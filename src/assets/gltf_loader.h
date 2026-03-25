@@ -4,4 +4,4 @@
 
 #include "scene.h"
 
-TextureData LoadTexture(std::string_view path);
+SceneData LoadGltfScene(std::string_view path);

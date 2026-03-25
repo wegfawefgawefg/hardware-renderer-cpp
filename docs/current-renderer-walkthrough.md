@@ -13,7 +13,7 @@ The renderer is split into a few obvious layers:
 - `mesh_loader`: OBJ ingestion into flat vertex/index buffers
 - `texture_loader`: PNG ingestion into RGBA pixels
 - `vulkan_helpers`: boring Vulkan allocation and one-shot command helpers
-- `vulkan_renderer`: actual graphics backend
+- `render`: actual graphics backend
 - `shaders/mesh.vert` and `shaders/mesh.frag`: GPU shading
 
 That is the core seam:
@@ -80,7 +80,7 @@ Contains the repetitive Vulkan utility pieces:
 - image creation
 - one-shot command buffers
 
-### `src/vulkan_renderer.cpp`
+### `src/render/renderer.cpp`
 
 This is the actual hardware renderer.
 

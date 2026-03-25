@@ -11,25 +11,40 @@ We already have:
 - SDL3 Vulkan window
 - Vulkan graphics pipeline
 - depth testing
-- OBJ mesh loading
+- OBJ and glTF loading
 - PNG texture loading
+- multi-model scene + entity split
 - first-person camera
 - realtime fragment lighting
 - animated point light
+- CPU-side static triangle collider groundwork
+- one skinned character path with CPU pose evaluation and GPU skinning
 
 That is enough to explain the basic GPU raster architecture cleanly.
 
 ## Sensible Next Steps
 
-### 1. Multiple Meshes And Materials
+### 0. Current Structural Baseline
 
-The next useful structural step would be:
+The first rearch pass is already underway:
 
-- scene with more than one mesh
-- separate material records
-- separate textures per material
+- `src/render/` exists as a shallow Vulkan module
+- `SceneData` now separates models from entities
+- `src/assets/` is the current loader boundary
 
-This keeps the current renderer model but makes it feel more like a real scene instead of a single sample asset.
+The next cleanup here is:
+
+- keep `src/assets/` narrow and reusable
+- avoid leaking sample-scene assumptions into the renderer API
+- prepare a clean animation/skinning module instead of mixing it into assets or render files
+
+### 1. Bigger Static World
+
+The next useful scene step is:
+
+- castle-scale static scene asset
+- stable scene framing/spawn points
+- renderer handling a larger world without special-casing one demo model
 
 ### 2. Shadowing
 
@@ -46,8 +61,10 @@ That would be a good lesson because it is very much a raster-era lighting techni
 
 If this repo wants to overlap more with the software renderer experiments, the next major feature would be:
 
-- skeletal animation data
-- GPU skinning in the vertex shader
+- broaden the current one-character path into:
+  - generic skinned mesh assets
+  - multiple skinned instances
+  - cleaner animation asset separation
 
 That would be a good line in the sand between “basic rasterizer” and “real animated renderer.”
 
@@ -84,3 +101,14 @@ To stay coherent, this repo should probably not immediately grow into:
 - multiple rendering backends at once
 
 The current value is that it is explicit and easy to trace.
+
+## Longer-Term Direction
+
+If the repo keeps going toward the software-renderer sandbox goals, the intended path is:
+
+1. castle-scale static scene
+2. skinned player character
+3. CPU-side collision/controller
+4. better realtime lighting
+
+That is the line where this becomes "software-renderer ideas, but done as a proper GPU rasterizer."

@@ -115,14 +115,24 @@ add_custom_target(
 
 add_executable(hardware-renderer-cpp
   src/app.cpp
+  src/animation/character.cpp
+  src/animation/ufbx_impl.cpp
+  src/assets/gltf_loader.cpp
+  src/assets/obj_loader.cpp
+  src/assets/texture_loader.cpp
   src/camera.cpp
+  src/collision/triangle_collider.cpp
+  src/gameplay/player_controller.cpp
   src/main.cpp
   src/math_types.cpp
-  src/mesh_loader.cpp
   src/scene.cpp
-  src/texture_loader.cpp
   src/vulkan_helpers.cpp
-  src/vulkan_renderer.cpp
+  src/render/renderer.cpp
+  src/render/device.cpp
+  src/render/frame.cpp
+  src/render/pipeline.cpp
+  src/render/resources.cpp
+  src/render/swapchain.cpp
 )
 
 target_compile_options(hardware-renderer-cpp
@@ -153,6 +163,12 @@ target_compile_definitions(hardware-renderer-cpp
     HARDWARE_RENDERER_OVERLAY_FRAG_SHADER_PATH="${OVERLAY_FRAG_SHADER_OUTPUT}"
     HARDWARE_RENDERER_LIGHT_VERT_SHADER_PATH="${LIGHT_VERT_SHADER_OUTPUT}"
     HARDWARE_RENDERER_LIGHT_FRAG_SHADER_PATH="${LIGHT_FRAG_SHADER_OUTPUT}"
+    HARDWARE_RENDERER_KENNEY_CHARACTER_PATH="${CMAKE_CURRENT_SOURCE_DIR}/assets/kenney/characterMedium.fbx"
+    HARDWARE_RENDERER_KENNEY_TEXTURE_PATH="${CMAKE_CURRENT_SOURCE_DIR}/assets/kenney/survivorMaleB.png"
+    HARDWARE_RENDERER_KENNEY_IDLE_PATH="${CMAKE_CURRENT_SOURCE_DIR}/assets/kenney/idle.fbx"
+    HARDWARE_RENDERER_KENNEY_RUN_PATH="${CMAKE_CURRENT_SOURCE_DIR}/assets/kenney/run.fbx"
+    HARDWARE_RENDERER_KENNEY_JUMP_PATH="${CMAKE_CURRENT_SOURCE_DIR}/assets/kenney/jump.fbx"
+    HARDWARE_RENDERER_MARIO_SCENE_PATH="${CMAKE_CURRENT_SOURCE_DIR}/assets/mario-64-mario/source/prototype_mario_super_mario_64/scene.gltf"
     HARDWARE_RENDERER_SAMPLE_OBJ_PATH="${CMAKE_CURRENT_SOURCE_DIR}/assets/viking_room.obj"
     HARDWARE_RENDERER_SAMPLE_TEXTURE_PATH="${CMAKE_CURRENT_SOURCE_DIR}/assets/viking_room.png"
 )

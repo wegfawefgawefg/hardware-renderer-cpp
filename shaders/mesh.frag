@@ -2,13 +2,13 @@
 
 layout(binding = 0) uniform SceneUniforms
 {
-    mat4 model;
     mat4 view;
     mat4 proj;
     vec4 cameraPosition;
     vec4 lightPositions[4];
     vec4 lightColors[4];
     vec4 ambientColor;
+    mat4 skinJoints[64];
 } uniforms;
 
 layout(binding = 1) uniform sampler2D albedoTexture;

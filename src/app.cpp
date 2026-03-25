@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <filesystem>
 #include <stdexcept>
 #include <string_view>
 
@@ -101,7 +102,33 @@ void App::Initialize()
 
     CenterWindowOnPrimaryDisplay(m_window);
     m_scene = LoadSampleScene();
-    m_renderer.Initialize(m_window, m_scene);
+    m_sceneBounds = ComputeSceneBounds(m_scene);
+    m_sceneTriangleCount = CountSceneTriangles(m_scene);
+    m_worldCollider.BuildFromScene(m_scene);
+    if (std::filesystem::exists(HARDWARE_RENDERER_KENNEY_CHARACTER_PATH) &&
+        std::filesystem::exists(HARDWARE_RENDERER_KENNEY_TEXTURE_PATH) &&
+        std::filesystem::exists(HARDWARE_RENDERER_KENNEY_IDLE_PATH) &&
+        std::filesystem::exists(HARDWARE_RENDERER_KENNEY_RUN_PATH) &&
+        std::filesystem::exists(HARDWARE_RENDERER_KENNEY_JUMP_PATH))
+    {
+        m_characterSet = LoadKenneyCharacterAnimationSet(
+            HARDWARE_RENDERER_KENNEY_CHARACTER_PATH,
+            HARDWARE_RENDERER_KENNEY_TEXTURE_PATH,
+            HARDWARE_RENDERER_KENNEY_IDLE_PATH,
+            HARDWARE_RENDERER_KENNEY_RUN_PATH,
+            HARDWARE_RENDERER_KENNEY_JUMP_PATH
+        );
+        m_hasCharacter = true;
+    }
+    if (m_sceneBounds.valid)
+    {
+        m_camera.yawRadians = DegreesToRadians(180.0f);
+        m_camera.pitchRadians = DegreesToRadians(-14.0f);
+    }
+    PlayerSpawn(m_player, m_worldCollider, m_sceneBounds);
+    m_characterModelYaw = m_camera.yawRadians;
+    PlayerSyncCamera(m_player, m_camera);
+    m_renderer.Initialize(m_window, m_scene, m_hasCharacter ? &m_characterSet.asset : nullptr);
     SyncRendererSize();
     UpdateWindowTitle();
     UpdateOverlayText();
@@ -195,7 +222,8 @@ void App::Update(float dtSeconds)
         }
     }
 
-    CameraUpdateFromInput(m_camera, dtSeconds, m_mouseCaptured);
+    PlayerUpdateFromInput(m_player, m_worldCollider, m_camera, dtSeconds, m_mouseCaptured);
+    PlayerSyncCamera(m_player, m_camera);
 
     if (m_windowResized)
     {
@@ -212,10 +240,6 @@ void App::Update(float dtSeconds)
 
     SceneUniforms uniforms{};
 
-    Mat4 roomRotation = Mat4RotateX(DegreesToRadians(-90.0f));
-    Mat4 roomScale = Mat4Scale(1.0f);
-    Mat4 roomTransform = Mat4Mul(roomRotation, roomScale);
-    uniforms.model = roomTransform;
     uniforms.view = CameraViewMatrix(m_camera);
     uniforms.proj = Mat4Perspective(
         DegreesToRadians(60.0f),
@@ -232,39 +256,109 @@ void App::Update(float dtSeconds)
     );
 
     float t = m_elapsedSeconds;
+    Vec3 lightCenter = m_sceneBounds.valid ? m_sceneBounds.center : Vec3Make(0.0f, 0.0f, 0.0f);
+    float orbitRadius = m_sceneBounds.valid ? std::max(m_sceneBounds.radius * 0.75f, 1.5f) : 2.9f;
+    float highY = m_sceneBounds.valid
+        ? m_sceneBounds.center.y + std::max(m_sceneBounds.radius * 0.65f, 1.8f)
+        : 2.3f;
+    float midY = m_sceneBounds.valid
+        ? m_sceneBounds.center.y + std::max(m_sceneBounds.radius * 0.45f, 1.4f)
+        : 1.9f;
+    float lowY = m_sceneBounds.valid
+        ? m_sceneBounds.center.y + std::max(m_sceneBounds.radius * 0.30f, 1.1f)
+        : 1.5f;
+
     uniforms.lightPositions[0] = Vec4Make(
-        std::cos(t * 0.8f) * 2.9f,
-        2.3f + std::sin(t * 1.2f) * 0.45f,
-        std::sin(t * 0.8f) * 2.9f,
+        lightCenter.x + std::cos(t * 0.8f) * orbitRadius,
+        highY + std::sin(t * 1.2f) * 0.45f,
+        lightCenter.z + std::sin(t * 0.8f) * orbitRadius,
         1.0f
     );
     uniforms.lightColors[0] = Vec4Make(3.2f, 3.0f, 2.8f, 1.0f);
 
     uniforms.lightPositions[1] = Vec4Make(
-        -2.4f + std::sin(t * 1.4f) * 0.8f,
-        1.9f + std::sin(t * 2.1f) * 0.5f,
-        std::cos(t * 0.9f) * 1.5f,
+        lightCenter.x - orbitRadius * 0.8f + std::sin(t * 1.4f) * orbitRadius * 0.28f,
+        midY + std::sin(t * 2.1f) * 0.5f,
+        lightCenter.z + std::cos(t * 0.9f) * orbitRadius * 0.55f,
         1.0f
     );
     uniforms.lightColors[1] = Vec4Make(2.2f, 0.35f, 0.35f, 1.0f);
 
     uniforms.lightPositions[2] = Vec4Make(
-        std::cos(t * 1.1f) * 1.6f,
-        1.5f + std::cos(t * 1.8f) * 0.6f,
-        -2.2f + std::sin(t * 1.3f) * 0.9f,
+        lightCenter.x + std::cos(t * 1.1f) * orbitRadius * 0.55f,
+        lowY + std::cos(t * 1.8f) * 0.6f,
+        lightCenter.z - orbitRadius * 0.75f + std::sin(t * 1.3f) * orbitRadius * 0.32f,
         1.0f
     );
     uniforms.lightColors[2] = Vec4Make(0.35f, 2.0f, 0.45f, 1.0f);
 
     uniforms.lightPositions[3] = Vec4Make(
-        2.2f + std::cos(t * 1.7f) * 0.7f,
-        2.0f + std::sin(t * 1.5f) * 0.55f,
-        std::sin(t * 1.0f) * 1.8f,
+        lightCenter.x + orbitRadius * 0.8f + std::cos(t * 1.7f) * orbitRadius * 0.24f,
+        midY + 0.2f + std::sin(t * 1.5f) * 0.55f,
+        lightCenter.z + std::sin(t * 1.0f) * orbitRadius * 0.62f,
         1.0f
     );
     uniforms.lightColors[3] = Vec4Make(0.45f, 0.75f, 2.2f, 1.0f);
 
     uniforms.ambientColor = Vec4Make(0.14f, 0.14f, 0.16f, 1.0f);
+    for (Mat4& skinJoint : uniforms.skinJoints)
+    {
+        skinJoint = Mat4Identity();
+    }
+
+    if (m_hasCharacter)
+    {
+        float moveMag = Vec3Length(Vec3Make(m_player.velocity.x, 0.0f, m_player.velocity.z));
+        int wantedAnim = (!m_player.onGround && std::fabs(m_player.velocity.y) > 0.5f)
+            ? 2
+            : (moveMag > 0.1f ? 1 : 0);
+
+        if (moveMag > 0.1f)
+        {
+            m_characterModelYaw = std::atan2(m_player.velocity.x, m_player.velocity.z);
+        }
+
+        if (wantedAnim != m_activeCharacterAnim)
+        {
+            m_activeCharacterAnim = wantedAnim;
+            m_characterAnimTime = 0.0f;
+        }
+        else
+        {
+            float animDt = dtSeconds;
+            if (wantedAnim == 1)
+            {
+                float base = std::max(1e-5f, m_player.moveSpeed);
+                animDt *= std::clamp(moveMag / base, 0.25f, 3.0f);
+            }
+            m_characterAnimTime += animDt;
+        }
+
+        const AnimationClip* clip = &m_characterSet.idle;
+        if (m_activeCharacterAnim == 1)
+        {
+            clip = &m_characterSet.run;
+        }
+        else if (m_activeCharacterAnim == 2)
+        {
+            clip = &m_characterSet.jump;
+        }
+
+        EvaluateCharacterClip(m_characterSet.asset, *clip, m_characterAnimTime, m_characterRenderState);
+        Vec3 renderPos = Vec3Sub(m_player.position, Vec3Make(0.0f, m_player.radius, 0.0f));
+        m_characterRenderState.model = Mat4Mul(
+            Mat4Translate(renderPos),
+            Mat4Mul(Mat4RotateY(m_characterModelYaw), m_characterSet.asset.modelOffset)
+        );
+        for (std::uint32_t i = 0; i < m_characterRenderState.jointCount && i < kMaxSkinJoints; ++i)
+        {
+            uniforms.skinJoints[i] = m_characterRenderState.joints[i];
+        }
+    }
+    else
+    {
+        m_characterRenderState = {};
+    }
 
     m_overlayRefreshSeconds -= dtSeconds;
     if (m_overlayRefreshSeconds <= 0.0f)
@@ -273,7 +367,13 @@ void App::Update(float dtSeconds)
         m_overlayRefreshSeconds = kOverlayRefreshPeriod;
     }
 
-    m_renderer.Render(uniforms, m_overlayPixels, m_overlayWidth, m_overlayHeight);
+    m_renderer.Render(
+        uniforms,
+        m_overlayPixels,
+        m_overlayWidth,
+        m_overlayHeight,
+        m_hasCharacter ? &m_characterRenderState : nullptr
+    );
 }
 
 void App::SyncRendererSize()
@@ -324,11 +424,15 @@ void App::UpdateOverlayText(const SceneUniforms* uniforms)
     std::snprintf(
         text,
         sizeof(text),
-        "%.2f ms   %.0f fps   %ux%u",
+        "%.2f ms   %.0f fps   %ux%u   %u ents   %u tris   %s   %s",
         ms,
         m_smoothedFps,
         m_windowWidth,
-        m_windowHeight
+        m_windowHeight,
+        static_cast<std::uint32_t>(m_scene.entities.size()),
+        m_sceneTriangleCount,
+        m_player.onGround ? "ground" : "air",
+        m_hasCharacter ? (m_activeCharacterAnim == 2 ? "jump" : (m_activeCharacterAnim == 1 ? "run" : "idle")) : "nochar"
     );
 
     SDL_Color color = {230, 242, 255, 255};

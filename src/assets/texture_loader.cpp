@@ -1,4 +1,4 @@
-#include "texture_loader.h"
+#include "assets/texture_loader.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -32,5 +32,14 @@ TextureData LoadTexture(std::string_view path)
     );
 
     stbi_image_free(pixels);
+    return texture;
+}
+
+TextureData MakeSolidTexture(std::uint8_t r, std::uint8_t g, std::uint8_t b, std::uint8_t a)
+{
+    TextureData texture{};
+    texture.width = 1;
+    texture.height = 1;
+    texture.pixels = {r, g, b, a};
     return texture;
 }

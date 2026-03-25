@@ -1,24 +1,35 @@
 #pragma once
 
 #include <cstdint>
+#include <limits>
 #include <span>
 #include <vector>
 
 #include <SDL3/SDL_video.h>
 #include <vulkan/vulkan.h>
 
+#include "animation/character.h"
 #include "scene.h"
 #include "vulkan_helpers.h"
 
 struct alignas(16) SceneUniforms
 {
-    Mat4 model;
     Mat4 view;
     Mat4 proj;
     Vec4 cameraPosition;
     Vec4 lightPositions[4];
     Vec4 lightColors[4];
     Vec4 ambientColor;
+    Mat4 skinJoints[64];
+};
+
+struct alignas(16) DrawPushConstants
+{
+    Mat4 model;
+    std::uint32_t skinned = 0;
+    std::uint32_t padding0 = 0;
+    std::uint32_t padding1 = 0;
+    std::uint32_t padding2 = 0;
 };
 
 struct OverlayVertex
@@ -37,14 +48,19 @@ struct VulkanRenderer
 {
     ~VulkanRenderer();
 
-    void Initialize(SDL_Window* window, const SceneData& scene);
+    void Initialize(
+        SDL_Window* window,
+        const SceneData& scene,
+        const SkinnedCharacterAsset* characterAsset = nullptr
+    );
     void Shutdown();
     void Resize(std::uint32_t width, std::uint32_t height);
     void Render(
         const SceneUniforms& uniforms,
         std::span<const std::uint32_t> overlayPixels,
         std::uint32_t overlayWidth,
-        std::uint32_t overlayHeight
+        std::uint32_t overlayHeight,
+        const CharacterRenderState* characterState = nullptr
     );
 
     void CreateInstance();
@@ -63,7 +79,8 @@ struct VulkanRenderer
     void CreateOverlayPipeline();
     void CreateLightPipeline();
     void CreateSceneBuffers(const SceneData& scene);
-    void CreateTextureResources(const TextureData& texture);
+    void CreateTextureResources(const SceneData& scene);
+    void CreateCharacterResources(const SkinnedCharacterAsset& characterAsset);
     void CreateOverlayResources();
     void DestroyOverlayResources();
     void CreateDepthResources();
@@ -96,7 +113,7 @@ struct VulkanRenderer
     VkRenderPass m_renderPass = VK_NULL_HANDLE;
     VkDescriptorSetLayout m_descriptorSetLayout = VK_NULL_HANDLE;
     VkDescriptorPool m_descriptorPool = VK_NULL_HANDLE;
-    VkDescriptorSet m_descriptorSet = VK_NULL_HANDLE;
+    std::vector<VkDescriptorSet> m_descriptorSets;
     VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
     VkPipeline m_pipeline = VK_NULL_HANDLE;
     VkShaderModule m_vertShaderModule = VK_NULL_HANDLE;
@@ -124,13 +141,28 @@ struct VulkanRenderer
     BufferResource m_overlayUploadBuffer;
     BufferResource m_overlayVertexBuffer;
     BufferResource m_lightMarkerBuffer;
-    ImageResource m_textureImage;
+    BufferResource m_characterVertexBuffer;
+    BufferResource m_characterIndexBuffer;
+    std::vector<ImageResource> m_textureImages;
     VkSampler m_textureSampler = VK_NULL_HANDLE;
     ImageResource m_overlayImage;
     VkSampler m_overlaySampler = VK_NULL_HANDLE;
     ImageResource m_depthImage;
 
-    std::uint32_t m_indexCount = 0;
+    struct DrawItem
+    {
+        Mat4 model;
+        std::uint32_t firstIndex = 0;
+        std::uint32_t indexCount = 0;
+        std::uint32_t descriptorIndex = 0;
+        std::uint32_t skinned = 0;
+    };
+
+    std::vector<DrawItem> m_drawItems;
+    CharacterRenderState m_characterState = {};
+    std::uint32_t m_characterIndexCount = 0;
+    std::uint32_t m_characterDescriptorIndex = std::numeric_limits<std::uint32_t>::max();
+    bool m_hasCharacter = false;
     std::uint32_t m_overlayTextureWidth = 0;
     std::uint32_t m_overlayTextureHeight = 0;
     std::uint32_t m_overlayWidth = 0;

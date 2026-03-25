@@ -12,10 +12,15 @@ This project plays the same role for the software rasterizers that `gpu-raytrace
 - SDL3 floating Vulkan window on X11/i3
 - Vulkan graphics pipeline with swapchain, depth buffer, and textured mesh rendering
 - First-person free camera with right-mouse look
-- OBJ mesh loading
+- OBJ and glTF asset loading
 - PNG texture loading
+- Multi-model scene path with separate models and world instances
 - Realtime hardware lighting in fragment shader
 - Animated point light orbit
+- CPU-side static triangle collider groundwork for scene queries
+- Grounded player movement with jump, slide, and static-scene collision
+- Kenney character load path with CPU clip evaluation and GPU skinning
+- Native-resolution SDL_ttf HUD overlay
 - Smoothed `ms / fps` in the window title
 
 ## Build
@@ -36,37 +41,51 @@ That configures, builds, and launches `build/debug/hardware-renderer-cpp` under 
 
 - `Right Mouse`: hold to capture mouse and look around
 - `W A S D`: move
-- `Space` / `Shift`: move up / down
+- `Space`: jump
+- `Shift`: sprint
 - `Escape`: quit
 
 ## Sample Scene
 
-The current baseline uses:
+The default sample path now prefers:
+
+- `assets/mario-64-mario/source/prototype_mario_super_mario_64/scene.gltf`
+
+with OBJ fallback to:
 
 - `assets/viking_room.obj`
 - `assets/viking_room.png`
 
-This is just a good first textured mesh target. The point is the renderer structure, not the asset itself.
+The point is the renderer structure, not one specific asset. The repo now has a better static-scene migration path than the original single-mesh baseline.
 
 ## What It Teaches
 
 - how Vulkan graphics setup differs from a software rasterizer
-- how mesh and texture assets get uploaded into GPU resources
+- how mesh, material, texture, and scene-instance data get uploaded into GPU resources
 - how a hardware raster pipeline is split across CPU setup, vertex shader, fragment shader, and presentation
+- how a CPU-side static world collider can sit next to a GPU renderer without contaminating the render architecture
 - how to keep a renderer flat and explicit without dragging simulation/gameplay concerns into it
 
 ## Docs
 
 - `docs/current-renderer-walkthrough.md`: file map and frame flow
 - `docs/roadmap.md`: where this renderer would naturally go next
+- `docs/features.md`: target feature set for the bigger castle/character direction
+- `docs/rearchitecture-notes.md`: what should be split and cleaned up before the repo grows much more
 
 ## Status
 
-This is already a good stopping point for an educational hardware rasterizer:
+This is now past the first “single mesh demo” stage and into a more useful migration baseline:
 
-- one clean Vulkan path
-- one real asset path
+- one clean Vulkan raster path
+- one static multi-node scene asset path
 - one movable camera
-- one lit textured scene
+- one lit textured world scene
+- one CPU-side collision/query foundation
 
-If this repo continues later, the natural next topics are richer materials, multiple meshes, animation/skinning, shadowing, and post-processing.
+If this repo continues later, the natural next topics are:
+
+- castle-scale static world rendering
+- shadowing and better material control
+- CPU-side collision and gameplay queries on top of the GPU renderer
+ - broadening the one-character skinning path into a more general animation system

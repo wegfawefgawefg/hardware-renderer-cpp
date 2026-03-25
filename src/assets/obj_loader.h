@@ -4,4 +4,4 @@
 
 #include "scene.h"
 
-MeshData LoadObjMesh(std::string_view path);
+ModelData LoadObjModel(std::string_view path);

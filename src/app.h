@@ -9,8 +9,11 @@
 #include <SDL3_ttf/SDL_ttf.h>
 
 #include "camera.h"
+#include "collision/triangle_collider.h"
+#include "gameplay/player_controller.h"
+#include "animation/character.h"
 #include "scene.h"
-#include "vulkan_renderer.h"
+#include "render/renderer.h"
 
 struct App
 {
@@ -29,6 +32,11 @@ struct App
     SDL_Window* m_window = nullptr;
     VulkanRenderer m_renderer;
     SceneData m_scene;
+    SceneBounds m_sceneBounds;
+    TriangleMeshCollider m_worldCollider;
+    PlayerController m_player;
+    CharacterAnimationSet m_characterSet;
+    CharacterRenderState m_characterRenderState;
     Camera m_camera;
     TTF_Font* m_uiFont = nullptr;
 
@@ -41,6 +49,11 @@ struct App
     float m_smoothedFps = 0.0f;
     float m_titleRefreshSeconds = 0.0f;
     float m_overlayRefreshSeconds = 0.0f;
+    float m_characterAnimTime = 0.0f;
+    float m_characterModelYaw = 0.0f;
+    int m_activeCharacterAnim = 0;
+    std::uint32_t m_sceneTriangleCount = 0;
+    bool m_hasCharacter = false;
 
     std::array<std::uint32_t, 512 * 128> m_overlayPixels = {};
     std::uint32_t m_overlayWidth = 0;
