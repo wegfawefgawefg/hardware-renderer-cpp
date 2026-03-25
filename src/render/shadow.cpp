@@ -118,8 +118,8 @@ void VulkanRenderer::CreateShadowPipeline()
     rasterization.cullMode = VK_CULL_MODE_BACK_BIT;
     rasterization.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
     rasterization.depthBiasEnable = VK_TRUE;
-    rasterization.depthBiasConstantFactor = 1.75f;
-    rasterization.depthBiasSlopeFactor = 2.25f;
+    rasterization.depthBiasConstantFactor = 0.9f;
+    rasterization.depthBiasSlopeFactor = 1.35f;
     rasterization.lineWidth = 1.0f;
 
     VkPipelineMultisampleStateCreateInfo multisample{};
@@ -162,7 +162,7 @@ void VulkanRenderer::CreateShadowPipeline()
     CheckVk(vkCreateGraphicsPipelines(m_device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_shadowPipeline), "vkCreateGraphicsPipelines(shadow)");
 }
 
-void VulkanRenderer::RecordShadowPass(VkCommandBuffer commandBuffer)
+void VulkanRenderer::RecordShadowPass(VkCommandBuffer commandBuffer, std::uint32_t cascadeIndex)
 {
     VkViewport viewport{};
     viewport.width = static_cast<float>(m_shadowMapSize);
@@ -181,7 +181,7 @@ void VulkanRenderer::RecordShadowPass(VkCommandBuffer commandBuffer)
     VkRenderPassBeginInfo passInfo{};
     passInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
     passInfo.renderPass = m_shadowRenderPass;
-    passInfo.framebuffer = m_shadowFramebuffer;
+    passInfo.framebuffer = m_shadowFramebuffers[cascadeIndex];
     passInfo.renderArea.extent = {m_shadowMapSize, m_shadowMapSize};
     passInfo.clearValueCount = 1;
     passInfo.pClearValues = &clearValue;
@@ -199,6 +199,7 @@ void VulkanRenderer::RecordShadowPass(VkCommandBuffer commandBuffer)
         DrawPushConstants pushConstants{};
         pushConstants.model = drawItem.model;
         pushConstants.skinned = drawItem.skinned;
+        pushConstants.shadowCascade = cascadeIndex;
         vkCmdPushConstants(commandBuffer, m_shadowPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pushConstants), &pushConstants);
         vkCmdBindDescriptorSets(
             commandBuffer,
@@ -218,6 +219,7 @@ void VulkanRenderer::RecordShadowPass(VkCommandBuffer commandBuffer)
         DrawPushConstants pushConstants{};
         pushConstants.model = m_characterState.model;
         pushConstants.skinned = 1;
+        pushConstants.shadowCascade = cascadeIndex;
         VkBuffer characterBuffers[] = {m_characterVertexBuffer.buffer};
         VkDeviceSize characterOffsets[] = {0};
         vkCmdBindVertexBuffers(commandBuffer, 0, 1, characterBuffers, characterOffsets);

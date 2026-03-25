@@ -17,7 +17,7 @@ layout(binding = 0) uniform SceneUniforms
     vec4 celestialPositions[2];
     vec4 celestialColors[2];
     vec4 clearColor;
-    mat4 shadowViewProj;
+    mat4 shadowViewProj[2];
     vec4 shadowParams;
     mat4 skinJoints[64];
 } uniforms;
@@ -26,9 +26,9 @@ layout(push_constant) uniform DrawPushConstants
 {
     mat4 model;
     uint skinned;
+    uint shadowCascade;
     uint padding0;
     uint padding1;
-    uint padding2;
 } drawPush;
 
 void main()
@@ -44,5 +44,5 @@ void main()
         localPosition = skinMatrix * localPosition;
     }
 
-    gl_Position = uniforms.shadowViewProj * drawPush.model * localPosition;
+    gl_Position = uniforms.shadowViewProj[drawPush.shadowCascade] * drawPush.model * localPosition;
 }

@@ -19,7 +19,7 @@ layout(binding = 0) uniform SceneUniforms
     vec4 celestialPositions[2];
     vec4 celestialColors[2];
     vec4 clearColor;
-    mat4 shadowViewProj;
+    mat4 shadowViewProj[2];
     vec4 shadowParams;
     mat4 skinJoints[64];
 } uniforms;
@@ -28,15 +28,17 @@ layout(push_constant) uniform DrawPushConstants
 {
     mat4 model;
     uint skinned;
+    uint shadowCascade;
     uint padding0;
     uint padding1;
-    uint padding2;
 } drawPush;
 
 layout(location = 0) out vec3 fragWorldPosition;
 layout(location = 1) out vec3 fragNormal;
 layout(location = 2) out vec2 fragUv;
-layout(location = 3) out vec4 fragShadowPosition;
+layout(location = 3) out vec4 fragShadowPosition0;
+layout(location = 4) out vec4 fragShadowPosition1;
+layout(location = 5) out float fragViewDepth;
 
 void main()
 {
@@ -59,7 +61,10 @@ void main()
     fragWorldPosition = worldPosition.xyz;
     fragNormal = normalize(normalMatrix * localNormal);
     fragUv = inUv;
-    fragShadowPosition = uniforms.shadowViewProj * worldPosition;
+    vec4 viewPosition = uniforms.view * worldPosition;
+    fragShadowPosition0 = uniforms.shadowViewProj[0] * worldPosition;
+    fragShadowPosition1 = uniforms.shadowViewProj[1] * worldPosition;
+    fragViewDepth = -viewPosition.z;
 
-    gl_Position = uniforms.proj * uniforms.view * worldPosition;
+    gl_Position = uniforms.proj * viewPosition;
 }

@@ -58,18 +58,25 @@ void VulkanRenderer::InitializeImGuiBackend()
     initInfo.CheckVkResultFn = CheckImGuiVkResult;
     ImGui_ImplVulkan_Init(&initInfo);
 
-    m_imguiShadowDescriptor = ImGui_ImplVulkan_AddTexture(
-        m_shadowSampler,
-        m_shadowImage.view,
-        VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL
-    );
+    for (std::size_t i = 0; i < m_imguiShadowDescriptors.size(); ++i)
+    {
+        m_imguiShadowDescriptors[i] = ImGui_ImplVulkan_AddTexture(
+            m_shadowSampler,
+            m_shadowImages[i].view,
+            VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL
+        );
+    }
 
     m_imguiInitialized = true;
 }
 
-ImTextureID VulkanRenderer::GetShadowDebugTexture() const
+ImTextureID VulkanRenderer::GetShadowDebugTexture(std::uint32_t cascadeIndex) const
 {
-    return static_cast<ImTextureID>(reinterpret_cast<std::uintptr_t>(m_imguiShadowDescriptor));
+    if (cascadeIndex >= m_imguiShadowDescriptors.size())
+    {
+        return {};
+    }
+    return static_cast<ImTextureID>(reinterpret_cast<std::uintptr_t>(m_imguiShadowDescriptors[cascadeIndex]));
 }
 
 void VulkanRenderer::ShutdownImGuiBackend()
@@ -80,10 +87,13 @@ void VulkanRenderer::ShutdownImGuiBackend()
     }
 
     vkDeviceWaitIdle(m_device);
-    if (m_imguiShadowDescriptor != VK_NULL_HANDLE)
+    for (VkDescriptorSet& descriptor : m_imguiShadowDescriptors)
     {
-        ImGui_ImplVulkan_RemoveTexture(m_imguiShadowDescriptor);
-        m_imguiShadowDescriptor = VK_NULL_HANDLE;
+        if (descriptor != VK_NULL_HANDLE)
+        {
+            ImGui_ImplVulkan_RemoveTexture(descriptor);
+            descriptor = VK_NULL_HANDLE;
+        }
     }
     ImGui_ImplVulkan_Shutdown();
     if (m_imguiDescriptorPool != VK_NULL_HANDLE)

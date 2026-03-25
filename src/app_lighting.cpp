@@ -6,6 +6,15 @@
 
 namespace
 {
+struct ShadowCascadeBounds
+{
+    Vec3 center = {};
+    float halfWidth = 1.0f;
+    float halfHeight = 1.0f;
+    float nearDepth = 0.1f;
+    float farDepth = 10.0f;
+};
+
 struct DayNightSample
 {
     Vec3 sky = {};
@@ -42,6 +51,11 @@ Vec3 NormalizeOrFallback(Vec3 v, Vec3 fallback)
     return Vec3Scale(v, 1.0f / length);
 }
 
+Vec3 CameraUpVector(const Camera& camera)
+{
+    return Vec3Normalize(Vec3Cross(CameraRight(camera), CameraForward(camera)));
+}
+
 Mat4 MakeOrthographic(float left, float right, float bottom, float top, float zNear, float zFar)
 {
     Mat4 result{};
@@ -53,6 +67,109 @@ Mat4 MakeOrthographic(float left, float right, float bottom, float top, float zN
     result.m[14] = -zNear / (zFar - zNear);
     result.m[15] = 1.0f;
     return result;
+}
+
+ShadowCascadeBounds FitShadowCascadeToCameraSlice(
+    const Camera& camera,
+    float aspect,
+    float fovYRadians,
+    float sliceNear,
+    float sliceFar,
+    Vec3 lightDirToScene,
+    float casterDepthPadding,
+    float receiverDepthPadding
+)
+{
+    const Vec3 forward = CameraForward(camera);
+    const Vec3 right = CameraRight(camera);
+    const Vec3 up = CameraUpVector(camera);
+    const float tanHalfFovY = std::tan(fovYRadians * 0.5f);
+
+    const Vec3 nearCenter = Vec3Add(camera.position, Vec3Scale(forward, sliceNear));
+    const Vec3 farCenter = Vec3Add(camera.position, Vec3Scale(forward, sliceFar));
+
+    const float nearHalfHeight = tanHalfFovY * sliceNear;
+    const float nearHalfWidth = nearHalfHeight * aspect;
+    const float farHalfHeight = tanHalfFovY * sliceFar;
+    const float farHalfWidth = farHalfHeight * aspect;
+
+    std::array<Vec3, 8> corners = {
+        Vec3Add(Vec3Add(nearCenter, Vec3Scale(right, nearHalfWidth)), Vec3Scale(up, nearHalfHeight)),
+        Vec3Add(Vec3Add(nearCenter, Vec3Scale(right, -nearHalfWidth)), Vec3Scale(up, nearHalfHeight)),
+        Vec3Add(Vec3Add(nearCenter, Vec3Scale(right, nearHalfWidth)), Vec3Scale(up, -nearHalfHeight)),
+        Vec3Add(Vec3Add(nearCenter, Vec3Scale(right, -nearHalfWidth)), Vec3Scale(up, -nearHalfHeight)),
+        Vec3Add(Vec3Add(farCenter, Vec3Scale(right, farHalfWidth)), Vec3Scale(up, farHalfHeight)),
+        Vec3Add(Vec3Add(farCenter, Vec3Scale(right, -farHalfWidth)), Vec3Scale(up, farHalfHeight)),
+        Vec3Add(Vec3Add(farCenter, Vec3Scale(right, farHalfWidth)), Vec3Scale(up, -farHalfHeight)),
+        Vec3Add(Vec3Add(farCenter, Vec3Scale(right, -farHalfWidth)), Vec3Scale(up, -farHalfHeight)),
+    };
+
+    std::array<Vec3, 16> fitPoints{};
+    for (std::size_t i = 0; i < corners.size(); ++i)
+    {
+        fitPoints[i] = corners[i];
+        fitPoints[i + corners.size()] = Vec3Add(corners[i], Vec3Scale(lightDirToScene, casterDepthPadding));
+    }
+
+    Vec3 centroid = {};
+    for (const Vec3& point : fitPoints)
+    {
+        centroid = Vec3Add(centroid, point);
+    }
+    centroid = Vec3Scale(centroid, 1.0f / static_cast<float>(fitPoints.size()));
+
+    const float eyeOffset = sliceFar + casterDepthPadding;
+    const Mat4 lightView = Mat4LookAt(
+        Vec3Add(centroid, Vec3Scale(lightDirToScene, eyeOffset)),
+        centroid,
+        Vec3Make(0.0f, 1.0f, 0.0f)
+    );
+
+    float minX = 1e30f;
+    float maxX = -1e30f;
+    float minY = 1e30f;
+    float maxY = -1e30f;
+    float minDepth = 1e30f;
+    float maxDepth = -1e30f;
+    for (const Vec3& point : fitPoints)
+    {
+        Vec4 lightSpace = Mat4MulVec4(lightView, Vec4Make(point.x, point.y, point.z, 1.0f));
+        float depth = -lightSpace.z;
+        minX = std::min(minX, lightSpace.x);
+        maxX = std::max(maxX, lightSpace.x);
+        minY = std::min(minY, lightSpace.y);
+        maxY = std::max(maxY, lightSpace.y);
+        minDepth = std::min(minDepth, depth);
+        maxDepth = std::max(maxDepth, depth);
+    }
+
+    const float xyPadding = std::max((sliceFar - sliceNear) * 0.08f, 1.5f);
+    ShadowCascadeBounds bounds{};
+    bounds.center = centroid;
+    bounds.halfWidth = std::max((maxX - minX) * 0.5f + xyPadding, 1.0f);
+    bounds.halfHeight = std::max((maxY - minY) * 0.5f + xyPadding, 1.0f);
+    bounds.nearDepth = std::max(minDepth - receiverDepthPadding, 0.1f);
+    bounds.farDepth = std::max(maxDepth + casterDepthPadding, bounds.nearDepth + 1.0f);
+    return bounds;
+}
+
+Mat4 MakeShadowViewProj(
+    Vec3 center,
+    Vec3 lightDirToScene,
+    float halfWidth,
+    float halfHeight,
+    float zNear,
+    float zFar
+)
+{
+    Mat4 shadowView = Mat4LookAt(
+        Vec3Add(center, Vec3Scale(lightDirToScene, zFar * 0.5f)),
+        center,
+        Vec3Make(0.0f, 1.0f, 0.0f)
+    );
+    Mat4 shadowProj = MakeOrthographic(-halfWidth, halfWidth, -halfHeight, halfHeight, zNear, zFar);
+    shadowProj.m[5] *= -1.0f;
+    return Mat4Mul(shadowProj, shadowView);
 }
 
 DayNightSample SampleDayNight(float timeOfDay)
@@ -138,21 +255,43 @@ void App::ApplyLighting(SceneUniforms& uniforms, float dtSeconds)
     uniforms.celestialColors[0] = Vec4Make(sample.sun.x * 3.0f, sample.sun.y * 3.0f, sample.sun.z * 3.0f, 1.0f);
     uniforms.celestialColors[1] = Vec4Make(sample.moon.x * 2.0f, sample.moon.y * 2.0f, sample.moon.z * 2.0f, 1.0f);
 
-    float shadowExtent = std::max((m_sceneBounds.valid ? m_sceneBounds.radius : 24.0f) * 1.15f, 20.0f);
-    Vec3 shadowCenter = center;
-    Vec3 shadowEye = Vec3Add(shadowCenter, Vec3Scale(keyDirToLight, shadowExtent));
-    Mat4 shadowView = Mat4LookAt(shadowEye, shadowCenter, Vec3Make(0.0f, 1.0f, 0.0f));
-    Mat4 shadowProj = MakeOrthographic(
-        -shadowExtent,
-        shadowExtent,
-        -shadowExtent,
-        shadowExtent,
-        0.1f,
-        shadowExtent * 3.0f
+    float cameraNear = 0.1f;
+    float cameraFar = 200.0f;
+    float cameraAspect = static_cast<float>(std::max(m_windowWidth, 1u)) / static_cast<float>(std::max(m_windowHeight, 1u));
+    float cameraFovY = DegreesToRadians(60.0f);
+    float splitDistance = std::clamp(m_shadowCascadeSplit, 4.0f, cameraFar - 10.0f);
+    float sceneRadius = m_sceneBounds.valid ? m_sceneBounds.radius : 24.0f;
+
+    ShadowCascadeBounds nearCascade = FitShadowCascadeToCameraSlice(
+        m_camera,
+        cameraAspect,
+        cameraFovY,
+        cameraNear,
+        splitDistance,
+        keyDirToLight,
+        std::max(splitDistance * 1.2f, 18.0f),
+        std::max(splitDistance * 0.45f, 6.0f)
     );
-    shadowProj.m[5] *= -1.0f;
-    uniforms.shadowViewProj = Mat4Mul(shadowProj, shadowView);
-    uniforms.shadowParams = Vec4Make(m_shadowBlur ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f);
+    uniforms.shadowViewProj[0] = MakeShadowViewProj(
+        nearCascade.center,
+        keyDirToLight,
+        nearCascade.halfWidth,
+        nearCascade.halfHeight,
+        nearCascade.nearDepth,
+        nearCascade.farDepth
+    );
+
+    float farExtent = std::max(sceneRadius * 1.15f, splitDistance * 1.75f);
+    uniforms.shadowViewProj[1] = MakeShadowViewProj(
+        center,
+        keyDirToLight,
+        farExtent,
+        farExtent,
+        0.1f,
+        farExtent * 3.0f
+    );
+    float cascadeBlendWidth = std::max(splitDistance * 0.12f, 2.0f);
+    uniforms.shadowParams = Vec4Make(m_shadowBlur ? 1.0f : 0.0f, splitDistance, cascadeBlendWidth, 0.0f);
 
     float t = m_elapsedSeconds;
     float pointScale = m_pointLightIntensity;

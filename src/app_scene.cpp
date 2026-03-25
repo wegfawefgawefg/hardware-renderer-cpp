@@ -32,6 +32,7 @@ void App::ReloadScene()
         m_moonIntensity = 0.0f;
         m_ambientIntensity = 0.18f;
         m_pointLightIntensity = 0.0f;
+        m_shadowCascadeSplit = 12.0f;
     }
 
     m_renderer.m_shadowMapSize = m_shadowMapSize;

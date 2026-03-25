@@ -80,6 +80,7 @@ struct App
     SceneKind m_sceneKind = SceneKind::ShadowTest;
     bool m_shadowBlur = true;
     std::uint32_t m_shadowMapSize = 2048;
+    float m_shadowCascadeSplit = 32.0f;
 
     std::array<std::uint32_t, 512 * 128> m_overlayPixels = {};
     std::uint32_t m_overlayWidth = 0;

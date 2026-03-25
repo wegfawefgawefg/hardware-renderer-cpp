@@ -403,35 +403,38 @@ void VulkanRenderer::CreateDepthResources()
 void VulkanRenderer::CreateShadowResources()
 {
     VkFormat depthFormat = FindDepthFormat();
-    m_shadowImage = CreateImage2D(
-        m_physicalDevice,
-        m_device,
-        m_shadowMapSize,
-        m_shadowMapSize,
-        depthFormat,
-        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-        VK_IMAGE_ASPECT_DEPTH_BIT
-    );
+    for (std::size_t i = 0; i < m_shadowImages.size(); ++i)
+    {
+        m_shadowImages[i] = CreateImage2D(
+            m_physicalDevice,
+            m_device,
+            m_shadowMapSize,
+            m_shadowMapSize,
+            depthFormat,
+            VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+            VK_IMAGE_ASPECT_DEPTH_BIT
+        );
 
-    TransitionImageLayout(
-        m_device,
-        m_graphicsQueue,
-        m_commandPool,
-        m_shadowImage.image,
-        VK_IMAGE_ASPECT_DEPTH_BIT,
-        VK_IMAGE_LAYOUT_UNDEFINED,
-        VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL
-    );
+        TransitionImageLayout(
+            m_device,
+            m_graphicsQueue,
+            m_commandPool,
+            m_shadowImages[i].image,
+            VK_IMAGE_ASPECT_DEPTH_BIT,
+            VK_IMAGE_LAYOUT_UNDEFINED,
+            VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL
+        );
 
-    VkFramebufferCreateInfo framebufferInfo{};
-    framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-    framebufferInfo.renderPass = m_shadowRenderPass;
-    framebufferInfo.attachmentCount = 1;
-    framebufferInfo.pAttachments = &m_shadowImage.view;
-    framebufferInfo.width = m_shadowMapSize;
-    framebufferInfo.height = m_shadowMapSize;
-    framebufferInfo.layers = 1;
-    CheckVk(vkCreateFramebuffer(m_device, &framebufferInfo, nullptr, &m_shadowFramebuffer), "vkCreateFramebuffer(shadow)");
+        VkFramebufferCreateInfo framebufferInfo{};
+        framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+        framebufferInfo.renderPass = m_shadowRenderPass;
+        framebufferInfo.attachmentCount = 1;
+        framebufferInfo.pAttachments = &m_shadowImages[i].view;
+        framebufferInfo.width = m_shadowMapSize;
+        framebufferInfo.height = m_shadowMapSize;
+        framebufferInfo.layers = 1;
+        CheckVk(vkCreateFramebuffer(m_device, &framebufferInfo, nullptr, &m_shadowFramebuffers[i]), "vkCreateFramebuffer(shadow)");
+    }
 
     VkSamplerCreateInfo samplerInfo{};
     samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
@@ -451,12 +454,18 @@ void VulkanRenderer::CreateShadowResources()
 
 void VulkanRenderer::DestroyShadowResources()
 {
-    if (m_shadowFramebuffer != VK_NULL_HANDLE)
+    for (VkFramebuffer& framebuffer : m_shadowFramebuffers)
     {
-        vkDestroyFramebuffer(m_device, m_shadowFramebuffer, nullptr);
-        m_shadowFramebuffer = VK_NULL_HANDLE;
+        if (framebuffer != VK_NULL_HANDLE)
+        {
+            vkDestroyFramebuffer(m_device, framebuffer, nullptr);
+            framebuffer = VK_NULL_HANDLE;
+        }
     }
-    DestroyImage(m_device, m_shadowImage);
+    for (ImageResource& image : m_shadowImages)
+    {
+        DestroyImage(m_device, image);
+    }
 }
 
 void VulkanRenderer::UpdateDescriptorSet()
@@ -478,10 +487,13 @@ void VulkanRenderer::UpdateDescriptorSet()
         imageInfo.imageView = m_textureImages[i].view;
         imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-        VkDescriptorImageInfo shadowInfo{};
-        shadowInfo.sampler = m_shadowSampler;
-        shadowInfo.imageView = m_shadowImage.view;
-        shadowInfo.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+        std::array<VkDescriptorImageInfo, 2> shadowInfos{};
+        for (std::size_t shadowIndex = 0; shadowIndex < shadowInfos.size(); ++shadowIndex)
+        {
+            shadowInfos[shadowIndex].sampler = m_shadowSampler;
+            shadowInfos[shadowIndex].imageView = m_shadowImages[shadowIndex].view;
+            shadowInfos[shadowIndex].imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+        }
 
         VkWriteDescriptorSet uniformWrite{};
         uniformWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -504,8 +516,8 @@ void VulkanRenderer::UpdateDescriptorSet()
         shadowWrite.dstSet = m_descriptorSets[i];
         shadowWrite.dstBinding = 2;
         shadowWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        shadowWrite.descriptorCount = 1;
-        shadowWrite.pImageInfo = &shadowInfo;
+        shadowWrite.descriptorCount = static_cast<std::uint32_t>(shadowInfos.size());
+        shadowWrite.pImageInfo = shadowInfos.data();
 
         std::array<VkWriteDescriptorSet, 3> writes = {uniformWrite, imageWrite, shadowWrite};
         vkUpdateDescriptorSets(m_device, static_cast<std::uint32_t>(writes.size()), writes.data(), 0, nullptr);

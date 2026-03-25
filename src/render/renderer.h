@@ -27,7 +27,7 @@ struct alignas(16) SceneUniforms
     Vec4 celestialPositions[2];
     Vec4 celestialColors[2];
     Vec4 clearColor;
-    Mat4 shadowViewProj;
+    Mat4 shadowViewProj[2];
     Vec4 shadowParams;
     Mat4 skinJoints[64];
 };
@@ -36,9 +36,9 @@ struct alignas(16) DrawPushConstants
 {
     Mat4 model;
     std::uint32_t skinned = 0;
+    std::uint32_t shadowCascade = 0;
     std::uint32_t padding0 = 0;
     std::uint32_t padding1 = 0;
-    std::uint32_t padding2 = 0;
 };
 
 struct OverlayVertex
@@ -67,7 +67,7 @@ struct VulkanRenderer
     void UpdateSceneTransforms(const SceneData& scene);
     void InitializeImGuiBackend();
     void ShutdownImGuiBackend();
-    ImTextureID GetShadowDebugTexture() const;
+    ImTextureID GetShadowDebugTexture(std::uint32_t cascadeIndex) const;
     void Render(
         const SceneUniforms& uniforms,
         std::span<const std::uint32_t> overlayPixels,
@@ -103,7 +103,7 @@ struct VulkanRenderer
     void CreateDepthResources();
     void UpdateDescriptorSet();
     void UpdateOverlayDescriptorSet();
-    void RecordShadowPass(VkCommandBuffer commandBuffer);
+    void RecordShadowPass(VkCommandBuffer commandBuffer, std::uint32_t cascadeIndex);
     void RecordCommandBuffer(std::uint32_t imageIndex);
 
     VkSurfaceFormatKHR ChooseSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& formats) const;
@@ -150,9 +150,9 @@ struct VulkanRenderer
     VkPipelineLayout m_shadowPipelineLayout = VK_NULL_HANDLE;
     VkPipeline m_shadowPipeline = VK_NULL_HANDLE;
     VkShaderModule m_shadowVertShaderModule = VK_NULL_HANDLE;
-    VkFramebuffer m_shadowFramebuffer = VK_NULL_HANDLE;
+    std::array<VkFramebuffer, 2> m_shadowFramebuffers = {VK_NULL_HANDLE, VK_NULL_HANDLE};
     VkDescriptorPool m_imguiDescriptorPool = VK_NULL_HANDLE;
-    VkDescriptorSet m_imguiShadowDescriptor = VK_NULL_HANDLE;
+    std::array<VkDescriptorSet, 2> m_imguiShadowDescriptors = {VK_NULL_HANDLE, VK_NULL_HANDLE};
 
     VkCommandPool m_commandPool = VK_NULL_HANDLE;
     std::vector<VkCommandBuffer> m_commandBuffers;
@@ -173,7 +173,7 @@ struct VulkanRenderer
     ImageResource m_overlayImage;
     VkSampler m_overlaySampler = VK_NULL_HANDLE;
     ImageResource m_depthImage;
-    ImageResource m_shadowImage;
+    std::array<ImageResource, 2> m_shadowImages = {};
     VkSampler m_shadowSampler = VK_NULL_HANDLE;
 
     struct DrawItem

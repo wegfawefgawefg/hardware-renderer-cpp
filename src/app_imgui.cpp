@@ -74,6 +74,7 @@ void App::BuildImGui()
             ImGui::SliderFloat("Moon intensity", &m_moonIntensity, 0.0f, 1.0f, "%.2f");
             ImGui::SliderFloat("Ambient intensity", &m_ambientIntensity, 0.0f, 1.0f, "%.2f");
             ImGui::SliderFloat("Point lights", &m_pointLightIntensity, 0.0f, 3.0f, "%.2f");
+            ImGui::SliderFloat("Cascade split", &m_shadowCascadeSplit, 4.0f, 96.0f, "%.1f");
             ImGui::Separator();
             ImGui::Text("RMB capture camera");
             ImGui::Text("Sun  %.1f %.1f %.1f", m_sunWorldPosition.x, m_sunWorldPosition.y, m_sunWorldPosition.z);
@@ -92,9 +93,13 @@ void App::BuildImGui()
         ImGui::SetNextWindowSize(shadowWindowSize, ImGuiCond_Always);
         if (ImGui::Begin("Sun View", nullptr, ImGuiWindowFlags_NoResize))
         {
-            ImGui::Text("Shadow Map");
+            ImGui::Text("Cascade 0");
             ImGui::Separator();
-            ImGui::Image(m_renderer.GetShadowDebugTexture(), ImVec2(268.0f, 268.0f));
+            ImGui::Image(m_renderer.GetShadowDebugTexture(0), ImVec2(268.0f, 128.0f));
+            ImGui::Separator();
+            ImGui::Text("Cascade 1");
+            ImGui::Separator();
+            ImGui::Image(m_renderer.GetShadowDebugTexture(1), ImVec2(268.0f, 128.0f));
         }
         ImGui::End();
 

@@ -108,7 +108,8 @@ void VulkanRenderer::RecordCommandBuffer(std::uint32_t imageIndex)
         );
     }
 
-    RecordShadowPass(commandBuffer);
+    RecordShadowPass(commandBuffer, 0);
+    RecordShadowPass(commandBuffer, 1);
 
     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline);
