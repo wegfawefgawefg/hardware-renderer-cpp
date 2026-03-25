@@ -3,12 +3,15 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
 
 namespace
 {
 constexpr float kRoadTileSize = 6.0f;
 constexpr int kRoadStrideTiles = 4;
 constexpr float kLaneOffset = 1.1f;
+
 enum Direction
 {
     kNorth = 0,
@@ -52,13 +55,13 @@ Vec3 LaneOffset(int direction)
     switch (direction)
     {
     case kNorth:
-        return Vec3Make(kLaneOffset, 0.0f, 0.0f);
-    case kEast:
-        return Vec3Make(0.0f, 0.0f, -kLaneOffset);
-    case kSouth:
         return Vec3Make(-kLaneOffset, 0.0f, 0.0f);
-    default:
+    case kEast:
         return Vec3Make(0.0f, 0.0f, kLaneOffset);
+    case kSouth:
+        return Vec3Make(kLaneOffset, 0.0f, 0.0f);
+    default:
+        return Vec3Make(0.0f, 0.0f, -kLaneOffset);
     }
 }
 
@@ -67,14 +70,37 @@ float DirectionYawDegrees(int direction)
     switch (direction)
     {
     case kNorth:
-        return 0.0f;
-    case kEast:
-        return 90.0f;
-    case kSouth:
         return 180.0f;
-    default:
+    case kEast:
         return -90.0f;
+    case kSouth:
+        return 0.0f;
+    default:
+        return 90.0f;
     }
+}
+
+float WrapDegrees(float degrees)
+{
+    while (degrees > 180.0f)
+    {
+        degrees -= 360.0f;
+    }
+    while (degrees < -180.0f)
+    {
+        degrees += 360.0f;
+    }
+    return degrees;
+}
+
+float RotateTowardDegrees(float current, float target, float maxStep)
+{
+    float delta = WrapDegrees(target - current);
+    if (std::fabs(delta) <= maxStep)
+    {
+        return target;
+    }
+    return current + (delta > 0.0f ? maxStep : -maxStep);
 }
 
 std::uint32_t NextRandom(std::uint32_t& state)
@@ -83,25 +109,62 @@ std::uint32_t NextRandom(std::uint32_t& state)
     return state;
 }
 
-int InferDirection(const EntityData& entity)
+bool TrafficLoggingEnabled()
 {
-    Vec4 forward4 = Mat4MulVec4(entity.transform, Vec4Make(0.0f, 0.0f, 1.0f, 0.0f));
-    Vec3 forward = Vec3Make(forward4.x, 0.0f, forward4.z);
-    if (std::fabs(forward.x) > std::fabs(forward.z))
-    {
-        return forward.x >= 0.0f ? kEast : kWest;
-    }
-    return forward.z >= 0.0f ? kNorth : kSouth;
+    const char* value = std::getenv("HR_TRAFFIC_LOG");
+    return value != nullptr && value[0] != '\0' && value[0] != '0';
 }
 
-int ChooseNextDirection(
-    TrafficAgent& agent,
-    const TrafficSystem& traffic,
-    int currentTileX,
-    int currentTileZ
-)
+const char* DirectionName(int direction)
 {
-    if (!IsIntersectionTile(currentTileX, currentTileZ))
+    switch (direction)
+    {
+    case kNorth:
+        return "north";
+    case kEast:
+        return "east";
+    case kSouth:
+        return "south";
+    default:
+        return "west";
+    }
+}
+
+int LaneCellIndex(const TrafficSystem& traffic, int tx, int tz, int direction)
+{
+    return traffic.CellIndex(tx, tz) * 4 + direction;
+}
+
+Vec3 SegmentStartPosition(const TrafficAgent& agent)
+{
+    return Vec3Add(TileBasePosition(agent.tx, agent.tz), LaneOffset(agent.direction));
+}
+
+Vec3 SegmentEndPosition(const TrafficAgent& agent)
+{
+    if (!agent.reservedNext)
+    {
+        return SegmentStartPosition(agent);
+    }
+    return Vec3Add(TileBasePosition(agent.nextTx, agent.nextTz), LaneOffset(agent.nextDirection));
+}
+
+Mat4 BuildTrafficTransform(const TrafficAgent& agent)
+{
+    Vec3 start = SegmentStartPosition(agent);
+    Vec3 end = SegmentEndPosition(agent);
+    float t = std::clamp(agent.progress, 0.0f, 1.0f);
+    float smoothT = t * t * (3.0f - 2.0f * t);
+    Vec3 position = Vec3Add(start, Vec3Scale(Vec3Sub(end, start), smoothT));
+    return Mat4Mul(
+        Mat4Translate(position),
+        Mat4Mul(Mat4RotateY(DegreesToRadians(agent.yawDegrees)), Mat4Scale(agent.modelScale))
+    );
+}
+
+int ChooseNextDirection(TrafficAgent& agent, const TrafficSystem& traffic)
+{
+    if (!IsIntersectionTile(agent.tx, agent.tz))
     {
         return agent.direction;
     }
@@ -117,8 +180,8 @@ int ChooseNextDirection(
     for (int candidate : candidates)
     {
         Vec3 delta = DirectionVector(candidate);
-        int nextX = currentTileX + static_cast<int>(delta.x);
-        int nextZ = currentTileZ + static_cast<int>(delta.z);
+        int nextX = agent.tx + static_cast<int>(delta.x);
+        int nextZ = agent.tz + static_cast<int>(delta.z);
         if (!traffic.IsInBounds(nextX, nextZ) || !IsRoadTile(nextX, nextZ))
         {
             continue;
@@ -135,19 +198,41 @@ int ChooseNextDirection(
     return valid[random % static_cast<std::uint32_t>(validCount)];
 }
 
-Mat4 BuildTrafficTransform(const TrafficAgent& agent)
+bool TryReserveNextCell(TrafficSystem& traffic, TrafficAgent& agent)
 {
-    Vec3 start = TileBasePosition(agent.tx, agent.tz);
-    Vec3 dir = DirectionVector(agent.direction);
-    Vec3 along = Vec3Scale(dir, kRoadTileSize * agent.progress);
-    Vec3 lane = LaneOffset(agent.direction);
-    return Mat4Mul(
-        Mat4Translate(Vec3Add(start, Vec3Add(along, lane))),
-        Mat4Mul(
-            Mat4RotateY(DegreesToRadians(DirectionYawDegrees(agent.direction))),
-            Mat4Scale(agent.modelScale)
-        )
-    );
+    int nextDirection = ChooseNextDirection(agent, traffic);
+    Vec3 delta = DirectionVector(nextDirection);
+    int nextX = agent.tx + static_cast<int>(delta.x);
+    int nextZ = agent.tz + static_cast<int>(delta.z);
+
+    if (!traffic.IsInBounds(nextX, nextZ) || !IsRoadTile(nextX, nextZ))
+    {
+        nextDirection = (agent.direction + 2) & 3;
+        delta = DirectionVector(nextDirection);
+        nextX = agent.tx + static_cast<int>(delta.x);
+        nextZ = agent.tz + static_cast<int>(delta.z);
+        if (!traffic.IsInBounds(nextX, nextZ) || !IsRoadTile(nextX, nextZ))
+        {
+            return false;
+        }
+    }
+
+    const int nextLaneCell = LaneCellIndex(traffic, nextX, nextZ, nextDirection);
+    if (traffic.m_occupancy[static_cast<std::size_t>(nextLaneCell)] >= 0)
+    {
+        return false;
+    }
+
+    const int currentLaneCell = LaneCellIndex(traffic, agent.tx, agent.tz, agent.direction);
+    traffic.m_occupancy[static_cast<std::size_t>(currentLaneCell)] = -1;
+    traffic.m_occupancy[static_cast<std::size_t>(nextLaneCell)] = static_cast<int>(&agent - traffic.m_agents.data());
+    agent.nextTx = nextX;
+    agent.nextTz = nextZ;
+    agent.nextDirection = nextDirection;
+    agent.targetYawDegrees = DirectionYawDegrees(nextDirection);
+    agent.progress = 0.0f;
+    agent.reservedNext = true;
+    return true;
 }
 }
 
@@ -164,6 +249,7 @@ bool TrafficSystem::IsInBounds(int tx, int tz) const
 void TrafficSystem::Initialize(SceneData& scene)
 {
     m_agents.clear();
+
     float minX = 0.0f;
     float maxX = 0.0f;
     float minZ = 0.0f;
@@ -188,9 +274,10 @@ void TrafficSystem::Initialize(SceneData& scene)
     m_minTile = static_cast<int>(std::floor(std::min(minX, minZ) / kRoadTileSize)) - 2;
     m_maxTile = static_cast<int>(std::ceil(std::max(maxX, maxZ) / kRoadTileSize)) + 2;
     m_side = m_maxTile - m_minTile + 1;
-    m_occupancy.assign(static_cast<std::size_t>(m_side * m_side), -1);
+    m_occupancy.assign(static_cast<std::size_t>(m_side * m_side * 4), -1);
 
     std::uint32_t seed = 1;
+    const bool logTraffic = TrafficLoggingEnabled();
     for (std::uint32_t entityIndex = 0; entityIndex < scene.entities.size(); ++entityIndex)
     {
         const EntityData& entity = scene.entities[entityIndex];
@@ -211,14 +298,34 @@ void TrafficSystem::Initialize(SceneData& scene)
         agent.entityIndex = entityIndex;
         agent.tx = tx;
         agent.tz = tz;
-        agent.direction = InferDirection(entity);
-        agent.speedTilesPerSecond = 1.6f + static_cast<float>(seed % 5) * 0.18f;
+        agent.direction = entity.trafficDirection >= 0 ? entity.trafficDirection : kEast;
+        agent.nextTx = tx;
+        agent.nextTz = tz;
+        agent.nextDirection = agent.direction;
+        agent.speedTilesPerSecond = 0.55f + static_cast<float>(seed % 5) * 0.05f;
         agent.modelScale = Vec3Length(Vec3Make(entity.transform.m[0], entity.transform.m[1], entity.transform.m[2]));
+        agent.yawDegrees = DirectionYawDegrees(agent.direction);
+        agent.targetYawDegrees = agent.yawDegrees;
         agent.rngState = seed * 747796405u + 2891336453u;
         seed += 17u;
         m_agents.push_back(agent);
-        m_occupancy[static_cast<std::size_t>(CellIndex(tx, tz))] = static_cast<int>(m_agents.size() - 1);
+        const int laneCell = LaneCellIndex(*this, tx, tz, agent.direction);
+        m_occupancy[static_cast<std::size_t>(laneCell)] = static_cast<int>(m_agents.size() - 1);
         scene.entities[entityIndex].transform = BuildTrafficTransform(m_agents.back());
+
+        if (logTraffic)
+        {
+            std::fprintf(
+                stderr,
+                "traffic init entity=%u tile=(%d,%d) dir=%s scale=%.2f speed=%.2f\n",
+                entityIndex,
+                tx,
+                tz,
+                DirectionName(agent.direction),
+                agent.modelScale,
+                agent.speedTilesPerSecond
+            );
+        }
     }
 }
 
@@ -228,35 +335,32 @@ void TrafficSystem::Update(SceneData& scene, float dtSeconds, std::uint32_t step
 
     for (TrafficAgent& agent : m_agents)
     {
-        agent.progress += dtSeconds * agent.speedTilesPerSecond;
-        while (agent.progress >= 1.0f && stepsUsed < stepBudget)
+        if (!agent.reservedNext && stepsUsed < stepBudget)
         {
-            int nextDirection = ChooseNextDirection(agent, *this, agent.tx, agent.tz);
-            Vec3 delta = DirectionVector(nextDirection);
-            int nextX = agent.tx + static_cast<int>(delta.x);
-            int nextZ = agent.tz + static_cast<int>(delta.z);
-            if (!IsInBounds(nextX, nextZ) || !IsRoadTile(nextX, nextZ))
+            if (TryReserveNextCell(*this, agent))
             {
-                agent.direction = (agent.direction + 2) & 3;
+                ++stepsUsed;
+            }
+        }
+
+        agent.yawDegrees = RotateTowardDegrees(
+            agent.yawDegrees,
+            agent.targetYawDegrees,
+            dtSeconds * 220.0f
+        );
+
+        if (agent.reservedNext)
+        {
+            agent.progress += dtSeconds * agent.speedTilesPerSecond;
+            if (agent.progress >= 1.0f)
+            {
+                agent.tx = agent.nextTx;
+                agent.tz = agent.nextTz;
+                agent.direction = agent.nextDirection;
+                agent.yawDegrees = agent.targetYawDegrees;
                 agent.progress = 0.0f;
-                break;
+                agent.reservedNext = false;
             }
-
-            int nextCell = CellIndex(nextX, nextZ);
-            if (m_occupancy[static_cast<std::size_t>(nextCell)] >= 0)
-            {
-                agent.progress = std::min(agent.progress, 0.95f);
-                break;
-            }
-
-            const int oldCell = CellIndex(agent.tx, agent.tz);
-            m_occupancy[static_cast<std::size_t>(oldCell)] = -1;
-            agent.tx = nextX;
-            agent.tz = nextZ;
-            agent.direction = nextDirection;
-            m_occupancy[static_cast<std::size_t>(nextCell)] = static_cast<int>(&agent - m_agents.data());
-            agent.progress -= 1.0f;
-            ++stepsUsed;
         }
 
         if (agent.entityIndex < scene.entities.size())

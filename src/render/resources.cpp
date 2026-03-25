@@ -105,7 +105,7 @@ void VulkanRenderer::CreateSceneBuffers(const SceneData& scene)
     m_lightMarkerBuffer = CreateBuffer(
         m_physicalDevice,
         m_device,
-        sizeof(LightMarkerVertex) * 4,
+        sizeof(LightMarkerVertex) * kLightMarkerCount,
         VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
         true
@@ -400,6 +400,65 @@ void VulkanRenderer::CreateDepthResources()
     );
 }
 
+void VulkanRenderer::CreateShadowResources()
+{
+    VkFormat depthFormat = FindDepthFormat();
+    m_shadowImage = CreateImage2D(
+        m_physicalDevice,
+        m_device,
+        m_shadowMapSize,
+        m_shadowMapSize,
+        depthFormat,
+        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+        VK_IMAGE_ASPECT_DEPTH_BIT
+    );
+
+    TransitionImageLayout(
+        m_device,
+        m_graphicsQueue,
+        m_commandPool,
+        m_shadowImage.image,
+        VK_IMAGE_ASPECT_DEPTH_BIT,
+        VK_IMAGE_LAYOUT_UNDEFINED,
+        VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL
+    );
+
+    VkFramebufferCreateInfo framebufferInfo{};
+    framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+    framebufferInfo.renderPass = m_shadowRenderPass;
+    framebufferInfo.attachmentCount = 1;
+    framebufferInfo.pAttachments = &m_shadowImage.view;
+    framebufferInfo.width = m_shadowMapSize;
+    framebufferInfo.height = m_shadowMapSize;
+    framebufferInfo.layers = 1;
+    CheckVk(vkCreateFramebuffer(m_device, &framebufferInfo, nullptr, &m_shadowFramebuffer), "vkCreateFramebuffer(shadow)");
+
+    VkSamplerCreateInfo samplerInfo{};
+    samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    samplerInfo.magFilter = VK_FILTER_LINEAR;
+    samplerInfo.minFilter = VK_FILTER_LINEAR;
+    samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+    samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+    samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+    samplerInfo.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
+    samplerInfo.maxAnisotropy = 1.0f;
+    samplerInfo.compareEnable = VK_FALSE;
+    samplerInfo.minLod = 0.0f;
+    samplerInfo.maxLod = 0.0f;
+    CheckVk(vkCreateSampler(m_device, &samplerInfo, nullptr, &m_shadowSampler), "vkCreateSampler(shadow)");
+}
+
+void VulkanRenderer::DestroyShadowResources()
+{
+    if (m_shadowFramebuffer != VK_NULL_HANDLE)
+    {
+        vkDestroyFramebuffer(m_device, m_shadowFramebuffer, nullptr);
+        m_shadowFramebuffer = VK_NULL_HANDLE;
+    }
+    DestroyImage(m_device, m_shadowImage);
+}
+
 void VulkanRenderer::UpdateDescriptorSet()
 {
     if (m_textureImages.empty())
@@ -419,6 +478,11 @@ void VulkanRenderer::UpdateDescriptorSet()
         imageInfo.imageView = m_textureImages[i].view;
         imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
+        VkDescriptorImageInfo shadowInfo{};
+        shadowInfo.sampler = m_shadowSampler;
+        shadowInfo.imageView = m_shadowImage.view;
+        shadowInfo.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+
         VkWriteDescriptorSet uniformWrite{};
         uniformWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         uniformWrite.dstSet = m_descriptorSets[i];
@@ -435,7 +499,15 @@ void VulkanRenderer::UpdateDescriptorSet()
         imageWrite.descriptorCount = 1;
         imageWrite.pImageInfo = &imageInfo;
 
-        std::array<VkWriteDescriptorSet, 2> writes = {uniformWrite, imageWrite};
+        VkWriteDescriptorSet shadowWrite{};
+        shadowWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        shadowWrite.dstSet = m_descriptorSets[i];
+        shadowWrite.dstBinding = 2;
+        shadowWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        shadowWrite.descriptorCount = 1;
+        shadowWrite.pImageInfo = &shadowInfo;
+
+        std::array<VkWriteDescriptorSet, 3> writes = {uniformWrite, imageWrite, shadowWrite};
         vkUpdateDescriptorSets(m_device, static_cast<std::uint32_t>(writes.size()), writes.data(), 0, nullptr);
     }
 }

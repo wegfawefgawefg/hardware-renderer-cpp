@@ -57,6 +57,7 @@ struct EntityData
     Mat4 transform = {};
     bool collidable = true;
     bool traffic = false;
+    std::int32_t trafficDirection = -1;
 };
 
 struct SceneData
@@ -74,6 +75,12 @@ struct SceneBounds
     float radius = 1.0f;
 };
 
+enum class SceneKind
+{
+    City,
+    ShadowTest,
+};
+
 SceneBounds ComputeSceneBounds(const SceneData& scene);
 std::uint32_t CountSceneTriangles(const SceneData& scene);
-SceneData LoadSampleScene(const AssetRegistry& assetRegistry);
+SceneData LoadSampleScene(const AssetRegistry& assetRegistry, SceneKind kind);

@@ -38,8 +38,19 @@ FetchContent_Declare(
   GIT_SHALLOW TRUE
 )
 
+FetchContent_Declare(
+  imgui
+  GIT_REPOSITORY https://github.com/ocornut/imgui.git
+  GIT_TAG v1.92.6
+  GIT_SHALLOW TRUE
+)
+
 FetchContent_MakeAvailable(SDL3)
 FetchContent_MakeAvailable(SDL3_ttf)
+FetchContent_GetProperties(imgui)
+if(NOT imgui_POPULATED)
+  FetchContent_Populate(imgui)
+endif()
 
 set(VERT_SHADER_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/shaders/mesh.vert)
 set(FRAG_SHADER_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/shaders/mesh.frag)
@@ -53,6 +64,8 @@ set(LIGHT_VERT_SHADER_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/shaders/light.vert)
 set(LIGHT_FRAG_SHADER_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/shaders/light.frag)
 set(LIGHT_VERT_SHADER_OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/shaders/light.vert.spv)
 set(LIGHT_FRAG_SHADER_OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/shaders/light.frag.spv)
+set(SHADOW_VERT_SHADER_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/shaders/shadow.vert)
+set(SHADOW_VERT_SHADER_OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/shaders/shadow.vert.spv)
 
 add_custom_command(
   OUTPUT ${VERT_SHADER_OUTPUT}
@@ -102,6 +115,14 @@ add_custom_command(
   VERBATIM
 )
 
+add_custom_command(
+  OUTPUT ${SHADOW_VERT_SHADER_OUTPUT}
+  COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/shaders
+  COMMAND ${GLSLANG_VALIDATOR} -V --target-env vulkan1.3 -S vert -o ${SHADOW_VERT_SHADER_OUTPUT} ${SHADOW_VERT_SHADER_SOURCE}
+  DEPENDS ${SHADOW_VERT_SHADER_SOURCE}
+  VERBATIM
+)
+
 add_custom_target(
   hardware-renderer-cpp-shaders
   DEPENDS
@@ -111,10 +132,14 @@ add_custom_target(
     ${OVERLAY_FRAG_SHADER_OUTPUT}
     ${LIGHT_VERT_SHADER_OUTPUT}
     ${LIGHT_FRAG_SHADER_OUTPUT}
+    ${SHADOW_VERT_SHADER_OUTPUT}
 )
 
 add_executable(hardware-renderer-cpp
   src/app.cpp
+  src/app_imgui.cpp
+  src/app_lighting.cpp
+  src/app_scene.cpp
   src/animation/character.cpp
   src/animation/ufbx_impl.cpp
   src/assets/asset_registry.cpp
@@ -134,9 +159,17 @@ add_executable(hardware-renderer-cpp
   src/render/renderer.cpp
   src/render/device.cpp
   src/render/frame.cpp
+  src/render/imgui.cpp
   src/render/pipeline.cpp
   src/render/resources.cpp
+  src/render/shadow.cpp
   src/render/swapchain.cpp
+  ${imgui_SOURCE_DIR}/imgui.cpp
+  ${imgui_SOURCE_DIR}/imgui_draw.cpp
+  ${imgui_SOURCE_DIR}/imgui_tables.cpp
+  ${imgui_SOURCE_DIR}/imgui_widgets.cpp
+  ${imgui_SOURCE_DIR}/backends/imgui_impl_sdl3.cpp
+  ${imgui_SOURCE_DIR}/backends/imgui_impl_vulkan.cpp
 )
 
 target_compile_options(hardware-renderer-cpp
@@ -150,6 +183,8 @@ target_compile_options(hardware-renderer-cpp
 target_include_directories(hardware-renderer-cpp
   PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${imgui_SOURCE_DIR}
+    ${imgui_SOURCE_DIR}/backends
 )
 
 target_link_libraries(hardware-renderer-cpp
@@ -167,6 +202,7 @@ target_compile_definitions(hardware-renderer-cpp
     HARDWARE_RENDERER_OVERLAY_FRAG_SHADER_PATH="${OVERLAY_FRAG_SHADER_OUTPUT}"
     HARDWARE_RENDERER_LIGHT_VERT_SHADER_PATH="${LIGHT_VERT_SHADER_OUTPUT}"
     HARDWARE_RENDERER_LIGHT_FRAG_SHADER_PATH="${LIGHT_FRAG_SHADER_OUTPUT}"
+    HARDWARE_RENDERER_SHADOW_VERT_SHADER_PATH="${SHADOW_VERT_SHADER_OUTPUT}"
     HARDWARE_RENDERER_ASSETS_ROOT="${CMAKE_CURRENT_SOURCE_DIR}/assets"
 )
 

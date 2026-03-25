@@ -18,9 +18,24 @@ constexpr int kLotsPerBlockSide = 3;
 constexpr int kRoadStrideTiles = kLotsPerBlockSide + 1;
 constexpr int kCityTilesPerSide = 32;
 constexpr int kHalfCityTiles = kCityTilesPerSide / 2;
-constexpr float kVehicleFootprint = 4.5f;
+constexpr float kVehicleFootprint = 2.25f;
 constexpr float kBuildingFootprint = 5.0f;
 constexpr float kRoadLightOffset = kRoadTileSize * 0.48f;
+
+float TrafficYawDegrees(int direction)
+{
+    switch (direction)
+    {
+    case 0:
+        return 180.0f;
+    case 1:
+        return -90.0f;
+    case 2:
+        return 0.0f;
+    default:
+        return 90.0f;
+    }
+}
 
 Mat4 PlacementTransform(Vec3 position, float yawDegrees, float scale = 1.0f)
 {
@@ -100,7 +115,8 @@ std::uint32_t AddModelInstanceWithFootprint(
     float yawDegrees,
     float targetFootprint,
     bool collidable = true,
-    bool traffic = false
+    bool traffic = false,
+    std::int32_t trafficDirection = -1
 )
 {
     const std::string key(relativePath);
@@ -136,6 +152,7 @@ std::uint32_t AddModelInstanceWithFootprint(
         .transform = PlacementTransform(position, yawDegrees, scale),
         .collidable = collidable,
         .traffic = traffic,
+        .trafficDirection = trafficDirection,
     });
     return static_cast<std::uint32_t>(scene.entities.size() - 1);
 }
@@ -205,37 +222,6 @@ void AddRoadLights(
         180.0f,
         1.6f
     );
-}
-
-void AddHighwaySigns(
-    SceneData& scene,
-    const AssetRegistry& assetRegistry,
-    ModelCache& cache,
-    int minTile,
-    int maxTile
-)
-{
-    for (int tx = minTile + 8; tx <= maxTile - 8; tx += 16)
-    {
-        AddModelInstanceWithFootprint(
-            scene,
-            assetRegistry,
-            cache,
-            "kenney/kenney_city-kit-roads/Models/FBX format/sign-highway-wide.fbx",
-            Vec3Make(TileCenter(tx), 0.0f, TileCenter(4)),
-            180.0f,
-            5.0f
-        );
-        AddModelInstanceWithFootprint(
-            scene,
-            assetRegistry,
-            cache,
-            "kenney/kenney_city-kit-roads/Models/FBX format/sign-highway-wide.fbx",
-            Vec3Make(TileCenter(tx), 0.0f, TileCenter(-4)),
-            0.0f,
-            5.0f
-        );
-    }
 }
 
 void AddRoadTile(
@@ -399,7 +385,7 @@ void AddTrafficVehicles(
     constexpr std::size_t kVehicleCount = sizeof(kVehicles) / sizeof(kVehicles[0]);
 
     int vehicleIndex = 0;
-    for (int tx = minTile + 2; tx <= maxTile - 2; tx += 8)
+    for (int tx = minTile + 2; tx <= maxTile - 2; tx += 4)
     {
         if (tx % kRoadStrideTiles == 0)
         {
@@ -412,10 +398,11 @@ void AddTrafficVehicles(
             cache,
             kVehicles[vehicleIndex % kVehicleCount],
             Vec3Make(TileCenter(tx), 0.0f, TileCenter(-4)),
-            0.0f,
+            TrafficYawDegrees(1),
             kVehicleFootprint,
             false,
-            true
+            true,
+            1
         );
         ++vehicleIndex;
         AddModelInstanceWithFootprint(
@@ -424,15 +411,16 @@ void AddTrafficVehicles(
             cache,
             kVehicles[vehicleIndex % kVehicleCount],
             Vec3Make(TileCenter(tx), 0.0f, TileCenter(4)),
-            180.0f,
+            TrafficYawDegrees(3),
             kVehicleFootprint,
             false,
-            true
+            true,
+            3
         );
         ++vehicleIndex;
     }
 
-    for (int tz = minTile + 2; tz <= maxTile - 2; tz += 8)
+    for (int tz = minTile + 2; tz <= maxTile - 2; tz += 4)
     {
         if (tz % kRoadStrideTiles == 0)
         {
@@ -445,10 +433,11 @@ void AddTrafficVehicles(
             cache,
             kVehicles[vehicleIndex % kVehicleCount],
             Vec3Make(TileCenter(-4), 0.0f, TileCenter(tz)),
-            0.0f,
+            TrafficYawDegrees(0),
             kVehicleFootprint,
             false,
-            true
+            true,
+            0
         );
         ++vehicleIndex;
         AddModelInstanceWithFootprint(
@@ -457,10 +446,11 @@ void AddTrafficVehicles(
             cache,
             kVehicles[vehicleIndex % kVehicleCount],
             Vec3Make(TileCenter(4), 0.0f, TileCenter(tz)),
-            180.0f,
+            TrafficYawDegrees(2),
             kVehicleFootprint,
             false,
-            true
+            true,
+            2
         );
         ++vehicleIndex;
     }
@@ -469,13 +459,9 @@ void AddTrafficVehicles(
 void AddStreetProps(
     SceneData& scene,
     const AssetRegistry& assetRegistry,
-    ModelCache& cache,
-    int minTile,
-    int maxTile
+    ModelCache& cache
 )
 {
-    AddHighwaySigns(scene, assetRegistry, cache, minTile, maxTile);
-
     for (int tx = -6; tx <= 6; tx += 2)
     {
         if (tx == 0)
@@ -518,7 +504,7 @@ void AddStreetWorld(SceneData& scene, const AssetRegistry& assetRegistry)
         }
     }
 
-    AddStreetProps(scene, assetRegistry, cache, minTile, maxTile);
+    AddStreetProps(scene, assetRegistry, cache);
     AddTrafficVehicles(scene, assetRegistry, cache, minTile, maxTile);
 }
 }

@@ -112,12 +112,6 @@ void App::Initialize()
 
     CenterWindowOnPrimaryDisplay(m_window);
     m_assetRegistry.ScanFbx(HARDWARE_RENDERER_ASSETS_ROOT);
-    m_scene = LoadSampleScene(m_assetRegistry);
-    m_sceneBounds = ComputeSceneBounds(m_scene);
-    m_sceneTriangleCount = CountSceneTriangles(m_scene);
-    m_traffic.Initialize(m_scene);
-    m_worldCollider.BuildFromScene(m_scene);
-
     const std::filesystem::path* characterPath = m_assetRegistry.FindByRelativePath(kCharacterModelAsset);
     const std::filesystem::path* idlePath = m_assetRegistry.FindByRelativePath(kCharacterIdleAsset);
     const std::filesystem::path* runPath = m_assetRegistry.FindByRelativePath(kCharacterRunAsset);
@@ -139,22 +133,12 @@ void App::Initialize()
         );
         m_hasCharacter = true;
     }
-    if (m_sceneBounds.valid)
-    {
-        m_camera.yawRadians = DegreesToRadians(180.0f);
-        m_camera.pitchRadians = DegreesToRadians(-14.0f);
-    }
-    PlayerSpawn(m_player, m_worldCollider, m_sceneBounds);
-    m_characterModelYaw = m_camera.yawRadians;
-    PlayerSyncCamera(m_player, m_camera);
-    m_renderer.Initialize(m_window, m_scene, m_hasCharacter ? &m_characterSet.asset : nullptr);
-    SyncRendererSize();
-    UpdateWindowTitle();
-    UpdateOverlayText();
+    ReloadScene();
 }
 
 void App::Shutdown()
 {
+    ShutdownImGui();
     m_renderer.Shutdown();
 
     if (m_uiFont != nullptr)
@@ -176,6 +160,8 @@ void App::Shutdown()
 
 void App::HandleEvent(const SDL_Event& event)
 {
+    ProcessImGuiEvent(event);
+
     switch (event.type)
     {
     case SDL_EVENT_QUIT:
@@ -186,6 +172,10 @@ void App::HandleEvent(const SDL_Event& event)
         if (event.key.key == SDLK_ESCAPE)
         {
             m_running = false;
+        }
+        if (event.key.key == SDLK_TAB)
+        {
+            m_showImGui = !m_showImGui;
         }
         break;
 
@@ -259,6 +249,13 @@ void App::Update(float dtSeconds)
         m_titleRefreshSeconds = kTitleRefreshPeriod;
     }
 
+    BuildImGui();
+    if (m_reloadSceneRequested)
+    {
+        ReloadScene();
+        return;
+    }
+
     SceneUniforms uniforms{};
 
     uniforms.view = CameraViewMatrix(m_camera);
@@ -275,55 +272,7 @@ void App::Update(float dtSeconds)
         m_camera.position.z,
         1.0f
     );
-
-    float t = m_elapsedSeconds;
-    Vec3 lightCenter = m_sceneBounds.valid ? m_sceneBounds.center : Vec3Make(0.0f, 0.0f, 0.0f);
-    float orbitRadius = m_sceneBounds.valid ? std::max(m_sceneBounds.radius * 0.75f, 1.5f) : 2.9f;
-    float highY = m_sceneBounds.valid
-        ? m_sceneBounds.center.y + std::max(m_sceneBounds.radius * 0.65f, 1.8f)
-        : 2.3f;
-    float midY = m_sceneBounds.valid
-        ? m_sceneBounds.center.y + std::max(m_sceneBounds.radius * 0.45f, 1.4f)
-        : 1.9f;
-    float lowY = m_sceneBounds.valid
-        ? m_sceneBounds.center.y + std::max(m_sceneBounds.radius * 0.30f, 1.1f)
-        : 1.5f;
-
-    uniforms.lightPositions[0] = Vec4Make(
-        lightCenter.x + std::cos(t * 0.8f) * orbitRadius,
-        highY + std::sin(t * 1.2f) * 0.45f,
-        lightCenter.z + std::sin(t * 0.8f) * orbitRadius,
-        1.0f
-    );
-    uniforms.lightColors[0] = Vec4Make(5.0f, 4.8f, 4.5f, 1.0f);
-
-    uniforms.lightPositions[1] = Vec4Make(
-        lightCenter.x - orbitRadius * 0.8f + std::sin(t * 1.4f) * orbitRadius * 0.28f,
-        midY + std::sin(t * 2.1f) * 0.5f,
-        lightCenter.z + std::cos(t * 0.9f) * orbitRadius * 0.55f,
-        1.0f
-    );
-    uniforms.lightColors[1] = Vec4Make(4.8f, 0.45f, 0.45f, 1.0f);
-
-    uniforms.lightPositions[2] = Vec4Make(
-        lightCenter.x + std::cos(t * 1.1f) * orbitRadius * 0.55f,
-        lowY + std::cos(t * 1.8f) * 0.6f,
-        lightCenter.z - orbitRadius * 0.75f + std::sin(t * 1.3f) * orbitRadius * 0.32f,
-        1.0f
-    );
-    uniforms.lightColors[2] = Vec4Make(0.45f, 4.4f, 0.55f, 1.0f);
-
-    uniforms.lightPositions[3] = Vec4Make(
-        lightCenter.x + orbitRadius * 0.8f + std::cos(t * 1.7f) * orbitRadius * 0.24f,
-        midY + 0.2f + std::sin(t * 1.5f) * 0.55f,
-        lightCenter.z + std::sin(t * 1.0f) * orbitRadius * 0.62f,
-        1.0f
-    );
-    uniforms.lightColors[3] = Vec4Make(0.55f, 0.9f, 4.8f, 1.0f);
-
-    uniforms.sunDirection = Vec4Make(-0.45f, -1.0f, -0.35f, 0.0f);
-    uniforms.sunColor = Vec4Make(0.55f, 0.52f, 0.48f, 1.0f);
-    uniforms.ambientColor = Vec4Make(0.035f, 0.035f, 0.04f, 1.0f);
+    ApplyLighting(uniforms, dtSeconds);
     for (Mat4& skinJoint : uniforms.skinJoints)
     {
         skinJoint = Mat4Identity();

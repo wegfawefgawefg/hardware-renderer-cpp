@@ -5,6 +5,9 @@
 #include <stdexcept>
 #include <vector>
 
+#include "imgui.h"
+#include "backends/imgui_impl_vulkan.h"
+
 using namespace vulkan_renderer_internal;
 
 void VulkanRenderer::RecordCommandBuffer(std::uint32_t imageIndex)
@@ -16,7 +19,7 @@ void VulkanRenderer::RecordCommandBuffer(std::uint32_t imageIndex)
     CheckVk(vkBeginCommandBuffer(commandBuffer, &beginInfo), "vkBeginCommandBuffer");
 
     std::array<VkClearValue, 2> clearValues{};
-    clearValues[0].color = {{0.09f, 0.10f, 0.12f, 1.0f}};
+    clearValues[0].color = {{m_clearColor.x, m_clearColor.y, m_clearColor.z, m_clearColor.w}};
     clearValues[1].depthStencil = {1.0f, 0};
 
     VkRenderPassBeginInfo renderPassInfo{};
@@ -104,6 +107,8 @@ void VulkanRenderer::RecordCommandBuffer(std::uint32_t imageIndex)
             &toSample
         );
     }
+
+    RecordShadowPass(commandBuffer);
 
     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline);
@@ -198,7 +203,7 @@ void VulkanRenderer::RecordCommandBuffer(std::uint32_t imageIndex)
         0,
         nullptr
     );
-    vkCmdDraw(commandBuffer, 4, 1, 0, 0);
+    vkCmdDraw(commandBuffer, kLightMarkerCount, 1, 0, 0);
 
     if (m_overlayWidth > 0 && m_overlayHeight > 0)
     {
@@ -217,6 +222,11 @@ void VulkanRenderer::RecordCommandBuffer(std::uint32_t imageIndex)
             nullptr
         );
         vkCmdDraw(commandBuffer, 6, 1, 0, 0);
+    }
+
+    if (m_imguiInitialized)
+    {
+        ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer);
     }
 
     vkCmdEndRenderPass(commandBuffer);

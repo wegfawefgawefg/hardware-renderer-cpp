@@ -29,7 +29,13 @@ struct App
     void SyncRendererSize();
     void UpdateWindowTitle();
     void ResetMouseCapture(bool captured);
+    void InitializeImGui();
+    void ShutdownImGui();
+    void ProcessImGuiEvent(const SDL_Event& event);
+    void BuildImGui();
+    void ApplyLighting(SceneUniforms& uniforms, float dtSeconds);
     void UpdateOverlayText(const SceneUniforms* uniforms = nullptr);
+    void ReloadScene();
 
     SDL_Window* m_window = nullptr;
     VulkanRenderer m_renderer;
@@ -45,6 +51,7 @@ struct App
     TTF_Font* m_uiFont = nullptr;
 
     bool m_running = true;
+    bool m_showImGui = true;
     bool m_mouseCaptured = false;
     bool m_windowResized = false;
     std::uint32_t m_windowWidth = 0;
@@ -58,6 +65,21 @@ struct App
     int m_activeCharacterAnim = 0;
     std::uint32_t m_sceneTriangleCount = 0;
     bool m_hasCharacter = false;
+    bool m_reloadSceneRequested = false;
+    bool m_cycleDayNight = true;
+    float m_timeOfDay = 0.32f;
+    float m_dayNightSpeed = 0.035f;
+    float m_sunAzimuthDegrees = -35.0f;
+    float m_orbitDistanceScale = 1.6f;
+    float m_sunIntensity = 1.35f;
+    float m_moonIntensity = 0.18f;
+    float m_ambientIntensity = 0.35f;
+    float m_pointLightIntensity = 0.0f;
+    Vec3 m_sunWorldPosition = {};
+    Vec3 m_moonWorldPosition = {};
+    SceneKind m_sceneKind = SceneKind::ShadowTest;
+    bool m_shadowBlur = true;
+    std::uint32_t m_shadowMapSize = 2048;
 
     std::array<std::uint32_t, 512 * 128> m_overlayPixels = {};
     std::uint32_t m_overlayWidth = 0;

@@ -13,6 +13,11 @@ layout(binding = 0) uniform SceneUniforms
     vec4 sunDirection;
     vec4 sunColor;
     vec4 ambientColor;
+    vec4 celestialPositions[2];
+    vec4 celestialColors[2];
+    vec4 clearColor;
+    mat4 shadowViewProj;
+    vec4 shadowParams;
     mat4 skinJoints[64];
 } uniforms;
 

@@ -4,6 +4,8 @@
 #include <array>
 #include <cstring>
 
+#include "backends/imgui_impl_vulkan.h"
+
 VulkanRenderer::~VulkanRenderer()
 {
     Shutdown();
@@ -33,6 +35,8 @@ void VulkanRenderer::Initialize(
         CreateCharacterResources(*characterAsset);
     }
     CreateTextureResources(scene);
+    CreateShadowRenderPass();
+    CreateShadowResources();
     CreateDescriptorObjects();
     CreateOverlayDescriptorObjects();
 
@@ -46,6 +50,7 @@ void VulkanRenderer::Initialize(
     );
     CreateRenderPass();
     CreatePipeline();
+    CreateShadowPipeline();
     CreateLightPipeline();
     CreateOverlayPipeline();
     CreateFramebuffers();
@@ -74,8 +79,14 @@ void VulkanRenderer::Shutdown()
         vkDestroySampler(m_device, m_overlaySampler, nullptr);
         m_overlaySampler = VK_NULL_HANDLE;
     }
+    if (m_shadowSampler != VK_NULL_HANDLE)
+    {
+        vkDestroySampler(m_device, m_shadowSampler, nullptr);
+        m_shadowSampler = VK_NULL_HANDLE;
+    }
 
     DestroyOverlayResources();
+    DestroyShadowResources();
     for (ImageResource& textureImage : m_textureImages)
     {
         DestroyImage(m_device, textureImage);
@@ -159,6 +170,26 @@ void VulkanRenderer::Shutdown()
         vkDestroyShaderModule(m_device, m_lightFragShaderModule, nullptr);
         m_lightFragShaderModule = VK_NULL_HANDLE;
     }
+    if (m_shadowPipeline != VK_NULL_HANDLE)
+    {
+        vkDestroyPipeline(m_device, m_shadowPipeline, nullptr);
+        m_shadowPipeline = VK_NULL_HANDLE;
+    }
+    if (m_shadowPipelineLayout != VK_NULL_HANDLE)
+    {
+        vkDestroyPipelineLayout(m_device, m_shadowPipelineLayout, nullptr);
+        m_shadowPipelineLayout = VK_NULL_HANDLE;
+    }
+    if (m_shadowVertShaderModule != VK_NULL_HANDLE)
+    {
+        vkDestroyShaderModule(m_device, m_shadowVertShaderModule, nullptr);
+        m_shadowVertShaderModule = VK_NULL_HANDLE;
+    }
+    if (m_shadowRenderPass != VK_NULL_HANDLE)
+    {
+        vkDestroyRenderPass(m_device, m_shadowRenderPass, nullptr);
+        m_shadowRenderPass = VK_NULL_HANDLE;
+    }
     if (m_overlayDescriptorPool != VK_NULL_HANDLE)
     {
         vkDestroyDescriptorPool(m_device, m_overlayDescriptorPool, nullptr);
@@ -168,6 +199,10 @@ void VulkanRenderer::Shutdown()
     {
         vkDestroyDescriptorSetLayout(m_device, m_overlayDescriptorSetLayout, nullptr);
         m_overlayDescriptorSetLayout = VK_NULL_HANDLE;
+    }
+    if (m_imguiInitialized)
+    {
+        ShutdownImGuiBackend();
     }
 
     if (m_imageAvailableSemaphore != VK_NULL_HANDLE)
@@ -221,6 +256,10 @@ void VulkanRenderer::Resize(std::uint32_t width, std::uint32_t height)
     DestroySwapchain();
     CreateSwapchain(width, height);
     CreateFramebuffers();
+    if (m_imguiInitialized)
+    {
+        ImGui_ImplVulkan_SetMinImageCount(static_cast<std::uint32_t>(m_swapchainImages.size()));
+    }
 }
 
 void VulkanRenderer::Render(
@@ -241,6 +280,7 @@ void VulkanRenderer::Render(
 
     std::memcpy(m_uniformBuffer.mapped, &uniforms, sizeof(uniforms));
     m_characterState = characterState != nullptr ? *characterState : CharacterRenderState{};
+    m_clearColor = uniforms.clearColor;
     if (overlayPixels.size_bytes() > vulkan_renderer_internal::kOverlayTextureBytes)
     {
         return;
@@ -254,8 +294,8 @@ void VulkanRenderer::Render(
     m_overlayWidth = overlayWidth;
     m_overlayHeight = overlayHeight;
 
-    std::array<LightMarkerVertex, 4> lightMarkers{};
-    for (std::size_t i = 0; i < lightMarkers.size(); ++i)
+    std::array<LightMarkerVertex, vulkan_renderer_internal::kLightMarkerCount> lightMarkers{};
+    for (std::size_t i = 0; i < 4; ++i)
     {
         lightMarkers[i].position = Vec3Make(
             uniforms.lightPositions[i].x,
@@ -268,7 +308,20 @@ void VulkanRenderer::Render(
             uniforms.lightColors[i].z
         );
     }
-        std::memcpy(m_lightMarkerBuffer.mapped, lightMarkers.data(), sizeof(lightMarkers));
+    for (std::size_t i = 0; i < 2; ++i)
+    {
+        lightMarkers[4 + i].position = Vec3Make(
+            uniforms.celestialPositions[i].x,
+            uniforms.celestialPositions[i].y,
+            uniforms.celestialPositions[i].z
+        );
+        lightMarkers[4 + i].color = Vec3Make(
+            uniforms.celestialColors[i].x,
+            uniforms.celestialColors[i].y,
+            uniforms.celestialColors[i].z
+        );
+    }
+    std::memcpy(m_lightMarkerBuffer.mapped, lightMarkers.data(), sizeof(lightMarkers));
 
     std::uint32_t imageIndex = 0;
     VkResult acquireResult = vkAcquireNextImageKHR(
