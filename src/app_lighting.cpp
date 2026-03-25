@@ -259,7 +259,7 @@ void App::ApplyLighting(SceneUniforms& uniforms, float dtSeconds)
     float cameraFar = 200.0f;
     float cameraAspect = static_cast<float>(std::max(m_windowWidth, 1u)) / static_cast<float>(std::max(m_windowHeight, 1u));
     float cameraFovY = DegreesToRadians(60.0f);
-    float splitDistance = std::clamp(m_shadowCascadeSplit, 4.0f, cameraFar - 10.0f);
+    float splitDistance = std::clamp(m_shadowCascadeSplit, 8.0f, cameraFar - 10.0f);
     float sceneRadius = m_sceneBounds.valid ? m_sceneBounds.radius : 24.0f;
 
     ShadowCascadeBounds nearCascade = FitShadowCascadeToCameraSlice(
