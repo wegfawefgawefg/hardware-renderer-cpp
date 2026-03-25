@@ -31,12 +31,28 @@ FetchContent_Declare(
   GIT_SHALLOW TRUE
 )
 
+FetchContent_Declare(
+  SDL3_ttf
+  GIT_REPOSITORY https://github.com/libsdl-org/SDL_ttf.git
+  GIT_TAG release-3.2.2
+  GIT_SHALLOW TRUE
+)
+
 FetchContent_MakeAvailable(SDL3)
+FetchContent_MakeAvailable(SDL3_ttf)
 
 set(VERT_SHADER_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/shaders/mesh.vert)
 set(FRAG_SHADER_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/shaders/mesh.frag)
 set(VERT_SHADER_OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/shaders/mesh.vert.spv)
 set(FRAG_SHADER_OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/shaders/mesh.frag.spv)
+set(OVERLAY_VERT_SHADER_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/shaders/overlay.vert)
+set(OVERLAY_FRAG_SHADER_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/shaders/overlay.frag)
+set(OVERLAY_VERT_SHADER_OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/shaders/overlay.vert.spv)
+set(OVERLAY_FRAG_SHADER_OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/shaders/overlay.frag.spv)
+set(LIGHT_VERT_SHADER_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/shaders/light.vert)
+set(LIGHT_FRAG_SHADER_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/shaders/light.frag)
+set(LIGHT_VERT_SHADER_OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/shaders/light.vert.spv)
+set(LIGHT_FRAG_SHADER_OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/shaders/light.frag.spv)
 
 add_custom_command(
   OUTPUT ${VERT_SHADER_OUTPUT}
@@ -54,7 +70,48 @@ add_custom_command(
   VERBATIM
 )
 
-add_custom_target(hardware-renderer-cpp-shaders DEPENDS ${VERT_SHADER_OUTPUT} ${FRAG_SHADER_OUTPUT})
+add_custom_command(
+  OUTPUT ${OVERLAY_VERT_SHADER_OUTPUT}
+  COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/shaders
+  COMMAND ${GLSLANG_VALIDATOR} -V --target-env vulkan1.3 -S vert -o ${OVERLAY_VERT_SHADER_OUTPUT} ${OVERLAY_VERT_SHADER_SOURCE}
+  DEPENDS ${OVERLAY_VERT_SHADER_SOURCE}
+  VERBATIM
+)
+
+add_custom_command(
+  OUTPUT ${OVERLAY_FRAG_SHADER_OUTPUT}
+  COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/shaders
+  COMMAND ${GLSLANG_VALIDATOR} -V --target-env vulkan1.3 -S frag -o ${OVERLAY_FRAG_SHADER_OUTPUT} ${OVERLAY_FRAG_SHADER_SOURCE}
+  DEPENDS ${OVERLAY_FRAG_SHADER_SOURCE}
+  VERBATIM
+)
+
+add_custom_command(
+  OUTPUT ${LIGHT_VERT_SHADER_OUTPUT}
+  COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/shaders
+  COMMAND ${GLSLANG_VALIDATOR} -V --target-env vulkan1.3 -S vert -o ${LIGHT_VERT_SHADER_OUTPUT} ${LIGHT_VERT_SHADER_SOURCE}
+  DEPENDS ${LIGHT_VERT_SHADER_SOURCE}
+  VERBATIM
+)
+
+add_custom_command(
+  OUTPUT ${LIGHT_FRAG_SHADER_OUTPUT}
+  COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/shaders
+  COMMAND ${GLSLANG_VALIDATOR} -V --target-env vulkan1.3 -S frag -o ${LIGHT_FRAG_SHADER_OUTPUT} ${LIGHT_FRAG_SHADER_SOURCE}
+  DEPENDS ${LIGHT_FRAG_SHADER_SOURCE}
+  VERBATIM
+)
+
+add_custom_target(
+  hardware-renderer-cpp-shaders
+  DEPENDS
+    ${VERT_SHADER_OUTPUT}
+    ${FRAG_SHADER_OUTPUT}
+    ${OVERLAY_VERT_SHADER_OUTPUT}
+    ${OVERLAY_FRAG_SHADER_OUTPUT}
+    ${LIGHT_VERT_SHADER_OUTPUT}
+    ${LIGHT_FRAG_SHADER_OUTPUT}
+)
 
 add_executable(hardware-renderer-cpp
   src/app.cpp
@@ -84,6 +141,7 @@ target_include_directories(hardware-renderer-cpp
 target_link_libraries(hardware-renderer-cpp
   PRIVATE
     SDL3::SDL3
+    SDL3_ttf::SDL3_ttf
     Vulkan::Vulkan
 )
 
@@ -91,6 +149,10 @@ target_compile_definitions(hardware-renderer-cpp
   PRIVATE
     HARDWARE_RENDERER_VERT_SHADER_PATH="${VERT_SHADER_OUTPUT}"
     HARDWARE_RENDERER_FRAG_SHADER_PATH="${FRAG_SHADER_OUTPUT}"
+    HARDWARE_RENDERER_OVERLAY_VERT_SHADER_PATH="${OVERLAY_VERT_SHADER_OUTPUT}"
+    HARDWARE_RENDERER_OVERLAY_FRAG_SHADER_PATH="${OVERLAY_FRAG_SHADER_OUTPUT}"
+    HARDWARE_RENDERER_LIGHT_VERT_SHADER_PATH="${LIGHT_VERT_SHADER_OUTPUT}"
+    HARDWARE_RENDERER_LIGHT_FRAG_SHADER_PATH="${LIGHT_FRAG_SHADER_OUTPUT}"
     HARDWARE_RENDERER_SAMPLE_OBJ_PATH="${CMAKE_CURRENT_SOURCE_DIR}/assets/viking_room.obj"
     HARDWARE_RENDERER_SAMPLE_TEXTURE_PATH="${CMAKE_CURRENT_SOURCE_DIR}/assets/viking_room.png"
 )

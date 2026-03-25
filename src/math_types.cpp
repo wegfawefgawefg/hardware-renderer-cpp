@@ -188,6 +188,16 @@ Mat4 Mat4LookAt(Vec3 eye, Vec3 target, Vec3 up)
     return result;
 }
 
+Vec4 Mat4MulVec4(Mat4 m, Vec4 v)
+{
+    return Vec4Make(
+        m.m[0] * v.x + m.m[4] * v.y + m.m[8] * v.z + m.m[12] * v.w,
+        m.m[1] * v.x + m.m[5] * v.y + m.m[9] * v.z + m.m[13] * v.w,
+        m.m[2] * v.x + m.m[6] * v.y + m.m[10] * v.z + m.m[14] * v.w,
+        m.m[3] * v.x + m.m[7] * v.y + m.m[11] * v.z + m.m[15] * v.w
+    );
+}
+
 float DegreesToRadians(float degrees)
 {
     return degrees * (kPi / 180.0f);

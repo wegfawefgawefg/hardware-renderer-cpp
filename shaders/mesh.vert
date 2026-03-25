@@ -10,8 +10,8 @@ layout(binding = 0) uniform SceneUniforms
     mat4 view;
     mat4 proj;
     vec4 cameraPosition;
-    vec4 pointLightPosition;
-    vec4 pointLightColor;
+    vec4 lightPositions[4];
+    vec4 lightColors[4];
     vec4 ambientColor;
 } uniforms;
 

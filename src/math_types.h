@@ -50,5 +50,6 @@ Mat4 Mat4RotateZ(float radians);
 Mat4 Mat4Scale(float s);
 Mat4 Mat4Perspective(float fovYRadians, float aspect, float zNear, float zFar);
 Mat4 Mat4LookAt(Vec3 eye, Vec3 target, Vec3 up);
+Vec4 Mat4MulVec4(Mat4 m, Vec4 v);
 
 float DegreesToRadians(float degrees);

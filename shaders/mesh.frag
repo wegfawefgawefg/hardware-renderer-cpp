@@ -6,8 +6,8 @@ layout(binding = 0) uniform SceneUniforms
     mat4 view;
     mat4 proj;
     vec4 cameraPosition;
-    vec4 pointLightPosition;
-    vec4 pointLightColor;
+    vec4 lightPositions[4];
+    vec4 lightColors[4];
     vec4 ambientColor;
 } uniforms;
 
@@ -22,24 +22,22 @@ layout(location = 0) out vec4 outColor;
 void main()
 {
     vec3 normal = normalize(fragNormal);
-    vec3 viewDir = normalize(uniforms.cameraPosition.xyz - fragWorldPosition);
-    vec3 lightDir = normalize(uniforms.pointLightPosition.xyz - fragWorldPosition);
-    vec3 halfDir = normalize(lightDir + viewDir);
-
-    float distanceToLight = length(uniforms.pointLightPosition.xyz - fragWorldPosition);
-    float attenuation = 1.0 / (1.0 + 0.18 * distanceToLight + 0.035 * distanceToLight * distanceToLight);
-
-    float ndotl = max(dot(normal, lightDir), 0.0);
-    float specular = pow(max(dot(normal, halfDir), 0.0), 48.0);
-
     vec3 albedo = texture(albedoTexture, fragUv).rgb;
-    vec3 diffuse = albedo * uniforms.pointLightColor.rgb * ndotl * attenuation;
     vec3 ambient = albedo * uniforms.ambientColor.rgb;
-    vec3 specularColor = uniforms.pointLightColor.rgb * specular * attenuation * 0.35;
 
-    vec3 color = ambient + diffuse + specularColor;
+    vec3 lighting = ambient;
+    for (int i = 0; i < 4; ++i)
+    {
+        vec3 lightOffset = uniforms.lightPositions[i].xyz - fragWorldPosition;
+        float distanceToLight = length(lightOffset);
+        vec3 lightDir = distanceToLight > 0.0001 ? lightOffset / distanceToLight : vec3(0.0, 1.0, 0.0);
+        float attenuation = 1.0 / (1.0 + 0.22 * distanceToLight + 0.08 * distanceToLight * distanceToLight);
+        float ndotl = max(dot(normal, lightDir), 0.0);
+        lighting += albedo * uniforms.lightColors[i].rgb * ndotl * attenuation;
+    }
+
+    vec3 color = lighting;
     color = color / (color + vec3(1.0));
-    color = pow(color, vec3(1.0 / 2.2));
 
     outColor = vec4(color, 1.0);
 }

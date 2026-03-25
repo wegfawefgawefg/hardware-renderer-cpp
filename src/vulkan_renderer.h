@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <span>
 #include <vector>
 
 #include <SDL3/SDL_video.h>
@@ -15,9 +16,21 @@ struct alignas(16) SceneUniforms
     Mat4 view;
     Mat4 proj;
     Vec4 cameraPosition;
-    Vec4 pointLightPosition;
-    Vec4 pointLightColor;
+    Vec4 lightPositions[4];
+    Vec4 lightColors[4];
     Vec4 ambientColor;
+};
+
+struct OverlayVertex
+{
+    Vec2 position;
+    Vec2 uv;
+};
+
+struct LightMarkerVertex
+{
+    Vec3 position;
+    Vec3 color;
 };
 
 struct VulkanRenderer
@@ -27,7 +40,12 @@ struct VulkanRenderer
     void Initialize(SDL_Window* window, const SceneData& scene);
     void Shutdown();
     void Resize(std::uint32_t width, std::uint32_t height);
-    void Render(const SceneUniforms& uniforms);
+    void Render(
+        const SceneUniforms& uniforms,
+        std::span<const std::uint32_t> overlayPixels,
+        std::uint32_t overlayWidth,
+        std::uint32_t overlayHeight
+    );
 
     void CreateInstance();
     void CreateSurface();
@@ -41,10 +59,16 @@ struct VulkanRenderer
     void CreateSyncObjects();
     void CreateDescriptorObjects();
     void CreatePipeline();
+    void CreateOverlayDescriptorObjects();
+    void CreateOverlayPipeline();
+    void CreateLightPipeline();
     void CreateSceneBuffers(const SceneData& scene);
     void CreateTextureResources(const TextureData& texture);
+    void CreateOverlayResources();
+    void DestroyOverlayResources();
     void CreateDepthResources();
     void UpdateDescriptorSet();
+    void UpdateOverlayDescriptorSet();
     void RecordCommandBuffer(std::uint32_t imageIndex);
 
     VkSurfaceFormatKHR ChooseSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& formats) const;
@@ -77,6 +101,16 @@ struct VulkanRenderer
     VkPipeline m_pipeline = VK_NULL_HANDLE;
     VkShaderModule m_vertShaderModule = VK_NULL_HANDLE;
     VkShaderModule m_fragShaderModule = VK_NULL_HANDLE;
+    VkDescriptorSetLayout m_overlayDescriptorSetLayout = VK_NULL_HANDLE;
+    VkDescriptorPool m_overlayDescriptorPool = VK_NULL_HANDLE;
+    VkDescriptorSet m_overlayDescriptorSet = VK_NULL_HANDLE;
+    VkPipelineLayout m_overlayPipelineLayout = VK_NULL_HANDLE;
+    VkPipeline m_overlayPipeline = VK_NULL_HANDLE;
+    VkShaderModule m_overlayVertShaderModule = VK_NULL_HANDLE;
+    VkShaderModule m_overlayFragShaderModule = VK_NULL_HANDLE;
+    VkPipeline m_lightPipeline = VK_NULL_HANDLE;
+    VkShaderModule m_lightVertShaderModule = VK_NULL_HANDLE;
+    VkShaderModule m_lightFragShaderModule = VK_NULL_HANDLE;
 
     VkCommandPool m_commandPool = VK_NULL_HANDLE;
     std::vector<VkCommandBuffer> m_commandBuffers;
@@ -87,10 +121,19 @@ struct VulkanRenderer
     BufferResource m_vertexBuffer;
     BufferResource m_indexBuffer;
     BufferResource m_uniformBuffer;
+    BufferResource m_overlayUploadBuffer;
+    BufferResource m_overlayVertexBuffer;
+    BufferResource m_lightMarkerBuffer;
     ImageResource m_textureImage;
     VkSampler m_textureSampler = VK_NULL_HANDLE;
+    ImageResource m_overlayImage;
+    VkSampler m_overlaySampler = VK_NULL_HANDLE;
     ImageResource m_depthImage;
 
     std::uint32_t m_indexCount = 0;
+    std::uint32_t m_overlayTextureWidth = 0;
+    std::uint32_t m_overlayTextureHeight = 0;
+    std::uint32_t m_overlayWidth = 0;
+    std::uint32_t m_overlayHeight = 0;
     bool m_initialized = false;
 };
