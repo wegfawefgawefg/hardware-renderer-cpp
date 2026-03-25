@@ -11,8 +11,8 @@ This project plays the same role for the software rasterizers that `gpu-raytrace
 - Vendored SDL3 through CMake `FetchContent`
 - SDL3 floating Vulkan window on X11/i3
 - Vulkan graphics pipeline with swapchain, depth buffer, and textured mesh rendering
-- First-person free camera with right-mouse look
-- OBJ and glTF asset loading
+- Third-person follow camera with right-mouse look
+- OBJ, glTF, and FBX asset loading
 - PNG texture loading
 - Multi-model scene path with separate models and world instances
 - Realtime hardware lighting in fragment shader
@@ -47,16 +47,12 @@ That configures, builds, and launches `build/debug/hardware-renderer-cpp` under 
 
 ## Sample Scene
 
-The default sample path now prefers:
+The current sandbox keeps the static world minimal:
 
-- `assets/mario-64-mario/source/prototype_mario_super_mario_64/scene.gltf`
+- a built-in ground plane
+- one controllable Kenney skinned character loaded from `assets/kenney/animated-characters-1`
 
-with OBJ fallback to:
-
-- `assets/viking_room.obj`
-- `assets/viking_room.png`
-
-The point is the renderer structure, not one specific asset. The repo now has a better static-scene migration path than the original single-mesh baseline.
+That keeps the repo focused on renderer structure instead of tying it to legacy sample assets.
 
 ## What It Teaches
 
@@ -78,9 +74,9 @@ The point is the renderer structure, not one specific asset. The repo now has a 
 This is now past the first “single mesh demo” stage and into a more useful migration baseline:
 
 - one clean Vulkan raster path
-- one static multi-node scene asset path
-- one movable camera
-- one lit textured world scene
+- one static sandbox world path
+- one movable third-person camera
+- one lit animated character path
 - one CPU-side collision/query foundation
 
 If this repo continues later, the natural next topics are:

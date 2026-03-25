@@ -60,6 +60,7 @@ void VulkanRenderer::CreateSceneBuffers(const SceneData& scene)
             item.firstIndex = baseIndex + primitive.firstIndex;
             item.indexCount = primitive.indexCount;
             item.descriptorIndex = static_cast<std::uint32_t>(m_drawItems.size());
+            item.entityIndex = static_cast<std::uint32_t>(&entity - scene.entities.data());
             m_drawItems.push_back(item);
         }
     }
@@ -126,6 +127,17 @@ void VulkanRenderer::CreateSceneBuffers(const SceneData& scene)
         1
     );
     std::memcpy(m_overlayVertexBuffer.mapped, quad.data(), sizeof(quad));
+}
+
+void VulkanRenderer::UpdateSceneTransforms(const SceneData& scene)
+{
+    for (DrawItem& drawItem : m_drawItems)
+    {
+        if (drawItem.entityIndex < scene.entities.size())
+        {
+            drawItem.model = scene.entities[drawItem.entityIndex].transform;
+        }
+    }
 }
 
 void VulkanRenderer::CreateTextureResources(const SceneData& scene)

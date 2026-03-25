@@ -14,6 +14,11 @@ namespace
 constexpr std::string_view kWindowTitle = "hardware-renderer-cpp";
 constexpr std::string_view kUiFontPath = "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf";
 constexpr std::string_view kX11DialogWindowType = "_NET_WM_WINDOW_TYPE_DIALOG";
+constexpr std::string_view kCharacterModelAsset = "kenney/animated-characters-1/Model/characterMedium.fbx";
+constexpr std::string_view kCharacterIdleAsset = "kenney/animated-characters-1/Animations/idle.fbx";
+constexpr std::string_view kCharacterRunAsset = "kenney/animated-characters-1/Animations/run.fbx";
+constexpr std::string_view kCharacterJumpAsset = "kenney/animated-characters-1/Animations/jump.fbx";
+constexpr std::string_view kCharacterTextureAsset = "kenney/animated-characters-1/Skins/survivorMaleB.png";
 constexpr int kInitialWindowWidth = 1440;
 constexpr int kInitialWindowHeight = 900;
 constexpr float kTitleRefreshPeriod = 0.20f;
@@ -38,6 +43,11 @@ void CenterWindowOnPrimaryDisplay(SDL_Window* window)
     int x = bounds.x + (bounds.w - kInitialWindowWidth) / 2;
     int y = bounds.y + (bounds.h - kInitialWindowHeight) / 2;
     SDL_SetWindowPosition(window, x, y);
+}
+
+std::filesystem::path MakeAssetPath(std::string_view relativePath)
+{
+    return std::filesystem::path(HARDWARE_RENDERER_ASSETS_ROOT) / std::filesystem::path(relativePath);
 }
 
 }
@@ -101,22 +111,31 @@ void App::Initialize()
     }
 
     CenterWindowOnPrimaryDisplay(m_window);
-    m_scene = LoadSampleScene();
+    m_assetRegistry.ScanFbx(HARDWARE_RENDERER_ASSETS_ROOT);
+    m_scene = LoadSampleScene(m_assetRegistry);
     m_sceneBounds = ComputeSceneBounds(m_scene);
     m_sceneTriangleCount = CountSceneTriangles(m_scene);
+    m_traffic.Initialize(m_scene);
     m_worldCollider.BuildFromScene(m_scene);
-    if (std::filesystem::exists(HARDWARE_RENDERER_KENNEY_CHARACTER_PATH) &&
-        std::filesystem::exists(HARDWARE_RENDERER_KENNEY_TEXTURE_PATH) &&
-        std::filesystem::exists(HARDWARE_RENDERER_KENNEY_IDLE_PATH) &&
-        std::filesystem::exists(HARDWARE_RENDERER_KENNEY_RUN_PATH) &&
-        std::filesystem::exists(HARDWARE_RENDERER_KENNEY_JUMP_PATH))
+
+    const std::filesystem::path* characterPath = m_assetRegistry.FindByRelativePath(kCharacterModelAsset);
+    const std::filesystem::path* idlePath = m_assetRegistry.FindByRelativePath(kCharacterIdleAsset);
+    const std::filesystem::path* runPath = m_assetRegistry.FindByRelativePath(kCharacterRunAsset);
+    const std::filesystem::path* jumpPath = m_assetRegistry.FindByRelativePath(kCharacterJumpAsset);
+    const std::filesystem::path texturePath = MakeAssetPath(kCharacterTextureAsset);
+
+    if (characterPath != nullptr &&
+        idlePath != nullptr &&
+        runPath != nullptr &&
+        jumpPath != nullptr &&
+        std::filesystem::exists(texturePath))
     {
         m_characterSet = LoadKenneyCharacterAnimationSet(
-            HARDWARE_RENDERER_KENNEY_CHARACTER_PATH,
-            HARDWARE_RENDERER_KENNEY_TEXTURE_PATH,
-            HARDWARE_RENDERER_KENNEY_IDLE_PATH,
-            HARDWARE_RENDERER_KENNEY_RUN_PATH,
-            HARDWARE_RENDERER_KENNEY_JUMP_PATH
+            characterPath->string(),
+            texturePath.string(),
+            idlePath->string(),
+            runPath->string(),
+            jumpPath->string()
         );
         m_hasCharacter = true;
     }
@@ -224,6 +243,8 @@ void App::Update(float dtSeconds)
 
     PlayerUpdateFromInput(m_player, m_worldCollider, m_camera, dtSeconds, m_mouseCaptured);
     PlayerSyncCamera(m_player, m_camera);
+    m_traffic.Update(m_scene, dtSeconds, 64);
+    m_renderer.UpdateSceneTransforms(m_scene);
 
     if (m_windowResized)
     {
@@ -274,7 +295,7 @@ void App::Update(float dtSeconds)
         lightCenter.z + std::sin(t * 0.8f) * orbitRadius,
         1.0f
     );
-    uniforms.lightColors[0] = Vec4Make(3.2f, 3.0f, 2.8f, 1.0f);
+    uniforms.lightColors[0] = Vec4Make(5.0f, 4.8f, 4.5f, 1.0f);
 
     uniforms.lightPositions[1] = Vec4Make(
         lightCenter.x - orbitRadius * 0.8f + std::sin(t * 1.4f) * orbitRadius * 0.28f,
@@ -282,7 +303,7 @@ void App::Update(float dtSeconds)
         lightCenter.z + std::cos(t * 0.9f) * orbitRadius * 0.55f,
         1.0f
     );
-    uniforms.lightColors[1] = Vec4Make(2.2f, 0.35f, 0.35f, 1.0f);
+    uniforms.lightColors[1] = Vec4Make(4.8f, 0.45f, 0.45f, 1.0f);
 
     uniforms.lightPositions[2] = Vec4Make(
         lightCenter.x + std::cos(t * 1.1f) * orbitRadius * 0.55f,
@@ -290,7 +311,7 @@ void App::Update(float dtSeconds)
         lightCenter.z - orbitRadius * 0.75f + std::sin(t * 1.3f) * orbitRadius * 0.32f,
         1.0f
     );
-    uniforms.lightColors[2] = Vec4Make(0.35f, 2.0f, 0.45f, 1.0f);
+    uniforms.lightColors[2] = Vec4Make(0.45f, 4.4f, 0.55f, 1.0f);
 
     uniforms.lightPositions[3] = Vec4Make(
         lightCenter.x + orbitRadius * 0.8f + std::cos(t * 1.7f) * orbitRadius * 0.24f,
@@ -298,9 +319,11 @@ void App::Update(float dtSeconds)
         lightCenter.z + std::sin(t * 1.0f) * orbitRadius * 0.62f,
         1.0f
     );
-    uniforms.lightColors[3] = Vec4Make(0.45f, 0.75f, 2.2f, 1.0f);
+    uniforms.lightColors[3] = Vec4Make(0.55f, 0.9f, 4.8f, 1.0f);
 
-    uniforms.ambientColor = Vec4Make(0.14f, 0.14f, 0.16f, 1.0f);
+    uniforms.sunDirection = Vec4Make(-0.45f, -1.0f, -0.35f, 0.0f);
+    uniforms.sunColor = Vec4Make(0.55f, 0.52f, 0.48f, 1.0f);
+    uniforms.ambientColor = Vec4Make(0.035f, 0.035f, 0.04f, 1.0f);
     for (Mat4& skinJoint : uniforms.skinJoints)
     {
         skinJoint = Mat4Identity();
@@ -348,7 +371,10 @@ void App::Update(float dtSeconds)
         Vec3 renderPos = Vec3Sub(m_player.position, Vec3Make(0.0f, m_player.radius, 0.0f));
         m_characterRenderState.model = Mat4Mul(
             Mat4Translate(renderPos),
-            Mat4Mul(Mat4RotateY(m_characterModelYaw), m_characterSet.asset.modelOffset)
+            Mat4Mul(
+                Mat4RotateY(m_characterModelYaw),
+                Mat4Mul(m_characterSet.asset.modelOffset, Mat4Scale(0.8f))
+            )
         );
         for (std::uint32_t i = 0; i < m_characterRenderState.jointCount && i < kMaxSkinJoints; ++i)
         {

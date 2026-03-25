@@ -7,6 +7,8 @@ layout(binding = 0) uniform SceneUniforms
     vec4 cameraPosition;
     vec4 lightPositions[4];
     vec4 lightColors[4];
+    vec4 sunDirection;
+    vec4 sunColor;
     vec4 ambientColor;
     mat4 skinJoints[64];
 } uniforms;
@@ -26,12 +28,16 @@ void main()
     vec3 ambient = albedo * uniforms.ambientColor.rgb;
 
     vec3 lighting = ambient;
+    vec3 sunDir = normalize(-uniforms.sunDirection.xyz);
+    float sunNdotL = max(dot(normal, sunDir), 0.0);
+    lighting += albedo * uniforms.sunColor.rgb * sunNdotL;
+
     for (int i = 0; i < 4; ++i)
     {
         vec3 lightOffset = uniforms.lightPositions[i].xyz - fragWorldPosition;
         float distanceToLight = length(lightOffset);
         vec3 lightDir = distanceToLight > 0.0001 ? lightOffset / distanceToLight : vec3(0.0, 1.0, 0.0);
-        float attenuation = 1.0 / (1.0 + 0.22 * distanceToLight + 0.08 * distanceToLight * distanceToLight);
+        float attenuation = 1.0 / (1.0 + 0.14 * distanceToLight + 0.03 * distanceToLight * distanceToLight);
         float ndotl = max(dot(normal, lightDir), 0.0);
         lighting += albedo * uniforms.lightColors[i].rgb * ndotl * attenuation;
     }

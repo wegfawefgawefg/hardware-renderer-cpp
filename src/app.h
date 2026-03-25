@@ -9,8 +9,10 @@
 #include <SDL3_ttf/SDL_ttf.h>
 
 #include "camera.h"
+#include "assets/asset_registry.h"
 #include "collision/triangle_collider.h"
 #include "gameplay/player_controller.h"
+#include "gameplay/traffic.h"
 #include "animation/character.h"
 #include "scene.h"
 #include "render/renderer.h"
@@ -31,10 +33,12 @@ struct App
 
     SDL_Window* m_window = nullptr;
     VulkanRenderer m_renderer;
+    AssetRegistry m_assetRegistry;
     SceneData m_scene;
     SceneBounds m_sceneBounds;
     TriangleMeshCollider m_worldCollider;
     PlayerController m_player;
+    TrafficSystem m_traffic;
     CharacterAnimationSet m_characterSet;
     CharacterRenderState m_characterRenderState;
     Camera m_camera;

@@ -19,6 +19,8 @@ struct alignas(16) SceneUniforms
     Vec4 cameraPosition;
     Vec4 lightPositions[4];
     Vec4 lightColors[4];
+    Vec4 sunDirection;
+    Vec4 sunColor;
     Vec4 ambientColor;
     Mat4 skinJoints[64];
 };
@@ -55,6 +57,7 @@ struct VulkanRenderer
     );
     void Shutdown();
     void Resize(std::uint32_t width, std::uint32_t height);
+    void UpdateSceneTransforms(const SceneData& scene);
     void Render(
         const SceneUniforms& uniforms,
         std::span<const std::uint32_t> overlayPixels,
@@ -156,6 +159,7 @@ struct VulkanRenderer
         std::uint32_t indexCount = 0;
         std::uint32_t descriptorIndex = 0;
         std::uint32_t skinned = 0;
+        std::uint32_t entityIndex = 0;
     };
 
     std::vector<DrawItem> m_drawItems;

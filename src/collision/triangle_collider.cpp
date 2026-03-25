@@ -96,6 +96,10 @@ void TriangleMeshCollider::BuildFromScene(const SceneData& scene, const BuildOpt
         {
             continue;
         }
+        if (!entity.collidable)
+        {
+            continue;
+        }
 
         const ModelData& model = scene.models[entity.modelIndex];
         const MeshData& mesh = model.mesh;

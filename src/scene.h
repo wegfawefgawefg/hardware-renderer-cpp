@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 
+#include "assets/asset_registry.h"
 #include "math_types.h"
 
 struct Vertex
@@ -54,6 +55,8 @@ struct EntityData
 {
     std::uint32_t modelIndex = 0;
     Mat4 transform = {};
+    bool collidable = true;
+    bool traffic = false;
 };
 
 struct SceneData
@@ -73,4 +76,4 @@ struct SceneBounds
 
 SceneBounds ComputeSceneBounds(const SceneData& scene);
 std::uint32_t CountSceneTriangles(const SceneData& scene);
-SceneData LoadSampleScene();
+SceneData LoadSampleScene(const AssetRegistry& assetRegistry);

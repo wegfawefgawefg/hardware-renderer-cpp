@@ -36,13 +36,13 @@ Mat4 Mat4FromUfbx(const ufbx_matrix& m)
 {
     Mat4 out = Mat4Identity();
     out.m[0] = static_cast<float>(m.m00);
-    out.m[1] = static_cast<float>(m.m01);
-    out.m[2] = static_cast<float>(m.m02);
-    out.m[4] = static_cast<float>(m.m10);
+    out.m[1] = static_cast<float>(m.m10);
+    out.m[2] = static_cast<float>(m.m20);
+    out.m[4] = static_cast<float>(m.m01);
     out.m[5] = static_cast<float>(m.m11);
-    out.m[6] = static_cast<float>(m.m12);
-    out.m[8] = static_cast<float>(m.m20);
-    out.m[9] = static_cast<float>(m.m21);
+    out.m[6] = static_cast<float>(m.m21);
+    out.m[8] = static_cast<float>(m.m02);
+    out.m[9] = static_cast<float>(m.m12);
     out.m[10] = static_cast<float>(m.m22);
     out.m[12] = static_cast<float>(m.m03);
     out.m[13] = static_cast<float>(m.m13);

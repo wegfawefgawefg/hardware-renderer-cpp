@@ -13,6 +13,8 @@ layout(binding = 0) uniform SceneUniforms
     vec4 cameraPosition;
     vec4 lightPositions[4];
     vec4 lightColors[4];
+    vec4 sunDirection;
+    vec4 sunColor;
     vec4 ambientColor;
     mat4 skinJoints[64];
 } uniforms;
