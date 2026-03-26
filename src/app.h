@@ -95,6 +95,10 @@ struct App
     float m_shadowedSpotLightActivationDistance = 16.0f;
     float m_shadowedSpotLightActivationForwardOffset = 6.0f;
     Vec3 m_spotLightSourceOffset = {};
+    bool m_debugDrawActivationVolumes = true;
+    bool m_debugDrawSceneLightGizmos = true;
+    bool m_debugDrawLightDirections = true;
+    bool m_debugDrawLightLabels = true;
     bool m_shadowTestSpotTargetValid = false;
     Vec3 m_shadowTestSpotTargetWorld = {};
     Vec3 m_shadowTestSpotTargetOffset = {};

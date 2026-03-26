@@ -4,6 +4,255 @@
 #include "backends/imgui_impl_sdl3.h"
 #include "backends/imgui_impl_vulkan.h"
 
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <cstdio>
+#include <limits>
+#include <vector>
+
+namespace
+{
+Vec3 RotateYOffset(Vec3 v, float yawDegrees)
+{
+    float radians = DegreesToRadians(yawDegrees);
+    float c = std::cos(radians);
+    float s = std::sin(radians);
+    return Vec3Make(c * v.x + s * v.z, v.y, -s * v.x + c * v.z);
+}
+
+Vec3 NormalizeOrFallback(Vec3 v, Vec3 fallback)
+{
+    float length = Vec3Length(v);
+    return length > 1e-5f ? Vec3Scale(v, 1.0f / length) : fallback;
+}
+
+bool ProjectWorldToScreen(const App& app, Vec3 world, ImVec2& outScreen)
+{
+    if (app.m_windowWidth == 0 || app.m_windowHeight == 0)
+    {
+        return false;
+    }
+
+    Mat4 view = CameraViewMatrix(app.m_camera);
+    Mat4 proj = Mat4Perspective(
+        DegreesToRadians(60.0f),
+        static_cast<float>(app.m_windowWidth) / static_cast<float>(app.m_windowHeight),
+        0.1f,
+        200.0f
+    );
+    proj.m[5] *= -1.0f;
+
+    Vec4 clip = Mat4MulVec4(Mat4Mul(proj, view), Vec4Make(world.x, world.y, world.z, 1.0f));
+    if (clip.w <= 0.0001f)
+    {
+        return false;
+    }
+
+    float invW = 1.0f / clip.w;
+    float ndcX = clip.x * invW;
+    float ndcY = clip.y * invW;
+    float ndcZ = clip.z * invW;
+    if (ndcZ < -1.0f || ndcZ > 1.0f)
+    {
+        return false;
+    }
+
+    outScreen.x = (ndcX * 0.5f + 0.5f) * static_cast<float>(app.m_windowWidth);
+    outScreen.y = (ndcY * 0.5f + 0.5f) * static_cast<float>(app.m_windowHeight);
+    return true;
+}
+
+float ProjectSphereRadius(const App& app, Vec3 center, float radius)
+{
+    ImVec2 centerScreen{};
+    ImVec2 edgeScreen{};
+    Vec3 right = CameraRight(app.m_camera);
+    if (!ProjectWorldToScreen(app, center, centerScreen) ||
+        !ProjectWorldToScreen(app, Vec3Add(center, Vec3Scale(right, radius)), edgeScreen))
+    {
+        return 0.0f;
+    }
+    float dx = edgeScreen.x - centerScreen.x;
+    float dy = edgeScreen.y - centerScreen.y;
+    return std::sqrt(dx * dx + dy * dy);
+}
+
+struct DebugSpotSelection
+{
+    std::vector<std::uint32_t> shadowed;
+    std::vector<std::uint32_t> unshadowed;
+};
+
+DebugSpotSelection CollectDebugSpotSelection(const App& app)
+{
+    struct Candidate
+    {
+        float dist2 = 1e30f;
+        std::uint32_t index = std::numeric_limits<std::uint32_t>::max();
+    };
+
+    DebugSpotSelection result{};
+    std::array<Candidate, kMaxShadowedSpotLights> shadowed{};
+    std::array<Candidate, kMaxSceneSpotLights> unshadowed{};
+    for (Candidate& c : shadowed) c = Candidate{};
+    for (Candidate& c : unshadowed) c = Candidate{};
+
+    std::uint32_t shadowedBudget = std::min(app.m_shadowedSpotLightMaxActive, kMaxShadowedSpotLights);
+    std::uint32_t unshadowedBudget = std::min(app.m_spotLightMaxActive, kMaxSceneSpotLights);
+    Vec3 forward = CameraForward(app.m_camera);
+    Vec3 shadowedCenter = Vec3Add(app.m_camera.position, Vec3Scale(forward, app.m_shadowedSpotLightActivationForwardOffset));
+    Vec3 unshadowedCenter = Vec3Add(app.m_camera.position, Vec3Scale(forward, app.m_spotLightActivationForwardOffset));
+    float shadowedDist2Max = app.m_shadowedSpotLightActivationDistance * app.m_shadowedSpotLightActivationDistance;
+    float unshadowedDist2Max = app.m_spotLightActivationDistance * app.m_spotLightActivationDistance;
+
+    auto insertCandidate = [](auto& arr, std::uint32_t budget, float dist2, std::uint32_t index) {
+        for (std::uint32_t i = 0; i < budget; ++i)
+        {
+            if (dist2 >= arr[i].dist2)
+            {
+                continue;
+            }
+            for (std::uint32_t j = budget - 1; j > i; --j)
+            {
+                arr[j] = arr[j - 1];
+            }
+            arr[i] = Candidate{dist2, index};
+            break;
+        }
+    };
+
+    for (std::uint32_t i = 0; i < app.m_scene.spotLights.size(); ++i)
+    {
+        const SpotLightData& light = app.m_scene.spotLights[i];
+        Vec3 lightPos = Vec3Add(light.position, RotateYOffset(app.m_spotLightSourceOffset, light.yawDegrees));
+        Vec3 d0 = Vec3Sub(lightPos, shadowedCenter);
+        float sd2 = Vec3Dot(d0, d0);
+        if (sd2 <= shadowedDist2Max && shadowedBudget > 0)
+        {
+            insertCandidate(shadowed, shadowedBudget, sd2, i);
+        }
+
+        Vec3 d1 = Vec3Sub(lightPos, unshadowedCenter);
+        float ud2 = Vec3Dot(d1, d1);
+        if (ud2 <= unshadowedDist2Max && unshadowedBudget > 0)
+        {
+            insertCandidate(unshadowed, unshadowedBudget, ud2, i);
+        }
+    }
+
+    std::vector<bool> used(app.m_scene.spotLights.size(), false);
+    for (std::uint32_t i = 0; i < shadowedBudget; ++i)
+    {
+        if (shadowed[i].index < app.m_scene.spotLights.size())
+        {
+            result.shadowed.push_back(shadowed[i].index);
+            used[shadowed[i].index] = true;
+        }
+    }
+    for (std::uint32_t i = 0; i < unshadowedBudget; ++i)
+    {
+        if (unshadowed[i].index < app.m_scene.spotLights.size() && !used[unshadowed[i].index])
+        {
+            result.unshadowed.push_back(unshadowed[i].index);
+        }
+    }
+    return result;
+}
+
+void DrawLightDebugOverlay(const App& app)
+{
+    if (app.m_scene.spotLights.empty())
+    {
+        return;
+    }
+
+    ImDrawList* drawList = ImGui::GetForegroundDrawList();
+    DebugSpotSelection selection = CollectDebugSpotSelection(app);
+    std::vector<std::uint8_t> state(app.m_scene.spotLights.size(), 0);
+    for (std::uint32_t index : selection.unshadowed) state[index] = 1;
+    for (std::uint32_t index : selection.shadowed) state[index] = 2;
+
+    if (app.m_debugDrawActivationVolumes)
+    {
+        Vec3 forward = CameraForward(app.m_camera);
+        Vec3 centerA = Vec3Add(app.m_camera.position, Vec3Scale(forward, app.m_spotLightActivationForwardOffset));
+        Vec3 centerB = Vec3Add(app.m_camera.position, Vec3Scale(forward, app.m_shadowedSpotLightActivationForwardOffset));
+        ImVec2 screenCenter{};
+        if (ProjectWorldToScreen(app, centerA, screenCenter))
+        {
+            float radius = ProjectSphereRadius(app, centerA, app.m_spotLightActivationDistance);
+            if (radius > 1.0f)
+            {
+                drawList->AddCircle(screenCenter, radius, IM_COL32(0, 255, 255, 160), 64, 1.5f);
+                drawList->AddCircle(screenCenter, std::max(radius - 2.0f, 1.0f), IM_COL32(0, 255, 255, 80), 64, 1.0f);
+                drawList->AddCircleFilled(screenCenter, 3.0f, IM_COL32(0, 255, 255, 200), 12);
+                drawList->AddText(ImVec2(screenCenter.x + 8.0f, screenCenter.y - 10.0f), IM_COL32(0, 255, 255, 220), "ACT");
+            }
+        }
+        if (ProjectWorldToScreen(app, centerB, screenCenter))
+        {
+            float radius = ProjectSphereRadius(app, centerB, app.m_shadowedSpotLightActivationDistance);
+            if (radius > 1.0f)
+            {
+                drawList->AddCircle(screenCenter, radius, IM_COL32(255, 0, 255, 180), 64, 1.75f);
+                drawList->AddCircle(screenCenter, std::max(radius - 2.0f, 1.0f), IM_COL32(255, 0, 255, 96), 64, 1.0f);
+                drawList->AddCircleFilled(screenCenter, 3.0f, IM_COL32(255, 0, 255, 220), 12);
+                drawList->AddText(ImVec2(screenCenter.x + 8.0f, screenCenter.y - 10.0f), IM_COL32(255, 0, 255, 220), "SHD");
+            }
+        }
+    }
+
+    if (!app.m_debugDrawSceneLightGizmos && !app.m_debugDrawLightDirections && !app.m_debugDrawLightLabels)
+    {
+        return;
+    }
+
+    for (std::uint32_t i = 0; i < app.m_scene.spotLights.size(); ++i)
+    {
+        const SpotLightData& light = app.m_scene.spotLights[i];
+        Vec3 source = Vec3Add(light.position, RotateYOffset(app.m_spotLightSourceOffset, light.yawDegrees));
+        Vec3 direction = light.direction;
+        if (app.m_sceneKind == SceneKind::ShadowTest && i == 0 && app.m_shadowTestSpotTargetValid)
+        {
+            direction = NormalizeOrFallback(Vec3Sub(app.m_shadowTestSpotTargetWorld, source), direction);
+        }
+        ImU32 color = IM_COL32(110, 110, 110, 220);
+        if (state[i] == 1) color = IM_COL32(0, 255, 255, 255);
+        if (state[i] == 2) color = IM_COL32(255, 0, 255, 255);
+
+        ImVec2 sourceScreen{};
+        if (!ProjectWorldToScreen(app, source, sourceScreen))
+        {
+            continue;
+        }
+
+        if (app.m_debugDrawLightDirections)
+        {
+            ImVec2 endScreen{};
+            if (ProjectWorldToScreen(app, Vec3Add(source, Vec3Scale(direction, 3.0f)), endScreen))
+            {
+                drawList->AddLine(sourceScreen, endScreen, color, 2.0f);
+            }
+        }
+
+        if (app.m_debugDrawSceneLightGizmos)
+        {
+            drawList->AddCircleFilled(sourceScreen, 4.5f, color, 12);
+            drawList->AddCircle(sourceScreen, 6.5f, IM_COL32(0, 0, 0, 200), 12, 1.0f);
+        }
+
+        if (app.m_debugDrawLightLabels)
+        {
+            const char* type = state[i] == 2 ? "SH" : (state[i] == 1 ? "SP" : "IN");
+            char label[64];
+            std::snprintf(label, sizeof(label), "%s %u", type, i);
+            drawList->AddText(ImVec2(sourceScreen.x + 8.0f, sourceScreen.y - 8.0f), color, label);
+        }
+    }
+}
+}
+
 void App::InitializeImGui()
 {
     IMGUI_CHECKVERSION();
@@ -158,6 +407,10 @@ void App::BuildImGui()
             debugSettingsChanged |= ImGui::SliderFloat("Shadowed dist", &m_shadowedSpotLightActivationDistance, 2.0f, 64.0f, "%.1f");
             debugSettingsChanged |= ImGui::SliderFloat("Shadowed fwd", &m_shadowedSpotLightActivationForwardOffset, -16.0f, 32.0f, "%.1f");
             debugSettingsChanged |= ImGui::DragFloat3("Source offset", &m_spotLightSourceOffset.x, 0.01f, -2.0f, 2.0f, "%.3f");
+            debugSettingsChanged |= ImGui::Checkbox("Show activation", &m_debugDrawActivationVolumes);
+            debugSettingsChanged |= ImGui::Checkbox("Show light gizmos", &m_debugDrawSceneLightGizmos);
+            debugSettingsChanged |= ImGui::Checkbox("Show direction lines", &m_debugDrawLightDirections);
+            debugSettingsChanged |= ImGui::Checkbox("Show labels", &m_debugDrawLightLabels);
             if (m_spotLightOuterAngleDegrees < m_spotLightInnerAngleDegrees)
             {
                 m_spotLightOuterAngleDegrees = m_spotLightInnerAngleDegrees;
@@ -196,5 +449,6 @@ void App::BuildImGui()
         }
     }
 
+    DrawLightDebugOverlay(*this);
     ImGui::Render();
 }

@@ -83,6 +83,11 @@ void App::LoadDebugSettings()
     ExtractFloat(text, "\"source_offset_x\"", m_spotLightSourceOffset.x);
     ExtractFloat(text, "\"source_offset_y\"", m_spotLightSourceOffset.y);
     ExtractFloat(text, "\"source_offset_z\"", m_spotLightSourceOffset.z);
+    float boolValue = 0.0f;
+    if (ExtractFloat(text, "\"debug_draw_activation_volumes\"", boolValue)) m_debugDrawActivationVolumes = boolValue != 0.0f;
+    if (ExtractFloat(text, "\"debug_draw_scene_light_gizmos\"", boolValue)) m_debugDrawSceneLightGizmos = boolValue != 0.0f;
+    if (ExtractFloat(text, "\"debug_draw_light_directions\"", boolValue)) m_debugDrawLightDirections = boolValue != 0.0f;
+    if (ExtractFloat(text, "\"debug_draw_light_labels\"", boolValue)) m_debugDrawLightLabels = boolValue != 0.0f;
 }
 
 void App::SaveDebugSettings() const
@@ -109,7 +114,11 @@ void App::SaveDebugSettings() const
         "  \"shadowed_spot_light_activation_forward_offset\": %.6f,\n"
         "  \"source_offset_x\": %.6f,\n"
         "  \"source_offset_y\": %.6f,\n"
-        "  \"source_offset_z\": %.6f\n"
+        "  \"source_offset_z\": %.6f,\n"
+        "  \"debug_draw_activation_volumes\": %d,\n"
+        "  \"debug_draw_scene_light_gizmos\": %d,\n"
+        "  \"debug_draw_light_directions\": %d,\n"
+        "  \"debug_draw_light_labels\": %d\n"
         "}\n",
         m_spotLightIntensityScale,
         m_spotLightRangeScale,
@@ -123,7 +132,11 @@ void App::SaveDebugSettings() const
         m_shadowedSpotLightActivationForwardOffset,
         m_spotLightSourceOffset.x,
         m_spotLightSourceOffset.y,
-        m_spotLightSourceOffset.z
+        m_spotLightSourceOffset.z,
+        m_debugDrawActivationVolumes ? 1 : 0,
+        m_debugDrawSceneLightGizmos ? 1 : 0,
+        m_debugDrawLightDirections ? 1 : 0,
+        m_debugDrawLightLabels ? 1 : 0
     );
 
     std::fclose(file);
