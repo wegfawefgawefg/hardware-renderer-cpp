@@ -147,17 +147,17 @@ add_custom_target(
 )
 
 add_executable(hardware-renderer-cpp
-  src/app_lifecycle.cpp
-  src/app_update.cpp
-  src/app_debug_settings.cpp
-  src/app_imgui.cpp
-  src/app_imgui_overlay.cpp
-  src/app_imgui_windows.cpp
-  src/app_lighting.cpp
-  src/app_paint_balls.cpp
-  src/app_scene.cpp
-  src/app_spotlight.cpp
-  src/app_vehicle_lights.cpp
+  src/runtime/lifecycle.cpp
+  src/runtime/update.cpp
+  src/runtime/scene_reload.cpp
+  src/debug/settings.cpp
+  src/debug/spotlight_placement.cpp
+  src/ui/system.cpp
+  src/ui/overlay.cpp
+  src/ui/windows.cpp
+  src/lighting/apply.cpp
+  src/gameplay/paint_runtime.cpp
+  src/gameplay/vehicle_light_editor.cpp
   src/animation/character.cpp
   src/animation/ufbx_impl.cpp
   src/assets/asset_registry.cpp
