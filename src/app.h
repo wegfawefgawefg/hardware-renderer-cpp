@@ -61,6 +61,16 @@ struct App
         VehicleRearLightConfig rearB = {.offset = {0.45f, 0.35f, -1.25f}, .range = 3.2f, .intensity = 2.8f};
     };
 
+    struct PaintSplat
+    {
+        Vec3 position = {};
+        float radius = 0.35f;
+        Vec3 normal = {0.0f, 1.0f, 0.0f};
+        float pad0 = 0.0f;
+        Vec3 color = {1.0f, 0.2f, 0.75f};
+        float pad1 = 0.0f;
+    };
+
     ~App();
 
     void Run();
@@ -87,6 +97,7 @@ struct App
     int FindActiveVehicleLightIndex() const;
     bool TryFirePaintBall();
     void UpdatePaintBalls(float dtSeconds);
+    void AppendPaintSplat(const PaintSplatSpawn& splat);
 
     SDL_Window* m_window = nullptr;
     VulkanRenderer m_renderer;
@@ -164,6 +175,9 @@ struct App
     PaintBallSettings m_paintBallSettings = {};
     bool m_paintBallFireHeld = false;
     float m_paintBallFireCooldown = 0.0f;
+    std::array<PaintSplat, kMaxPaintSplats> m_paintSplats = {};
+    std::uint32_t m_paintSplatCount = 0;
+    std::uint32_t m_nextPaintSplatIndex = 0;
 
     std::array<std::uint32_t, 512 * 128> m_overlayPixels = {};
     std::uint32_t m_overlayWidth = 0;

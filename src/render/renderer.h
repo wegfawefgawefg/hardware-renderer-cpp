@@ -17,6 +17,7 @@
 
 constexpr std::uint32_t kMaxSceneSpotLights = 32;
 constexpr std::uint32_t kMaxShadowedSpotLights = 4;
+constexpr std::uint32_t kMaxPaintSplats = 128;
 constexpr std::uint32_t kSunShadowCascadeCount = 2;
 constexpr std::uint32_t kTotalShadowMaps = kSunShadowCascadeCount + kMaxShadowedSpotLights;
 constexpr std::uint32_t kGpuTimestampCount = 6;
@@ -46,6 +47,10 @@ struct alignas(16) SceneUniforms
     Mat4 shadowViewProj[kTotalShadowMaps];
     Vec4 shadowParams;
     Mat4 skinJoints[64];
+    Vec4 paintSplatPositions[kMaxPaintSplats];
+    Vec4 paintSplatNormals[kMaxPaintSplats];
+    Vec4 paintSplatColors[kMaxPaintSplats];
+    Vec4 paintSplatCounts;
 };
 
 struct alignas(16) DrawPushConstants

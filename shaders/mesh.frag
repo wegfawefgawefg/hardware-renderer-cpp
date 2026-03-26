@@ -25,6 +25,10 @@ layout(binding = 0) uniform SceneUniforms
     mat4 shadowViewProj[6];
     vec4 shadowParams;
     mat4 skinJoints[64];
+    vec4 paintSplatPositions[128];
+    vec4 paintSplatNormals[128];
+    vec4 paintSplatColors[128];
+    vec4 paintSplatCounts;
 } uniforms;
 
 layout(binding = 1) uniform sampler2D albedoTexture;
@@ -95,10 +99,47 @@ float sampleShadow(int cascadeIndex, vec4 shadowPosition, vec3 normal, vec3 ligh
     return visibility / 9.0;
 }
 
+vec3 applyPaintSplats(vec3 baseAlbedo, vec3 worldPosition, vec3 normal)
+{
+    vec3 painted = baseAlbedo;
+    int splatCount = int(uniforms.paintSplatCounts.x);
+    for (int i = 0; i < splatCount; ++i)
+    {
+        vec3 center = uniforms.paintSplatPositions[i].xyz;
+        float radius = uniforms.paintSplatPositions[i].w;
+        if (radius <= 0.0001)
+        {
+            continue;
+        }
+
+        vec3 toFrag = worldPosition - center;
+        float dist = length(toFrag);
+        if (dist >= radius)
+        {
+            continue;
+        }
+
+        vec3 splatNormal = normalize(uniforms.paintSplatNormals[i].xyz);
+        float facing = dot(normal, splatNormal);
+        if (facing <= 0.35)
+        {
+            continue;
+        }
+
+        float radial = 1.0 - dist / radius;
+        float noise = 0.5 + 0.5 * sin(dot(worldPosition, vec3(8.7, 5.3, 6.1)) + float(i) * 3.17);
+        float mask = smoothstep(0.18, 0.85, radial + (noise - 0.5) * 0.35);
+        mask *= smoothstep(0.35, 0.65, facing);
+        painted = mix(painted, uniforms.paintSplatColors[i].rgb, clamp(mask, 0.0, 1.0));
+    }
+    return painted;
+}
+
 void main()
 {
     vec3 normal = normalize(fragNormal);
     vec3 albedo = texture(albedoTexture, fragUv).rgb;
+    albedo = applyPaintSplats(albedo, fragWorldPosition, normal);
     vec3 ambient = albedo * uniforms.ambientColor.rgb;
 
     vec3 lighting = ambient;

@@ -544,9 +544,17 @@ void App::BuildImGui()
         if (ImGui::Begin("Paint Balls"))
         {
             ImGui::Text("Active: %u / %u", m_paintBalls.ActiveCount(), PaintBallSettings::kMaxBalls);
+            ImGui::Text("Paint splats: %u / %u", m_paintSplatCount, kMaxPaintSplats);
             if (ImGui::Button("Reset paint balls"))
             {
                 m_paintBalls.Reset();
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Reset paint"))
+            {
+                m_paintSplatCount = 0;
+                m_nextPaintSplatIndex = 0;
+                m_paintSplats = {};
             }
             int bounceLimit = static_cast<int>(m_paintBallSettings.bounceLimit);
             debugSettingsChanged |= ImGui::SliderInt("Bounce limit", &bounceLimit, 0, 12);
@@ -561,7 +569,6 @@ void App::BuildImGui()
             ImGui::Separator();
             ImGui::TextUnformatted("Play mode: hold left click to rapid fire");
             ImGui::TextUnformatted("Mouse mode: Shift + Left click places test-scene tools");
-            ImGui::TextUnformatted("Paint layer not implemented yet");
         }
         ImGui::End();
 

@@ -79,7 +79,12 @@ void PaintBallSystem::Fire(Vec3 origin, Vec3 direction, const PaintBallSettings&
     (void)foundFree;
 }
 
-void PaintBallSystem::Update(const TriangleMeshCollider& worldCollider, float dtSeconds, const PaintBallSettings& settings)
+void PaintBallSystem::Update(
+    const TriangleMeshCollider& worldCollider,
+    float dtSeconds,
+    const PaintBallSettings& settings,
+    std::vector<PaintSplatSpawn>& outSplats
+)
 {
     if (dtSeconds <= 0.0f)
     {
@@ -145,6 +150,13 @@ void PaintBallSystem::Update(const TriangleMeshCollider& worldCollider, float dt
             {
                 continue;
             }
+
+            outSplats.push_back(PaintSplatSpawn{
+                .position = Vec3Add(ball.position, Vec3Scale(bounceNormal, 0.015f)),
+                .normal = bounceNormal,
+                .color = ball.color,
+                .radius = std::max(ball.radius * 3.2f, 0.22f),
+            });
 
             if (ball.remainingBounces == 0)
             {

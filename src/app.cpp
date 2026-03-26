@@ -320,6 +320,41 @@ void App::Update(float dtSeconds)
     {
         skinJoint = Mat4Identity();
     }
+    for (Vec4& splatPos : uniforms.paintSplatPositions)
+    {
+        splatPos = Vec4Make(0.0f, 0.0f, 0.0f, 0.0f);
+    }
+    for (Vec4& splatNormal : uniforms.paintSplatNormals)
+    {
+        splatNormal = Vec4Make(0.0f, 1.0f, 0.0f, 0.0f);
+    }
+    for (Vec4& splatColor : uniforms.paintSplatColors)
+    {
+        splatColor = Vec4Make(0.0f, 0.0f, 0.0f, 0.0f);
+    }
+    uniforms.paintSplatCounts = Vec4Make(static_cast<float>(m_paintSplatCount), 0.0f, 0.0f, 0.0f);
+    for (std::uint32_t i = 0; i < m_paintSplatCount && i < kMaxPaintSplats; ++i)
+    {
+        const PaintSplat& splat = m_paintSplats[i];
+        uniforms.paintSplatPositions[i] = Vec4Make(
+            splat.position.x,
+            splat.position.y,
+            splat.position.z,
+            splat.radius
+        );
+        uniforms.paintSplatNormals[i] = Vec4Make(
+            splat.normal.x,
+            splat.normal.y,
+            splat.normal.z,
+            0.0f
+        );
+        uniforms.paintSplatColors[i] = Vec4Make(
+            splat.color.x,
+            splat.color.y,
+            splat.color.z,
+            1.0f
+        );
+    }
 
     if (m_hasCharacter)
     {

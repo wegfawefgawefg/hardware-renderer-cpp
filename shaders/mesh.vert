@@ -31,6 +31,10 @@ layout(binding = 0) uniform SceneUniforms
     mat4 shadowViewProj[6];
     vec4 shadowParams;
     mat4 skinJoints[64];
+    vec4 paintSplatPositions[128];
+    vec4 paintSplatNormals[128];
+    vec4 paintSplatColors[128];
+    vec4 paintSplatCounts;
 } uniforms;
 
 layout(push_constant) uniform DrawPushConstants

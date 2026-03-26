@@ -14,6 +14,17 @@ Vec3 CameraRayDirection(const Camera& camera)
 }
 }
 
+void App::AppendPaintSplat(const PaintSplatSpawn& splat)
+{
+    PaintSplat& dst = m_paintSplats[m_nextPaintSplatIndex];
+    dst.position = splat.position;
+    dst.radius = splat.radius;
+    dst.normal = Vec3Normalize(splat.normal);
+    dst.color = splat.color;
+    m_nextPaintSplatIndex = (m_nextPaintSplatIndex + 1u) % kMaxPaintSplats;
+    m_paintSplatCount = std::min(m_paintSplatCount + 1u, kMaxPaintSplats);
+}
+
 bool App::TryFirePaintBall()
 {
     Vec3 forward = CameraRayDirection(m_camera);
@@ -32,6 +43,8 @@ bool App::TryFirePaintBall()
 
 void App::UpdatePaintBalls(float dtSeconds)
 {
+    std::vector<PaintSplatSpawn> newSplats;
+    newSplats.reserve(16);
     m_paintBallFireCooldown = std::max(0.0f, m_paintBallFireCooldown - dtSeconds);
     if (m_paintBallFireHeld &&
         m_mouseCaptured &&
@@ -45,5 +58,9 @@ void App::UpdatePaintBalls(float dtSeconds)
             }
         }
     }
-    m_paintBalls.Update(m_worldCollider, dtSeconds, m_paintBallSettings);
+    m_paintBalls.Update(m_worldCollider, dtSeconds, m_paintBallSettings, newSplats);
+    for (const PaintSplatSpawn& splat : newSplats)
+    {
+        AppendPaintSplat(splat);
+    }
 }

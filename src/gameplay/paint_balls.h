@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstdint>
+#include <vector>
 
 #include "collision/triangle_collider.h"
 #include "math_types.h"
@@ -32,11 +33,24 @@ struct PaintBall
     std::uint64_t shotId = 0;
 };
 
+struct PaintSplatSpawn
+{
+    Vec3 position = {};
+    Vec3 normal = {0.0f, 1.0f, 0.0f};
+    Vec3 color = {1.0f, 0.2f, 0.75f};
+    float radius = 0.4f;
+};
+
 struct PaintBallSystem
 {
     void Reset();
     void Fire(Vec3 origin, Vec3 direction, const PaintBallSettings& settings);
-    void Update(const TriangleMeshCollider& worldCollider, float dtSeconds, const PaintBallSettings& settings);
+    void Update(
+        const TriangleMeshCollider& worldCollider,
+        float dtSeconds,
+        const PaintBallSettings& settings,
+        std::vector<PaintSplatSpawn>& outSplats
+    );
 
     std::uint32_t ActiveCount() const;
     const std::array<PaintBall, PaintBallSettings::kMaxBalls>& Balls() const { return m_balls; }
