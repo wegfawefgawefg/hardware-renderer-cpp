@@ -12,12 +12,14 @@
 #include "imgui.h"
 
 #include "animation/character.h"
+#include "paint_runtime.h"
 #include "scene.h"
 #include "vulkan_helpers.h"
 
 constexpr std::uint32_t kMaxSceneSpotLights = 32;
 constexpr std::uint32_t kMaxShadowedSpotLights = 4;
 constexpr std::uint32_t kMaxPaintSplats = 128;
+constexpr std::uint32_t kMaxPersistentPaintStamps = 4096;
 constexpr std::uint32_t kSunShadowCascadeCount = 2;
 constexpr std::uint32_t kTotalShadowMaps = kSunShadowCascadeCount + kMaxShadowedSpotLights;
 constexpr std::uint32_t kGpuTimestampCount = 6;
@@ -61,6 +63,15 @@ struct alignas(16) DrawPushConstants
     std::uint32_t pointLightMask = 0;
     std::uint32_t spotLightMask = 0;
     std::uint32_t shadowedSpotLightMask = 0;
+    std::uint32_t persistentPaintOffset = 0;
+    std::uint32_t persistentPaintCount = 0;
+};
+
+struct alignas(16) PersistentPaintGpuStamp
+{
+    Vec4 positionRadius;
+    Vec4 normalSeed;
+    Vec4 colorOpacity;
 };
 
 struct OverlayVertex
@@ -154,6 +165,7 @@ struct VulkanRenderer
     void CreateLightSolidPipeline();
     void UpdateMainPassVisibility(const SceneUniforms& uniforms);
     void UpdateDrawLightMasks(const SceneUniforms& uniforms);
+    void UpdatePersistentPaintData(const std::vector<EntityPaintLayer>& entityLayers);
     void BuildDebugLightGeometry(
         const SceneUniforms& uniforms,
         const DebugRenderOptions& debug,
@@ -240,6 +252,7 @@ struct VulkanRenderer
     BufferResource m_uniformBuffer;
     BufferResource m_overlayUploadBuffer;
     BufferResource m_overlayVertexBuffer;
+    BufferResource m_persistentPaintBuffer;
     BufferResource m_lightMarkerBuffer;
     BufferResource m_lightLineBuffer;
     BufferResource m_lightSolidBuffer;
@@ -266,6 +279,8 @@ struct VulkanRenderer
         std::uint32_t descriptorIndex = 0;
         std::uint32_t skinned = 0;
         std::uint32_t entityIndex = 0;
+        std::uint32_t persistentPaintOffset = 0;
+        std::uint32_t persistentPaintCount = 0;
     };
 
     bool ShadowDrawItemVisible(const DrawItem& drawItem, std::uint32_t cascadeIndex) const;

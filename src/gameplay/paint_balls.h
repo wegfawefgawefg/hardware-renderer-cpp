@@ -39,6 +39,7 @@ struct PaintSplatSpawn
     Vec3 normal = {0.0f, 1.0f, 0.0f};
     Vec3 color = {1.0f, 0.2f, 0.75f};
     float radius = 0.4f;
+    std::uint32_t entityIndex = UINT32_MAX;
 };
 
 struct PaintBallSystem

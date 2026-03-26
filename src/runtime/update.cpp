@@ -288,6 +288,8 @@ void App::Update(float dtSeconds)
         ++cubeIndex;
     }
 
+    core.renderer.UpdatePersistentPaintData(paint.entityLayers);
+
     auto renderStart = Clock::now();
     core.renderer.Render(
         uniforms,

@@ -92,6 +92,7 @@ void VulkanRenderer::Shutdown()
     }
     m_textureImages.clear();
     DestroyBuffer(m_device, m_overlayVertexBuffer);
+    DestroyBuffer(m_device, m_persistentPaintBuffer);
     DestroyBuffer(m_device, m_lightMarkerBuffer);
     DestroyBuffer(m_device, m_lightLineBuffer);
     DestroyBuffer(m_device, m_lightSolidBuffer);

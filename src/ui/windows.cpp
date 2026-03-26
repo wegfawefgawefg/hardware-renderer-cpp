@@ -245,6 +245,7 @@ void App::BuildPaintBallsWindow(bool& debugSettingsChanged)
     {
         ImGui::Text("Active: %u / %u", core.paintBalls.ActiveCount(), PaintBallSettings::kMaxBalls);
         ImGui::Text("Paint splats: %u / %u", paint.splatCount, kMaxPaintSplats);
+        ImGui::Text("Accumulated: %u", CountAccumulatedPaintStamps());
         if (ImGui::Button("Reset paint balls"))
         {
             core.paintBalls.Reset();
@@ -255,7 +256,15 @@ void App::BuildPaintBallsWindow(bool& debugSettingsChanged)
                 paint.splatCount = 0;
                 paint.nextSplatIndex = 0;
                 paint.splats = {};
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Reset accumulated"))
+        {
+            for (EntityPaintLayer& layer : paint.entityLayers)
+            {
+                layer = {};
             }
+        }
 
         int bounceLimit = static_cast<int>(paint.ballSettings.bounceLimit);
         debugSettingsChanged |= ImGui::SliderInt("Bounce limit", &bounceLimit, 0, 12);

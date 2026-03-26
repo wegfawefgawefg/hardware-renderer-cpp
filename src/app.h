@@ -34,6 +34,8 @@ struct App
     bool TryFirePaintBall();
     void UpdatePaintBalls(float dtSeconds);
     void AppendPaintSplat(const PaintSplatSpawn& splat);
+    void AppendPersistentPaint(const PaintSplatSpawn& splat);
+    std::uint32_t CountAccumulatedPaintStamps() const;
     void DrawLightDebugOverlay();
     void BuildLightingWindow(bool& debugSettingsChanged);
     void BuildProfilerWindow();

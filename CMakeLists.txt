@@ -186,6 +186,7 @@ add_executable(hardware-renderer-cpp
   src/render/renderer.cpp
   src/render/renderer_debug.cpp
   src/render/renderer_lifecycle.cpp
+  src/render/renderer_paint.cpp
   src/render/renderer_visibility.cpp
   src/render/device.cpp
   src/render/culling.cpp

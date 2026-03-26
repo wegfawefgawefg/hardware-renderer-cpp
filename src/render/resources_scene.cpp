@@ -125,6 +125,14 @@ void VulkanRenderer::CreateSceneBuffers(const SceneData& scene)
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
         true
     );
+    m_persistentPaintBuffer = CreateBuffer(
+        m_physicalDevice,
+        m_device,
+        sizeof(PersistentPaintGpuStamp) * kMaxPersistentPaintStamps,
+        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        true
+    );
     m_lightMarkerBuffer = CreateBuffer(
         m_physicalDevice,
         m_device,

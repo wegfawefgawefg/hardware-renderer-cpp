@@ -90,8 +90,9 @@ void TriangleMeshCollider::BuildFromScene(const SceneData& scene, const BuildOpt
     m_seenStamp.clear();
     m_grid.clear();
 
-    for (const EntityData& entity : scene.entities)
+    for (std::uint32_t entityIndex = 0; entityIndex < scene.entities.size(); ++entityIndex)
     {
+        const EntityData& entity = scene.entities[entityIndex];
         if (entity.modelIndex >= scene.models.size())
         {
             continue;
@@ -134,6 +135,7 @@ void TriangleMeshCollider::BuildFromScene(const SceneData& scene, const BuildOpt
             tri.maxx = std::max({a.x, b.x, c.x});
             tri.minz = std::min({a.z, b.z, c.z});
             tri.maxz = std::max({a.z, b.z, c.z});
+            tri.entityIndex = entityIndex;
             m_tris.push_back(tri);
         }
     }
@@ -239,6 +241,7 @@ TriangleMeshCollider::RayHit TriangleMeshCollider::Raycast(
             best.distance = t;
             best.position = Vec3Add(origin, Vec3Scale(rayDir, t));
             best.normal = tri.n;
+            best.entityIndex = tri.entityIndex;
         }
     }
 
@@ -351,6 +354,7 @@ TriangleMeshCollider::RayHit TriangleMeshCollider::RaycastDown(
             best.distance = t;
             best.position = p;
             best.normal = tri.n;
+            best.entityIndex = tri.entityIndex;
         }
     }
 
@@ -407,6 +411,7 @@ void TriangleMeshCollider::GatherSphereContacts(
             contact.normal = tri.n;
             contact.penetration = radius;
         }
+        contact.entityIndex = tri.entityIndex;
         out.push_back(contact);
     }
 }

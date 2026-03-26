@@ -145,6 +145,17 @@ void PaintBallSystem::Update(
                 continue;
             }
 
+            std::uint32_t impactEntity = UINT32_MAX;
+            float deepestPenetration = -1.0f;
+            for (const auto& contact : contacts)
+            {
+                if (contact.penetration > deepestPenetration)
+                {
+                    deepestPenetration = contact.penetration;
+                    impactEntity = contact.entityIndex;
+                }
+            }
+
             float incoming = Vec3Dot(ball.velocity, bounceNormal);
             if (incoming >= -1e-4f)
             {
@@ -156,6 +167,7 @@ void PaintBallSystem::Update(
                 .normal = bounceNormal,
                 .color = ball.color,
                 .radius = std::max(ball.radius * 3.2f, 0.22f),
+                .entityIndex = impactEntity,
             });
 
             if (ball.remainingBounces == 0)

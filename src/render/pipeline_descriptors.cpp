@@ -24,7 +24,13 @@ void VulkanRenderer::CreateDescriptorObjects()
     shadowBinding.descriptorCount = kTotalShadowMaps;
     shadowBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
-    std::array<VkDescriptorSetLayoutBinding, 3> bindings = {uniformBinding, samplerBinding, shadowBinding};
+    VkDescriptorSetLayoutBinding paintBinding{};
+    paintBinding.binding = 3;
+    paintBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    paintBinding.descriptorCount = 1;
+    paintBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+    std::array<VkDescriptorSetLayoutBinding, 4> bindings = {uniformBinding, samplerBinding, shadowBinding, paintBinding};
     VkDescriptorSetLayoutCreateInfo layoutInfo{};
     layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
     layoutInfo.bindingCount = static_cast<std::uint32_t>(bindings.size());
@@ -32,11 +38,12 @@ void VulkanRenderer::CreateDescriptorObjects()
     CheckVk(vkCreateDescriptorSetLayout(m_device, &layoutInfo, nullptr, &m_descriptorSetLayout), "vkCreateDescriptorSetLayout");
 
     std::uint32_t descriptorCount = static_cast<std::uint32_t>(m_textureImages.size());
-    std::array<VkDescriptorPoolSize, 3> poolSizes =
+    std::array<VkDescriptorPoolSize, 4> poolSizes =
         {
             VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, descriptorCount},
             VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, descriptorCount},
             VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, descriptorCount * kTotalShadowMaps},
+            VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, descriptorCount},
         };
 
     VkDescriptorPoolCreateInfo poolInfo{};

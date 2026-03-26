@@ -45,14 +45,18 @@ layout(push_constant) uniform DrawPushConstants
     uint pointLightMask;
     uint spotLightMask;
     uint shadowedSpotLightMask;
+    uint persistentPaintOffset;
+    uint persistentPaintCount;
 } drawPush;
 
 layout(location = 0) out vec3 fragWorldPosition;
 layout(location = 1) out vec3 fragNormal;
 layout(location = 2) out vec2 fragUv;
-layout(location = 3) out vec4 fragShadowPosition0;
-layout(location = 4) out vec4 fragShadowPosition1;
-layout(location = 5) out float fragViewDepth;
+layout(location = 3) out vec3 fragLocalPosition;
+layout(location = 4) out vec3 fragLocalNormal;
+layout(location = 5) out vec4 fragShadowPosition0;
+layout(location = 6) out vec4 fragShadowPosition1;
+layout(location = 7) out float fragViewDepth;
 
 void main()
 {
@@ -75,6 +79,8 @@ void main()
     fragWorldPosition = worldPosition.xyz;
     fragNormal = normalize(normalMatrix * localNormal);
     fragUv = inUv;
+    fragLocalPosition = localPosition.xyz;
+    fragLocalNormal = normalize(localNormal);
     vec4 viewPosition = uniforms.view * worldPosition;
     fragShadowPosition0 = uniforms.shadowViewProj[0] * worldPosition;
     fragShadowPosition1 = uniforms.shadowViewProj[1] * worldPosition;

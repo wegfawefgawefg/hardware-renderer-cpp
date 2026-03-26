@@ -324,7 +324,20 @@ void VulkanRenderer::UpdateDescriptorSet()
         shadowWrite.descriptorCount = static_cast<std::uint32_t>(shadowInfos.size());
         shadowWrite.pImageInfo = shadowInfos.data();
 
-        std::array<VkWriteDescriptorSet, 3> writes = {uniformWrite, imageWrite, shadowWrite};
+        VkDescriptorBufferInfo paintInfo{};
+        paintInfo.buffer = m_persistentPaintBuffer.buffer;
+        paintInfo.offset = 0;
+        paintInfo.range = sizeof(PersistentPaintGpuStamp) * kMaxPersistentPaintStamps;
+
+        VkWriteDescriptorSet paintWrite{};
+        paintWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        paintWrite.dstSet = m_descriptorSets[i];
+        paintWrite.dstBinding = 3;
+        paintWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        paintWrite.descriptorCount = 1;
+        paintWrite.pBufferInfo = &paintInfo;
+
+        std::array<VkWriteDescriptorSet, 4> writes = {uniformWrite, imageWrite, shadowWrite, paintWrite};
         vkUpdateDescriptorSets(m_device, static_cast<std::uint32_t>(writes.size()), writes.data(), 0, nullptr);
     }
 }
