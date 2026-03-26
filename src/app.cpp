@@ -165,6 +165,7 @@ void App::Shutdown()
 void App::HandleEvent(const SDL_Event& event)
 {
     ProcessImGuiEvent(event);
+    bool imguiCapturingMouse = ImGui::GetCurrentContext() != nullptr && ImGui::GetIO().WantCaptureMouse;
 
     switch (event.type)
     {
@@ -175,17 +176,27 @@ void App::HandleEvent(const SDL_Event& event)
     case SDL_EVENT_KEY_DOWN:
         if (event.key.key == SDLK_ESCAPE)
         {
-            m_running = false;
+            if (m_mouseCaptured)
+            {
+                ResetMouseCapture(false);
+            }
+            else
+            {
+                m_running = false;
+            }
         }
         if (event.key.key == SDLK_TAB)
         {
             m_showImGui = !m_showImGui;
         }
+        if (event.key.key == SDLK_F1)
+        {
+            ResetMouseCapture(!m_mouseCaptured);
+        }
         break;
 
     case SDL_EVENT_MOUSE_BUTTON_DOWN:
-        if (event.button.button == SDL_BUTTON_LEFT &&
-            (ImGui::GetCurrentContext() == nullptr || !ImGui::GetIO().WantCaptureMouse))
+        if (event.button.button == SDL_BUTTON_LEFT && !imguiCapturingMouse)
         {
             const bool* keys = SDL_GetKeyboardState(nullptr);
             bool placementModifier = keys[SDL_SCANCODE_LSHIFT] || keys[SDL_SCANCODE_RSHIFT];
@@ -197,21 +208,18 @@ void App::HandleEvent(const SDL_Event& event)
             {
                 TryPlaceVehicleLight(event.button.x, event.button.y);
             }
-            else
+            else if (m_mouseCaptured)
             {
+                m_paintBallFireHeld = true;
                 TryFirePaintBall();
             }
-        }
-        if (event.button.button == SDL_BUTTON_RIGHT)
-        {
-            ResetMouseCapture(true);
         }
         break;
 
     case SDL_EVENT_MOUSE_BUTTON_UP:
-        if (event.button.button == SDL_BUTTON_RIGHT)
+        if (event.button.button == SDL_BUTTON_LEFT)
         {
-            ResetMouseCapture(false);
+            m_paintBallFireHeld = false;
         }
         break;
 
@@ -256,8 +264,9 @@ void App::Update(float dtSeconds)
     }
 
     auto inputStart = Clock::now();
-    PlayerUpdateFromInput(m_player, m_worldCollider, m_camera, dtSeconds, m_mouseCaptured);
-    PlayerSyncCamera(m_player, m_camera);
+    bool imguiCapturingKeyboard = ImGui::GetCurrentContext() != nullptr && ImGui::GetIO().WantCaptureKeyboard;
+    PlayerUpdateFromInput(m_player, m_worldCollider, m_camera, dtSeconds, m_mouseCaptured && !imguiCapturingKeyboard);
+    PlayerSyncCamera(m_player, m_worldCollider, m_camera);
     m_traffic.Update(m_scene, dtSeconds, 64);
     UpdatePaintBalls(dtSeconds);
     m_renderer.UpdateSceneTransforms(m_scene);

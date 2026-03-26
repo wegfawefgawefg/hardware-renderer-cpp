@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cfloat>
 #include <cmath>
 #include <cstdio>
 #include <limits>
@@ -284,6 +285,19 @@ void App::ProcessImGuiEvent(const SDL_Event& event)
 {
     if (ImGui::GetCurrentContext() != nullptr)
     {
+        if (m_mouseCaptured)
+        {
+            switch (event.type)
+            {
+            case SDL_EVENT_MOUSE_MOTION:
+            case SDL_EVENT_MOUSE_WHEEL:
+            case SDL_EVENT_MOUSE_BUTTON_DOWN:
+            case SDL_EVENT_MOUSE_BUTTON_UP:
+                return;
+            default:
+                break;
+            }
+        }
         ImGui_ImplSDL3_ProcessEvent(&event);
     }
 }
@@ -298,6 +312,17 @@ void App::BuildImGui()
     ImGui_ImplVulkan_NewFrame();
     ImGui_ImplSDL3_NewFrame();
     ImGui::NewFrame();
+    if (m_mouseCaptured)
+    {
+        ImGuiIO& io = ImGui::GetIO();
+        io.MousePos = ImVec2(-FLT_MAX, -FLT_MAX);
+        for (bool& down : io.MouseDown)
+        {
+            down = false;
+        }
+        io.MouseWheel = 0.0f;
+        io.MouseWheelH = 0.0f;
+    }
 
     if (m_showImGui)
     {
@@ -332,7 +357,7 @@ void App::BuildImGui()
             debugSettingsChanged |= ImGui::SliderFloat("Point lights", &m_pointLightIntensity, 0.0f, 3.0f, "%.2f");
             debugSettingsChanged |= ImGui::SliderFloat("Cascade split", &m_shadowCascadeSplit, 8.0f, 96.0f, "%.1f");
             ImGui::Separator();
-            ImGui::Text("RMB capture camera");
+            ImGui::Text("%s", m_mouseCaptured ? "Play mode: F1 or Esc to release mouse" : "Mouse mode: F1 to enter play mode");
             ImGui::Text("Sun  %.1f %.1f %.1f", m_sunWorldPosition.x, m_sunWorldPosition.y, m_sunWorldPosition.z);
             ImGui::Text("Moon %.1f %.1f %.1f", m_moonWorldPosition.x, m_moonWorldPosition.y, m_moonWorldPosition.z);
         }
@@ -515,7 +540,7 @@ void App::BuildImGui()
             viewport->WorkPos.y + 628.0f
         );
         ImGui::SetNextWindowPos(paintPos, ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowSize(ImVec2(340.0f, 180.0f), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(340.0f, 260.0f), ImGuiCond_FirstUseEver);
         if (ImGui::Begin("Paint Balls"))
         {
             ImGui::Text("Active: %u / %u", m_paintBalls.ActiveCount(), PaintBallSettings::kMaxBalls);
@@ -526,11 +551,17 @@ void App::BuildImGui()
             int bounceLimit = static_cast<int>(m_paintBallSettings.bounceLimit);
             debugSettingsChanged |= ImGui::SliderInt("Bounce limit", &bounceLimit, 0, 12);
             m_paintBallSettings.bounceLimit = static_cast<std::uint32_t>(bounceLimit);
+            debugSettingsChanged |= ImGui::SliderFloat("Shoot speed", &m_paintBallSettings.shootSpeed, 6.0f, 48.0f, "%.1f");
+            debugSettingsChanged |= ImGui::SliderFloat("Fire rate", &m_paintBallSettings.fireRate, 1.0f, 40.0f, "%.1f /s");
+            debugSettingsChanged |= ImGui::SliderFloat("Gravity", &m_paintBallSettings.gravity, 4.0f, 36.0f, "%.1f");
+            debugSettingsChanged |= ImGui::SliderFloat("Restitution", &m_paintBallSettings.restitution, 0.0f, 0.95f, "%.2f");
+            debugSettingsChanged |= ImGui::SliderFloat("Ball radius", &m_paintBallSettings.radius, 0.04f, 0.30f, "%.2f");
             debugSettingsChanged |= ImGui::ColorEdit3("Paint color", &m_paintBallSettings.baseColor.x);
             debugSettingsChanged |= ImGui::Checkbox("Cycle color on shoot", &m_paintBallSettings.cycleColorOnShoot);
             ImGui::Separator();
-            ImGui::TextUnformatted("Left click fires");
-            ImGui::TextUnformatted("Shift + Left click places test-scene tools");
+            ImGui::TextUnformatted("Play mode: hold left click to rapid fire");
+            ImGui::TextUnformatted("Mouse mode: Shift + Left click places test-scene tools");
+            ImGui::TextUnformatted("Paint layer not implemented yet");
         }
         ImGui::End();
 

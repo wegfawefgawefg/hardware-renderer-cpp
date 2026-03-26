@@ -115,6 +115,11 @@ void App::LoadDebugSettings()
     if (ExtractFloat(text, "\"debug_draw_vehicle_volumes\"", boolValue)) m_debugDrawVehicleVolumes = boolValue != 0.0f;
     if (ExtractFloat(text, "\"debug_draw_vehicle_light_ranges\"", boolValue)) m_debugDrawVehicleLightRanges = boolValue != 0.0f;
     ExtractUInt(text, "\"paint_ball_bounce_limit\"", m_paintBallSettings.bounceLimit);
+    ExtractFloat(text, "\"paint_ball_shoot_speed\"", m_paintBallSettings.shootSpeed);
+    ExtractFloat(text, "\"paint_ball_fire_rate\"", m_paintBallSettings.fireRate);
+    ExtractFloat(text, "\"paint_ball_gravity\"", m_paintBallSettings.gravity);
+    ExtractFloat(text, "\"paint_ball_restitution\"", m_paintBallSettings.restitution);
+    ExtractFloat(text, "\"paint_ball_radius\"", m_paintBallSettings.radius);
     ExtractFloat(text, "\"paint_ball_color_r\"", m_paintBallSettings.baseColor.x);
     ExtractFloat(text, "\"paint_ball_color_g\"", m_paintBallSettings.baseColor.y);
     ExtractFloat(text, "\"paint_ball_color_b\"", m_paintBallSettings.baseColor.z);
@@ -171,6 +176,11 @@ void App::SaveDebugSettings() const
         "  \"debug_draw_vehicle_volumes\": %d,\n"
         "  \"debug_draw_vehicle_light_ranges\": %d,\n"
         "  \"paint_ball_bounce_limit\": %u,\n"
+        "  \"paint_ball_shoot_speed\": %.6f,\n"
+        "  \"paint_ball_fire_rate\": %.6f,\n"
+        "  \"paint_ball_gravity\": %.6f,\n"
+        "  \"paint_ball_restitution\": %.6f,\n"
+        "  \"paint_ball_radius\": %.6f,\n"
         "  \"paint_ball_color_r\": %.6f,\n"
         "  \"paint_ball_color_g\": %.6f,\n"
         "  \"paint_ball_color_b\": %.6f,\n"
@@ -214,6 +224,11 @@ void App::SaveDebugSettings() const
         m_debugDrawVehicleVolumes ? 1 : 0,
         m_debugDrawVehicleLightRanges ? 1 : 0,
         m_paintBallSettings.bounceLimit,
+        m_paintBallSettings.shootSpeed,
+        m_paintBallSettings.fireRate,
+        m_paintBallSettings.gravity,
+        m_paintBallSettings.restitution,
+        m_paintBallSettings.radius,
         m_paintBallSettings.baseColor.x,
         m_paintBallSettings.baseColor.y,
         m_paintBallSettings.baseColor.z,

@@ -8,13 +8,14 @@
 
 struct PaintBallSettings
 {
-    static constexpr std::uint32_t kMaxBalls = 16;
+    static constexpr std::uint32_t kMaxBalls = 64;
 
     std::uint32_t bounceLimit = 4;
     Vec3 baseColor = {1.0f, 0.2f, 0.75f};
     bool cycleColorOnShoot = false;
     float radius = 0.12f;
-    float shootSpeed = 16.0f;
+    float shootSpeed = 28.0f;
+    float fireRate = 8.0f;
     float gravity = 22.0f;
     float restitution = 0.72f;
 };

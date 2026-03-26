@@ -21,7 +21,7 @@ struct PlayerController
 };
 
 void PlayerSpawn(PlayerController& player, const TriangleMeshCollider& collider, const SceneBounds& sceneBounds);
-void PlayerSyncCamera(const PlayerController& player, Camera& camera);
+void PlayerSyncCamera(const PlayerController& player, const TriangleMeshCollider& collider, Camera& camera);
 void PlayerUpdateFromInput(
     PlayerController& player,
     const TriangleMeshCollider& collider,

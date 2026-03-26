@@ -85,7 +85,7 @@ struct App
     void SaveVehicleLightRigs() const;
     void TryPlaceVehicleLight(int mouseX, int mouseY);
     int FindActiveVehicleLightIndex() const;
-    void TryFirePaintBall();
+    bool TryFirePaintBall();
     void UpdatePaintBalls(float dtSeconds);
 
     SDL_Window* m_window = nullptr;
@@ -162,6 +162,8 @@ struct App
     bool m_debugDrawVehicleVolumes = true;
     bool m_debugDrawVehicleLightRanges = true;
     PaintBallSettings m_paintBallSettings = {};
+    bool m_paintBallFireHeld = false;
+    float m_paintBallFireCooldown = 0.0f;
 
     std::array<std::uint32_t, 512 * 128> m_overlayPixels = {};
     std::uint32_t m_overlayWidth = 0;

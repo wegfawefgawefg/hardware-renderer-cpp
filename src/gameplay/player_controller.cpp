@@ -88,15 +88,35 @@ void PlayerSpawn(PlayerController& player, const TriangleMeshCollider& collider,
     }
 }
 
-void PlayerSyncCamera(const PlayerController& player, Camera& camera)
+void PlayerSyncCamera(const PlayerController& player, const TriangleMeshCollider& collider, Camera& camera)
 {
+    constexpr float kCameraWallPadding = 0.14f;
+
     Vec3 target = Vec3Make(
         player.position.x,
         player.position.y + player.cameraTargetHeight,
         player.position.z
     );
     Vec3 forward = CameraForward(camera);
-    camera.position = Vec3Sub(target, Vec3Scale(forward, player.cameraDistance));
+    Vec3 desired = Vec3Sub(target, Vec3Scale(forward, player.cameraDistance));
+    Vec3 toDesired = Vec3Sub(desired, target);
+    float desiredDistance = Vec3Length(toDesired);
+    if (desiredDistance <= 1e-5f)
+    {
+        camera.position = target;
+        return;
+    }
+
+    Vec3 rayDir = Vec3Scale(toDesired, 1.0f / desiredDistance);
+    TriangleMeshCollider::RayHit hit = collider.Raycast(target, rayDir, desiredDistance);
+    if (hit.hit)
+    {
+        float safeDistance = std::max(hit.distance - kCameraWallPadding, 0.2f);
+        camera.position = Vec3Add(target, Vec3Scale(rayDir, safeDistance));
+        return;
+    }
+
+    camera.position = desired;
 }
 
 void PlayerUpdateFromInput(

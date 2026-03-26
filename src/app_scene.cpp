@@ -37,7 +37,7 @@ void App::ReloadScene()
 
     PlayerSpawn(m_player, m_worldCollider, m_sceneBounds);
     m_characterModelYaw = m_camera.yawRadians;
-    PlayerSyncCamera(m_player, m_camera);
+    PlayerSyncCamera(m_player, m_worldCollider, m_camera);
 
     if (m_sceneKind == SceneKind::ShadowTest)
     {
@@ -91,7 +91,7 @@ void App::ReloadScene()
         m_camera.position = Vec3Make(-56.0f, 3.2f, -12.0f);
         m_camera.yawRadians = DegreesToRadians(180.0f);
         m_camera.pitchRadians = DegreesToRadians(-10.0f);
-        PlayerSyncCamera(m_player, m_camera);
+        PlayerSyncCamera(m_player, m_worldCollider, m_camera);
     }
     else
     {
