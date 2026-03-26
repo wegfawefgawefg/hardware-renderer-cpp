@@ -159,6 +159,8 @@ add_executable(hardware-renderer-cpp
   src/gameplay/paint_runtime.cpp
   src/gameplay/vehicle_light_editor.cpp
   src/animation/character.cpp
+  src/animation/character_common.cpp
+  src/animation/character_loader.cpp
   src/animation/ufbx_impl.cpp
   src/assets/asset_registry.cpp
   src/assets/fbx_loader.cpp
