@@ -154,6 +154,13 @@ struct VulkanRenderer
     void CreateLightSolidPipeline();
     void UpdateMainPassVisibility(const SceneUniforms& uniforms);
     void UpdateDrawLightMasks(const SceneUniforms& uniforms);
+    void BuildDebugLightGeometry(
+        const SceneUniforms& uniforms,
+        const DebugRenderOptions& debug,
+        std::span<LightMarkerVertex> lightMarkers,
+        std::span<LightMarkerVertex> lightLines,
+        std::span<LightMarkerVertex> lightSolids
+    );
     void CreateShadowResources();
     void DestroyShadowResources();
     void CreateShadowRenderPass();

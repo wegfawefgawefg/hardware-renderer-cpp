@@ -174,18 +174,26 @@ add_executable(hardware-renderer-cpp
   src/math_types.cpp
   src/scene.cpp
   src/scene_city.cpp
+  src/scene_city_layout.cpp
   src/scene_vehicle.cpp
   src/lighting/runtime.cpp
   src/lighting/runtime_math.cpp
   src/lighting/runtime_modes.cpp
   src/vulkan_helpers.cpp
+  src/scene_city_support.cpp
   src/render/renderer.cpp
+  src/render/renderer_debug.cpp
+  src/render/renderer_lifecycle.cpp
+  src/render/renderer_visibility.cpp
   src/render/device.cpp
   src/render/culling.cpp
   src/render/frame.cpp
   src/render/imgui.cpp
   src/render/pipeline.cpp
+  src/render/pipeline_descriptors.cpp
+  src/render/pipeline_lights.cpp
   src/render/resources.cpp
+  src/render/resources_scene.cpp
   src/render/shadow.cpp
   src/render/swapchain.cpp
   ${imgui_SOURCE_DIR}/imgui.cpp
