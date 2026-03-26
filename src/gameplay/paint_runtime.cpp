@@ -113,9 +113,6 @@ void App::AppendPersistentPaint(const PaintSplatSpawn& splat)
 {
     auto& core = m_state.core;
     auto& paint = m_state.paint;
-    std::vector<TriangleMeshCollider::SphereContact> contacts;
-    contacts.reserve(16);
-
     std::array<std::uint32_t, 16> entityIndices = {};
     std::uint32_t entityCount = 0;
     auto appendEntity = [&](std::uint32_t entityIndex)
@@ -141,11 +138,16 @@ void App::AppendPersistentPaint(const PaintSplatSpawn& splat)
     Vec3 tangent = {};
     Vec3 bitangent = {};
     BuildPaintBasis(normal, tangent, bitangent);
-    float ringRadius = std::max(splat.radius * 0.85f, 0.05f);
-    float probeRadius = std::max(std::min(splat.radius * 0.18f, 0.12f), 0.035f);
-    Vec3 probeLift = Vec3Scale(normal, 0.01f);
-    std::array<Vec3, 9> probeOffsets = {
+    float ringRadius = std::max(splat.radius * 0.9f, 0.05f);
+    float midRadius = ringRadius * 0.5f;
+    float rayStartOffset = std::max(splat.radius * 0.35f, 0.08f);
+    float rayDistance = std::max(splat.radius * 0.8f, 0.18f);
+    std::array<Vec3, 13> probeOffsets = {
         Vec3Make(0.0f, 0.0f, 0.0f),
+        Vec3Scale(tangent, midRadius),
+        Vec3Scale(tangent, -midRadius),
+        Vec3Scale(bitangent, midRadius),
+        Vec3Scale(bitangent, -midRadius),
         Vec3Scale(tangent, ringRadius),
         Vec3Scale(tangent, -ringRadius),
         Vec3Scale(bitangent, ringRadius),
@@ -159,12 +161,16 @@ void App::AppendPersistentPaint(const PaintSplatSpawn& splat)
     appendEntity(splat.entityIndex);
     for (const Vec3& offset : probeOffsets)
     {
-        contacts.clear();
-        Vec3 probeCenter = Vec3Add(Vec3Add(splat.position, offset), probeLift);
-        core.worldCollider.GatherSphereContacts(probeCenter, probeRadius, contacts);
-        for (const auto& contact : contacts)
+        Vec3 probeWorld = Vec3Add(splat.position, offset);
+        Vec3 rayOrigin = Vec3Add(probeWorld, Vec3Scale(normal, rayStartOffset));
+        TriangleMeshCollider::RayHit hit = core.worldCollider.Raycast(
+            rayOrigin,
+            Vec3Scale(normal, -1.0f),
+            rayDistance
+        );
+        if (hit.hit)
         {
-            appendEntity(contact.entityIndex);
+            appendEntity(hit.entityIndex);
         }
     }
 
