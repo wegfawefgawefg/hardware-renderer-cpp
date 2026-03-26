@@ -39,31 +39,34 @@ Vec3 RotateYOffset(Vec3 v, float yawDegrees)
 
 void App::TryPlaceShadowTestSpotlight(int mouseX, int mouseY)
 {
-    if (m_sceneKind != SceneKind::ShadowTest || m_scene.spotLights.empty())
+    auto& core = m_state.core;
+    auto& runtime = m_state.runtime;
+    auto& lighting = m_state.lighting;
+    if (lighting.sceneKind != SceneKind::ShadowTest || core.scene.spotLights.empty())
     {
         return;
     }
-    if (m_windowWidth == 0 || m_windowHeight == 0)
+    if (runtime.windowWidth == 0 || runtime.windowHeight == 0)
     {
         return;
     }
 
     float pixelX = static_cast<float>(mouseX) + 0.5f;
     float pixelY = static_cast<float>(mouseY) + 0.5f;
-    float ndcX = pixelX / static_cast<float>(m_windowWidth) * 2.0f - 1.0f;
-    float ndcY = 1.0f - pixelY / static_cast<float>(m_windowHeight) * 2.0f;
-    float aspect = static_cast<float>(m_windowWidth) / static_cast<float>(m_windowHeight);
-    Vec3 rayDir = CameraRayDirection(m_camera, aspect, ndcX, ndcY);
+    float ndcX = pixelX / static_cast<float>(runtime.windowWidth) * 2.0f - 1.0f;
+    float ndcY = 1.0f - pixelY / static_cast<float>(runtime.windowHeight) * 2.0f;
+    float aspect = static_cast<float>(runtime.windowWidth) / static_cast<float>(runtime.windowHeight);
+    Vec3 rayDir = CameraRayDirection(core.camera, aspect, ndcX, ndcY);
 
-    TriangleMeshCollider::RayHit hit = m_worldCollider.Raycast(m_camera.position, rayDir, 500.0f);
+    TriangleMeshCollider::RayHit hit = core.worldCollider.Raycast(core.camera.position, rayDir, 500.0f);
     if (!hit.hit)
     {
         return;
     }
 
     Vec3 source = Vec3Add(
-        m_scene.spotLights[0].position,
-        RotateYOffset(m_spotLightSourceOffset, m_scene.spotLights[0].yawDegrees)
+        core.scene.spotLights[0].position,
+        RotateYOffset(lighting.spotLightSourceOffset, core.scene.spotLights[0].yawDegrees)
     );
     Vec3 offset = Vec3Sub(hit.position, source);
     if (Vec3Length(offset) <= 1e-4f)
@@ -71,9 +74,9 @@ void App::TryPlaceShadowTestSpotlight(int mouseX, int mouseY)
         return;
     }
 
-    m_shadowTestSpotTargetValid = true;
-    m_shadowTestSpotTargetWorld = hit.position;
-    m_shadowTestSpotTargetOffset = offset;
+    lighting.shadowTestSpotTargetValid = true;
+    lighting.shadowTestSpotTargetWorld = hit.position;
+    lighting.shadowTestSpotTargetOffset = offset;
 
     std::printf(
         "shadow-test spotlight target offset: %.3f %.3f %.3f\n",

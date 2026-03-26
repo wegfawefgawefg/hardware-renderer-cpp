@@ -12,7 +12,7 @@ std::filesystem::path VehicleLightRigPath()
     return std::filesystem::path(".cache") / "vehicle_light_rigs.txt";
 }
 
-App::VehicleLightRig MakeDefaultRig()
+VehicleLightRig MakeDefaultRig()
 {
     return {};
 }
@@ -47,17 +47,19 @@ bool ParseFloat(std::string_view text, std::size_t& cursor, float& outValue)
 
 int App::FindActiveVehicleLightIndex() const
 {
-    if (m_sceneKind != SceneKind::VehicleLightTest)
+    const auto& core = m_state.core;
+    const auto& lighting = m_state.lighting;
+    if (lighting.sceneKind != SceneKind::VehicleLightTest)
     {
         return -1;
     }
 
     int bestIndex = -1;
     float bestDist2 = 1e30f;
-    for (std::size_t i = 0; i < m_scene.vehicleLightTestItems.size(); ++i)
+    for (std::size_t i = 0; i < core.scene.vehicleLightTestItems.size(); ++i)
     {
-        const SceneData::VehicleLightTestItem& item = m_scene.vehicleLightTestItems[i];
-        Vec3 delta = Vec3Sub(m_player.position, item.origin);
+        const SceneData::VehicleLightTestItem& item = core.scene.vehicleLightTestItems[i];
+        Vec3 delta = Vec3Sub(core.player.position, item.origin);
         float dist2 = Vec3Dot(delta, delta);
         if (dist2 <= item.selectionRadius * item.selectionRadius && dist2 < bestDist2)
         {
@@ -70,27 +72,31 @@ int App::FindActiveVehicleLightIndex() const
 
 void App::TryPlaceVehicleLight(int mouseX, int mouseY)
 {
-    if (m_sceneKind != SceneKind::VehicleLightTest)
+    auto& core = m_state.core;
+    auto& runtime = m_state.runtime;
+    auto& lighting = m_state.lighting;
+    auto& vehicle = m_state.vehicleLights;
+    if (lighting.sceneKind != SceneKind::VehicleLightTest)
     {
         return;
     }
 
     int activeIndex = FindActiveVehicleLightIndex();
-    if (activeIndex < 0 || m_windowWidth == 0 || m_windowHeight == 0)
+    if (activeIndex < 0 || runtime.windowWidth == 0 || runtime.windowHeight == 0)
     {
         return;
     }
 
     float pixelX = static_cast<float>(mouseX) + 0.5f;
     float pixelY = static_cast<float>(mouseY) + 0.5f;
-    float ndcX = pixelX / static_cast<float>(m_windowWidth) * 2.0f - 1.0f;
-    float ndcY = 1.0f - pixelY / static_cast<float>(m_windowHeight) * 2.0f;
-    float aspect = static_cast<float>(m_windowWidth) / static_cast<float>(m_windowHeight);
+    float ndcX = pixelX / static_cast<float>(runtime.windowWidth) * 2.0f - 1.0f;
+    float ndcY = 1.0f - pixelY / static_cast<float>(runtime.windowHeight) * 2.0f;
+    float aspect = static_cast<float>(runtime.windowWidth) / static_cast<float>(runtime.windowHeight);
 
     constexpr float kFovYRadians = 1.0471975512f;
     float tanHalfFov = std::tan(kFovYRadians * 0.5f);
-    Vec3 forward = CameraForward(m_camera);
-    Vec3 right = CameraRight(m_camera);
+    Vec3 forward = CameraForward(core.camera);
+    Vec3 right = CameraRight(core.camera);
     Vec3 up = Vec3Normalize(Vec3Cross(right, forward));
     Vec3 rayDir = Vec3Normalize(Vec3Add(
         forward,
@@ -100,16 +106,16 @@ void App::TryPlaceVehicleLight(int mouseX, int mouseY)
         )
     ));
 
-    TriangleMeshCollider::RayHit hit = m_worldCollider.Raycast(m_camera.position, rayDir, 500.0f);
+    TriangleMeshCollider::RayHit hit = core.worldCollider.Raycast(core.camera.position, rayDir, 500.0f);
     if (!hit.hit)
     {
         return;
     }
 
-    const SceneData::VehicleLightTestItem& item = m_scene.vehicleLightTestItems[static_cast<std::size_t>(activeIndex)];
-    VehicleLightRig& rig = m_vehicleLightRigs[item.assetPath];
+    const SceneData::VehicleLightTestItem& item = core.scene.vehicleLightTestItems[static_cast<std::size_t>(activeIndex)];
+    VehicleLightRig& rig = vehicle.rigs[item.assetPath];
     Vec3 local = Vec3Scale(Vec3Sub(hit.position, item.origin), 1.0f / std::max(item.scale, 0.0001f));
-    switch (m_vehicleLightSlot)
+    switch (vehicle.slot)
     {
     case VehicleLightSlot::HeadA: rig.headA.offset = local; break;
     case VehicleLightSlot::HeadB: rig.headB.offset = local; break;
@@ -121,7 +127,8 @@ void App::TryPlaceVehicleLight(int mouseX, int mouseY)
 
 void App::LoadVehicleLightRigs()
 {
-    m_vehicleLightRigs.clear();
+    auto& rigs = m_state.vehicleLights.rigs;
+    rigs.clear();
     std::ifstream in(VehicleLightRigPath());
     if (!in)
     {
@@ -139,7 +146,7 @@ void App::LoadVehicleLightRigs()
         if (line.rfind("asset ", 0) == 0)
         {
             currentAsset = line.substr(6);
-            m_vehicleLightRigs.emplace(currentAsset, MakeDefaultRig());
+            rigs.emplace(currentAsset, MakeDefaultRig());
             continue;
         }
         if (currentAsset.empty())
@@ -147,7 +154,7 @@ void App::LoadVehicleLightRigs()
             continue;
         }
 
-        VehicleLightRig& rig = m_vehicleLightRigs[currentAsset];
+        VehicleLightRig& rig = rigs[currentAsset];
         std::string_view view(line);
         auto parseTriple = [&](Vec3& value) {
             std::size_t cursor = line.find(' ');
@@ -187,7 +194,7 @@ void App::SaveVehicleLightRigs() const
         return;
     }
 
-    for (const auto& [asset, rig] : m_vehicleLightRigs)
+    for (const auto& [asset, rig] : m_state.vehicleLights.rigs)
     {
         out << "asset " << asset << "\n";
         out << "headA_offset " << rig.headA.offset.x << " " << rig.headA.offset.y << " " << rig.headA.offset.z << "\n";

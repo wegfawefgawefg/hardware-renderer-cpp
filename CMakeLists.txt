@@ -147,9 +147,12 @@ add_custom_target(
 )
 
 add_executable(hardware-renderer-cpp
-  src/app.cpp
+  src/app_lifecycle.cpp
+  src/app_update.cpp
   src/app_debug_settings.cpp
   src/app_imgui.cpp
+  src/app_imgui_overlay.cpp
+  src/app_imgui_windows.cpp
   src/app_lighting.cpp
   src/app_paint_balls.cpp
   src/app_scene.cpp
@@ -172,6 +175,9 @@ add_executable(hardware-renderer-cpp
   src/scene.cpp
   src/scene_city.cpp
   src/scene_vehicle.cpp
+  src/lighting/runtime.cpp
+  src/lighting/runtime_math.cpp
+  src/lighting/runtime_modes.cpp
   src/vulkan_helpers.cpp
   src/render/renderer.cpp
   src/render/device.cpp

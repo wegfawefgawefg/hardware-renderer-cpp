@@ -16,41 +16,47 @@ Vec3 CameraRayDirection(const Camera& camera)
 
 void App::AppendPaintSplat(const PaintSplatSpawn& splat)
 {
-    PaintSplat& dst = m_paintSplats[m_nextPaintSplatIndex];
+    auto& paint = m_state.paint;
+    PaintSplat& dst = paint.splats[paint.nextSplatIndex];
     dst.position = splat.position;
     dst.radius = splat.radius;
     dst.normal = Vec3Normalize(splat.normal);
     dst.color = splat.color;
-    m_nextPaintSplatIndex = (m_nextPaintSplatIndex + 1u) % kMaxPaintSplats;
-    m_paintSplatCount = std::min(m_paintSplatCount + 1u, kMaxPaintSplats);
+    paint.nextSplatIndex = (paint.nextSplatIndex + 1u) % kMaxPaintSplats;
+    paint.splatCount = std::min(paint.splatCount + 1u, kMaxPaintSplats);
 }
 
 bool App::TryFirePaintBall()
 {
-    Vec3 forward = CameraRayDirection(m_camera);
+    auto& core = m_state.core;
+    auto& paint = m_state.paint;
+    Vec3 forward = CameraRayDirection(core.camera);
     Vec3 spawn = Vec3Add(
-        m_camera.position,
+        core.camera.position,
         Vec3Add(
             Vec3Scale(forward, 0.45f),
             Vec3Make(0.0f, -0.08f, 0.0f)
         )
     );
-    m_paintBalls.Fire(spawn, forward, m_paintBallSettings);
-    float fireRate = std::max(m_paintBallSettings.fireRate, 0.01f);
-    m_paintBallFireCooldown = 1.0f / fireRate;
+    core.paintBalls.Fire(spawn, forward, paint.ballSettings);
+    float fireRate = std::max(paint.ballSettings.fireRate, 0.01f);
+    paint.fireCooldown = 1.0f / fireRate;
     return true;
 }
 
 void App::UpdatePaintBalls(float dtSeconds)
 {
+    auto& core = m_state.core;
+    auto& runtime = m_state.runtime;
+    auto& paint = m_state.paint;
     std::vector<PaintSplatSpawn> newSplats;
     newSplats.reserve(16);
-    m_paintBallFireCooldown = std::max(0.0f, m_paintBallFireCooldown - dtSeconds);
-    if (m_paintBallFireHeld &&
-        m_mouseCaptured &&
+    paint.fireCooldown = std::max(0.0f, paint.fireCooldown - dtSeconds);
+    if (paint.fireHeld &&
+        runtime.mouseCaptured &&
         (ImGui::GetCurrentContext() == nullptr || !ImGui::GetIO().WantCaptureMouse))
     {
-        while (m_paintBallFireCooldown <= 0.0f)
+        while (paint.fireCooldown <= 0.0f)
         {
             if (!TryFirePaintBall())
             {
@@ -58,7 +64,7 @@ void App::UpdatePaintBalls(float dtSeconds)
             }
         }
     }
-    m_paintBalls.Update(m_worldCollider, dtSeconds, m_paintBallSettings, newSplats);
+    core.paintBalls.Update(core.worldCollider, dtSeconds, paint.ballSettings, newSplats);
     for (const PaintSplatSpawn& splat : newSplats)
     {
         AppendPaintSplat(splat);

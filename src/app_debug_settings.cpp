@@ -60,6 +60,9 @@ bool ExtractUInt(std::string_view text, std::string_view key, std::uint32_t& out
 
 void App::LoadDebugSettings()
 {
+    auto& lighting = m_state.lighting;
+    auto& vehicle = m_state.vehicleLights;
+    auto& paint = m_state.paint;
     std::ifstream in(DebugSettingsPath());
     if (!in)
     {
@@ -71,63 +74,66 @@ void App::LoadDebugSettings()
     std::string text = buffer.str();
     float boolValue = 0.0f;
 
-    std::uint32_t sceneKind = static_cast<std::uint32_t>(m_sceneKind);
+    std::uint32_t sceneKind = static_cast<std::uint32_t>(lighting.sceneKind);
     if (ExtractUInt(text, "\"scene_kind\"", sceneKind) && sceneKind <= static_cast<std::uint32_t>(SceneKind::VehicleLightTest))
     {
-        m_sceneKind = static_cast<SceneKind>(sceneKind);
+        lighting.sceneKind = static_cast<SceneKind>(sceneKind);
     }
 
     ExtractFloat(text, "\"cycle_day_night\"", boolValue);
-    m_cycleDayNight = boolValue != 0.0f;
-    if (ExtractFloat(text, "\"animate_sun_azimuth\"", boolValue)) m_animateSunAzimuth = boolValue != 0.0f;
-    ExtractFloat(text, "\"time_of_day\"", m_timeOfDay);
-    ExtractFloat(text, "\"day_night_speed\"", m_dayNightSpeed);
-    ExtractFloat(text, "\"sun_azimuth_degrees\"", m_sunAzimuthDegrees);
-    ExtractFloat(text, "\"orbit_distance_scale\"", m_orbitDistanceScale);
-    ExtractFloat(text, "\"sun_intensity\"", m_sunIntensity);
-    ExtractFloat(text, "\"moon_intensity\"", m_moonIntensity);
-    ExtractFloat(text, "\"ambient_intensity\"", m_ambientIntensity);
-    ExtractFloat(text, "\"point_light_intensity\"", m_pointLightIntensity);
-    ExtractFloat(text, "\"shadow_cascade_split\"", m_shadowCascadeSplit);
-    ExtractUInt(text, "\"shadow_map_size\"", m_shadowMapSize);
-    if (ExtractFloat(text, "\"shadow_blur\"", boolValue)) m_shadowBlur = boolValue != 0.0f;
-    ExtractFloat(text, "\"main_draw_distance\"", m_mainDrawDistance);
-    ExtractFloat(text, "\"shadow_draw_distance\"", m_shadowDrawDistance);
-    ExtractFloat(text, "\"spot_light_intensity_scale\"", m_spotLightIntensityScale);
-    ExtractFloat(text, "\"spot_light_range_scale\"", m_spotLightRangeScale);
-    ExtractFloat(text, "\"spot_light_inner_angle_degrees\"", m_spotLightInnerAngleDegrees);
-    ExtractFloat(text, "\"spot_light_outer_angle_degrees\"", m_spotLightOuterAngleDegrees);
-    ExtractUInt(text, "\"spot_light_max_active\"", m_spotLightMaxActive);
-    ExtractFloat(text, "\"spot_light_activation_distance\"", m_spotLightActivationDistance);
-    ExtractFloat(text, "\"spot_light_activation_forward_offset\"", m_spotLightActivationForwardOffset);
-    ExtractUInt(text, "\"shadowed_spot_light_max_active\"", m_shadowedSpotLightMaxActive);
-    ExtractFloat(text, "\"shadowed_spot_light_activation_distance\"", m_shadowedSpotLightActivationDistance);
-    ExtractFloat(text, "\"shadowed_spot_light_activation_forward_offset\"", m_shadowedSpotLightActivationForwardOffset);
-    ExtractFloat(text, "\"source_offset_x\"", m_spotLightSourceOffset.x);
-    ExtractFloat(text, "\"source_offset_y\"", m_spotLightSourceOffset.y);
-    ExtractFloat(text, "\"source_offset_z\"", m_spotLightSourceOffset.z);
-    if (ExtractFloat(text, "\"draw_light_proxies\"", boolValue)) m_drawLightProxies = boolValue != 0.0f;
-    if (ExtractFloat(text, "\"debug_draw_activation_volumes\"", boolValue)) m_debugDrawActivationVolumes = boolValue != 0.0f;
-    if (ExtractFloat(text, "\"debug_draw_scene_light_gizmos\"", boolValue)) m_debugDrawSceneLightGizmos = boolValue != 0.0f;
-    if (ExtractFloat(text, "\"debug_draw_light_directions\"", boolValue)) m_debugDrawLightDirections = boolValue != 0.0f;
-    if (ExtractFloat(text, "\"debug_draw_light_volumes\"", boolValue)) m_debugDrawLightVolumes = boolValue != 0.0f;
-    if (ExtractFloat(text, "\"debug_draw_light_labels\"", boolValue)) m_debugDrawLightLabels = boolValue != 0.0f;
-    if (ExtractFloat(text, "\"debug_draw_vehicle_volumes\"", boolValue)) m_debugDrawVehicleVolumes = boolValue != 0.0f;
-    if (ExtractFloat(text, "\"debug_draw_vehicle_light_ranges\"", boolValue)) m_debugDrawVehicleLightRanges = boolValue != 0.0f;
-    ExtractUInt(text, "\"paint_ball_bounce_limit\"", m_paintBallSettings.bounceLimit);
-    ExtractFloat(text, "\"paint_ball_shoot_speed\"", m_paintBallSettings.shootSpeed);
-    ExtractFloat(text, "\"paint_ball_fire_rate\"", m_paintBallSettings.fireRate);
-    ExtractFloat(text, "\"paint_ball_gravity\"", m_paintBallSettings.gravity);
-    ExtractFloat(text, "\"paint_ball_restitution\"", m_paintBallSettings.restitution);
-    ExtractFloat(text, "\"paint_ball_radius\"", m_paintBallSettings.radius);
-    ExtractFloat(text, "\"paint_ball_color_r\"", m_paintBallSettings.baseColor.x);
-    ExtractFloat(text, "\"paint_ball_color_g\"", m_paintBallSettings.baseColor.y);
-    ExtractFloat(text, "\"paint_ball_color_b\"", m_paintBallSettings.baseColor.z);
-    if (ExtractFloat(text, "\"paint_ball_cycle_color\"", boolValue)) m_paintBallSettings.cycleColorOnShoot = boolValue != 0.0f;
+    lighting.cycleDayNight = boolValue != 0.0f;
+    if (ExtractFloat(text, "\"animate_sun_azimuth\"", boolValue)) lighting.animateSunAzimuth = boolValue != 0.0f;
+    ExtractFloat(text, "\"time_of_day\"", lighting.timeOfDay);
+    ExtractFloat(text, "\"day_night_speed\"", lighting.dayNightSpeed);
+    ExtractFloat(text, "\"sun_azimuth_degrees\"", lighting.sunAzimuthDegrees);
+    ExtractFloat(text, "\"orbit_distance_scale\"", lighting.orbitDistanceScale);
+    ExtractFloat(text, "\"sun_intensity\"", lighting.sunIntensity);
+    ExtractFloat(text, "\"moon_intensity\"", lighting.moonIntensity);
+    ExtractFloat(text, "\"ambient_intensity\"", lighting.ambientIntensity);
+    ExtractFloat(text, "\"point_light_intensity\"", lighting.pointLightIntensity);
+    ExtractFloat(text, "\"shadow_cascade_split\"", lighting.shadowCascadeSplit);
+    ExtractUInt(text, "\"shadow_map_size\"", lighting.shadowMapSize);
+    if (ExtractFloat(text, "\"shadow_blur\"", boolValue)) lighting.shadowBlur = boolValue != 0.0f;
+    ExtractFloat(text, "\"main_draw_distance\"", lighting.mainDrawDistance);
+    ExtractFloat(text, "\"shadow_draw_distance\"", lighting.shadowDrawDistance);
+    ExtractFloat(text, "\"spot_light_intensity_scale\"", lighting.spotLightIntensityScale);
+    ExtractFloat(text, "\"spot_light_range_scale\"", lighting.spotLightRangeScale);
+    ExtractFloat(text, "\"spot_light_inner_angle_degrees\"", lighting.spotLightInnerAngleDegrees);
+    ExtractFloat(text, "\"spot_light_outer_angle_degrees\"", lighting.spotLightOuterAngleDegrees);
+    ExtractUInt(text, "\"spot_light_max_active\"", lighting.spotLightMaxActive);
+    ExtractFloat(text, "\"spot_light_activation_distance\"", lighting.spotLightActivationDistance);
+    ExtractFloat(text, "\"spot_light_activation_forward_offset\"", lighting.spotLightActivationForwardOffset);
+    ExtractUInt(text, "\"shadowed_spot_light_max_active\"", lighting.shadowedSpotLightMaxActive);
+    ExtractFloat(text, "\"shadowed_spot_light_activation_distance\"", lighting.shadowedSpotLightActivationDistance);
+    ExtractFloat(text, "\"shadowed_spot_light_activation_forward_offset\"", lighting.shadowedSpotLightActivationForwardOffset);
+    ExtractFloat(text, "\"source_offset_x\"", lighting.spotLightSourceOffset.x);
+    ExtractFloat(text, "\"source_offset_y\"", lighting.spotLightSourceOffset.y);
+    ExtractFloat(text, "\"source_offset_z\"", lighting.spotLightSourceOffset.z);
+    if (ExtractFloat(text, "\"draw_light_proxies\"", boolValue)) lighting.drawLightProxies = boolValue != 0.0f;
+    if (ExtractFloat(text, "\"debug_draw_activation_volumes\"", boolValue)) lighting.debugDrawActivationVolumes = boolValue != 0.0f;
+    if (ExtractFloat(text, "\"debug_draw_scene_light_gizmos\"", boolValue)) lighting.debugDrawSceneLightGizmos = boolValue != 0.0f;
+    if (ExtractFloat(text, "\"debug_draw_light_directions\"", boolValue)) lighting.debugDrawLightDirections = boolValue != 0.0f;
+    if (ExtractFloat(text, "\"debug_draw_light_volumes\"", boolValue)) lighting.debugDrawLightVolumes = boolValue != 0.0f;
+    if (ExtractFloat(text, "\"debug_draw_light_labels\"", boolValue)) lighting.debugDrawLightLabels = boolValue != 0.0f;
+    if (ExtractFloat(text, "\"debug_draw_vehicle_volumes\"", boolValue)) vehicle.debugDrawVehicleVolumes = boolValue != 0.0f;
+    if (ExtractFloat(text, "\"debug_draw_vehicle_light_ranges\"", boolValue)) vehicle.debugDrawVehicleLightRanges = boolValue != 0.0f;
+    ExtractUInt(text, "\"paint_ball_bounce_limit\"", paint.ballSettings.bounceLimit);
+    ExtractFloat(text, "\"paint_ball_shoot_speed\"", paint.ballSettings.shootSpeed);
+    ExtractFloat(text, "\"paint_ball_fire_rate\"", paint.ballSettings.fireRate);
+    ExtractFloat(text, "\"paint_ball_gravity\"", paint.ballSettings.gravity);
+    ExtractFloat(text, "\"paint_ball_restitution\"", paint.ballSettings.restitution);
+    ExtractFloat(text, "\"paint_ball_radius\"", paint.ballSettings.radius);
+    ExtractFloat(text, "\"paint_ball_color_r\"", paint.ballSettings.baseColor.x);
+    ExtractFloat(text, "\"paint_ball_color_g\"", paint.ballSettings.baseColor.y);
+    ExtractFloat(text, "\"paint_ball_color_b\"", paint.ballSettings.baseColor.z);
+    if (ExtractFloat(text, "\"paint_ball_cycle_color\"", boolValue)) paint.ballSettings.cycleColorOnShoot = boolValue != 0.0f;
 }
 
 void App::SaveDebugSettings() const
 {
+    const auto& lighting = m_state.lighting;
+    const auto& vehicle = m_state.vehicleLights;
+    const auto& paint = m_state.paint;
     std::filesystem::create_directories(DebugSettingsPath().parent_path());
     std::FILE* file = std::fopen(DebugSettingsPath().string().c_str(), "wb");
     if (file == nullptr)
@@ -186,53 +192,53 @@ void App::SaveDebugSettings() const
         "  \"paint_ball_color_b\": %.6f,\n"
         "  \"paint_ball_cycle_color\": %d\n"
         "}\n",
-        static_cast<std::uint32_t>(m_sceneKind),
-        m_cycleDayNight ? 1 : 0,
-        m_animateSunAzimuth ? 1 : 0,
-        m_timeOfDay,
-        m_dayNightSpeed,
-        m_sunAzimuthDegrees,
-        m_orbitDistanceScale,
-        m_sunIntensity,
-        m_moonIntensity,
-        m_ambientIntensity,
-        m_pointLightIntensity,
-        m_shadowCascadeSplit,
-        m_shadowMapSize,
-        m_shadowBlur ? 1 : 0,
-        m_mainDrawDistance,
-        m_shadowDrawDistance,
-        m_spotLightIntensityScale,
-        m_spotLightRangeScale,
-        m_spotLightInnerAngleDegrees,
-        m_spotLightOuterAngleDegrees,
-        m_spotLightMaxActive,
-        m_spotLightActivationDistance,
-        m_spotLightActivationForwardOffset,
-        m_shadowedSpotLightMaxActive,
-        m_shadowedSpotLightActivationDistance,
-        m_shadowedSpotLightActivationForwardOffset,
-        m_spotLightSourceOffset.x,
-        m_spotLightSourceOffset.y,
-        m_spotLightSourceOffset.z,
-        m_drawLightProxies ? 1 : 0,
-        m_debugDrawActivationVolumes ? 1 : 0,
-        m_debugDrawSceneLightGizmos ? 1 : 0,
-        m_debugDrawLightDirections ? 1 : 0,
-        m_debugDrawLightVolumes ? 1 : 0,
-        m_debugDrawLightLabels ? 1 : 0,
-        m_debugDrawVehicleVolumes ? 1 : 0,
-        m_debugDrawVehicleLightRanges ? 1 : 0,
-        m_paintBallSettings.bounceLimit,
-        m_paintBallSettings.shootSpeed,
-        m_paintBallSettings.fireRate,
-        m_paintBallSettings.gravity,
-        m_paintBallSettings.restitution,
-        m_paintBallSettings.radius,
-        m_paintBallSettings.baseColor.x,
-        m_paintBallSettings.baseColor.y,
-        m_paintBallSettings.baseColor.z,
-        m_paintBallSettings.cycleColorOnShoot ? 1 : 0
+        static_cast<std::uint32_t>(lighting.sceneKind),
+        lighting.cycleDayNight ? 1 : 0,
+        lighting.animateSunAzimuth ? 1 : 0,
+        lighting.timeOfDay,
+        lighting.dayNightSpeed,
+        lighting.sunAzimuthDegrees,
+        lighting.orbitDistanceScale,
+        lighting.sunIntensity,
+        lighting.moonIntensity,
+        lighting.ambientIntensity,
+        lighting.pointLightIntensity,
+        lighting.shadowCascadeSplit,
+        lighting.shadowMapSize,
+        lighting.shadowBlur ? 1 : 0,
+        lighting.mainDrawDistance,
+        lighting.shadowDrawDistance,
+        lighting.spotLightIntensityScale,
+        lighting.spotLightRangeScale,
+        lighting.spotLightInnerAngleDegrees,
+        lighting.spotLightOuterAngleDegrees,
+        lighting.spotLightMaxActive,
+        lighting.spotLightActivationDistance,
+        lighting.spotLightActivationForwardOffset,
+        lighting.shadowedSpotLightMaxActive,
+        lighting.shadowedSpotLightActivationDistance,
+        lighting.shadowedSpotLightActivationForwardOffset,
+        lighting.spotLightSourceOffset.x,
+        lighting.spotLightSourceOffset.y,
+        lighting.spotLightSourceOffset.z,
+        lighting.drawLightProxies ? 1 : 0,
+        lighting.debugDrawActivationVolumes ? 1 : 0,
+        lighting.debugDrawSceneLightGizmos ? 1 : 0,
+        lighting.debugDrawLightDirections ? 1 : 0,
+        lighting.debugDrawLightVolumes ? 1 : 0,
+        lighting.debugDrawLightLabels ? 1 : 0,
+        vehicle.debugDrawVehicleVolumes ? 1 : 0,
+        vehicle.debugDrawVehicleLightRanges ? 1 : 0,
+        paint.ballSettings.bounceLimit,
+        paint.ballSettings.shootSpeed,
+        paint.ballSettings.fireRate,
+        paint.ballSettings.gravity,
+        paint.ballSettings.restitution,
+        paint.ballSettings.radius,
+        paint.ballSettings.baseColor.x,
+        paint.ballSettings.baseColor.y,
+        paint.ballSettings.baseColor.z,
+        paint.ballSettings.cycleColorOnShoot ? 1 : 0
     );
 
     std::fclose(file);

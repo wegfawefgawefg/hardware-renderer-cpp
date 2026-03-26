@@ -20,89 +20,92 @@ Vec3 RotateYOffset(Vec3 v, float yawDegrees)
 
 void App::ReloadScene()
 {
+    auto& core = m_state.core;
+    auto& runtime = m_state.runtime;
+    auto& lighting = m_state.lighting;
     ShutdownImGui();
-    m_renderer.Shutdown();
+    core.renderer.Shutdown();
 
-    m_scene = LoadSampleScene(m_assetRegistry, m_sceneKind);
-    m_sceneBounds = ComputeSceneBounds(m_scene);
-    m_sceneTriangleCount = CountSceneTriangles(m_scene);
-    m_traffic.Initialize(m_scene);
-    m_worldCollider.BuildFromScene(m_scene);
+    core.scene = LoadSampleScene(core.assetRegistry, lighting.sceneKind);
+    core.sceneBounds = ComputeSceneBounds(core.scene);
+    runtime.sceneTriangleCount = CountSceneTriangles(core.scene);
+    core.traffic.Initialize(core.scene);
+    core.worldCollider.BuildFromScene(core.scene);
 
-    if (m_sceneBounds.valid)
+    if (core.sceneBounds.valid)
     {
-        m_camera.yawRadians = DegreesToRadians(180.0f);
-        m_camera.pitchRadians = DegreesToRadians(-14.0f);
+        core.camera.yawRadians = DegreesToRadians(180.0f);
+        core.camera.pitchRadians = DegreesToRadians(-14.0f);
     }
 
-    PlayerSpawn(m_player, m_worldCollider, m_sceneBounds);
-    m_characterModelYaw = m_camera.yawRadians;
-    PlayerSyncCamera(m_player, m_worldCollider, m_camera);
+    PlayerSpawn(core.player, core.worldCollider, core.sceneBounds);
+    runtime.characterModelYaw = core.camera.yawRadians;
+    PlayerSyncCamera(core.player, core.worldCollider, core.camera);
 
-    if (m_sceneKind == SceneKind::ShadowTest)
+    if (lighting.sceneKind == SceneKind::ShadowTest)
     {
-        m_cycleDayNight = false;
-        m_timeOfDay = 0.50f;
-        m_sunAzimuthDegrees = -35.0f;
-        m_sunIntensity = 1.35f;
-        m_moonIntensity = 0.0f;
-        m_ambientIntensity = 0.18f;
-        m_pointLightIntensity = 0.0f;
-        m_shadowCascadeSplit = 12.0f;
-        if (!m_scene.spotLights.empty())
+        lighting.cycleDayNight = false;
+        lighting.timeOfDay = 0.50f;
+        lighting.sunAzimuthDegrees = -35.0f;
+        lighting.sunIntensity = 1.35f;
+        lighting.moonIntensity = 0.0f;
+        lighting.ambientIntensity = 0.18f;
+        lighting.pointLightIntensity = 0.0f;
+        lighting.shadowCascadeSplit = 12.0f;
+        if (!core.scene.spotLights.empty())
         {
             Vec3 source = Vec3Add(
-                m_scene.spotLights[0].position,
-                RotateYOffset(m_spotLightSourceOffset, m_scene.spotLights[0].yawDegrees)
+                core.scene.spotLights[0].position,
+                RotateYOffset(lighting.spotLightSourceOffset, core.scene.spotLights[0].yawDegrees)
             );
-            Vec3 defaultTarget = Vec3Add(source, Vec3Scale(m_scene.spotLights[0].direction, 7.0f));
-            TriangleMeshCollider::RayHit hit = m_worldCollider.Raycast(source, m_scene.spotLights[0].direction, 24.0f);
-            m_shadowTestSpotTargetValid = hit.hit;
-            m_shadowTestSpotTargetWorld = hit.hit ? hit.position : defaultTarget;
-            m_shadowTestSpotTargetOffset = Vec3Sub(m_shadowTestSpotTargetWorld, source);
+            Vec3 defaultTarget = Vec3Add(source, Vec3Scale(core.scene.spotLights[0].direction, 7.0f));
+            TriangleMeshCollider::RayHit hit = core.worldCollider.Raycast(source, core.scene.spotLights[0].direction, 24.0f);
+            lighting.shadowTestSpotTargetValid = hit.hit;
+            lighting.shadowTestSpotTargetWorld = hit.hit ? hit.position : defaultTarget;
+            lighting.shadowTestSpotTargetOffset = Vec3Sub(lighting.shadowTestSpotTargetWorld, source);
         }
     }
-    else if (m_sceneKind == SceneKind::SpotShadowTest)
+    else if (lighting.sceneKind == SceneKind::SpotShadowTest)
     {
-        m_shadowTestSpotTargetValid = false;
-        m_cycleDayNight = false;
-        m_timeOfDay = 0.50f;
-        m_sunAzimuthDegrees = -35.0f;
-        m_sunIntensity = 0.0f;
-        m_moonIntensity = 0.0f;
-        m_ambientIntensity = 0.05f;
-        m_pointLightIntensity = 0.0f;
-        m_shadowCascadeSplit = 16.0f;
+        lighting.shadowTestSpotTargetValid = false;
+        lighting.cycleDayNight = false;
+        lighting.timeOfDay = 0.50f;
+        lighting.sunAzimuthDegrees = -35.0f;
+        lighting.sunIntensity = 0.0f;
+        lighting.moonIntensity = 0.0f;
+        lighting.ambientIntensity = 0.05f;
+        lighting.pointLightIntensity = 0.0f;
+        lighting.shadowCascadeSplit = 16.0f;
     }
-    else if (m_sceneKind == SceneKind::VehicleLightTest)
+    else if (lighting.sceneKind == SceneKind::VehicleLightTest)
     {
-        m_shadowTestSpotTargetValid = false;
-        m_cycleDayNight = false;
-        m_timeOfDay = 0.72f;
-        m_sunAzimuthDegrees = -28.0f;
-        m_sunIntensity = 0.12f;
-        m_moonIntensity = 0.0f;
-        m_ambientIntensity = 0.06f;
-        m_pointLightIntensity = 0.0f;
-        m_shadowCascadeSplit = 20.0f;
-        m_player.position = Vec3Make(-56.0f, 1.0f, -6.0f);
-        m_player.velocity = Vec3Make(0.0f, 0.0f, 0.0f);
-        m_player.onGround = true;
-        m_camera.position = Vec3Make(-56.0f, 3.2f, -12.0f);
-        m_camera.yawRadians = DegreesToRadians(180.0f);
-        m_camera.pitchRadians = DegreesToRadians(-10.0f);
-        PlayerSyncCamera(m_player, m_worldCollider, m_camera);
+        lighting.shadowTestSpotTargetValid = false;
+        lighting.cycleDayNight = false;
+        lighting.timeOfDay = 0.72f;
+        lighting.sunAzimuthDegrees = -28.0f;
+        lighting.sunIntensity = 0.12f;
+        lighting.moonIntensity = 0.0f;
+        lighting.ambientIntensity = 0.06f;
+        lighting.pointLightIntensity = 0.0f;
+        lighting.shadowCascadeSplit = 20.0f;
+        core.player.position = Vec3Make(-56.0f, 1.0f, -6.0f);
+        core.player.velocity = Vec3Make(0.0f, 0.0f, 0.0f);
+        core.player.onGround = true;
+        core.camera.position = Vec3Make(-56.0f, 3.2f, -12.0f);
+        core.camera.yawRadians = DegreesToRadians(180.0f);
+        core.camera.pitchRadians = DegreesToRadians(-10.0f);
+        PlayerSyncCamera(core.player, core.worldCollider, core.camera);
     }
     else
     {
-        m_shadowTestSpotTargetValid = false;
+        lighting.shadowTestSpotTargetValid = false;
     }
 
-    m_renderer.m_shadowMapSize = m_shadowMapSize;
-    m_renderer.Initialize(m_window, m_scene, m_hasCharacter ? &m_characterSet.asset : nullptr);
+    core.renderer.m_shadowMapSize = lighting.shadowMapSize;
+    core.renderer.Initialize(m_window, core.scene, runtime.hasCharacter ? &core.characterSet.asset : nullptr);
     InitializeImGui();
     SyncRendererSize();
     UpdateWindowTitle();
     UpdateOverlayText();
-    m_reloadSceneRequested = false;
+    runtime.reloadSceneRequested = false;
 }
