@@ -63,6 +63,13 @@ Vec3 TransformDirection(Mat4 m, Vec3 d)
     return Vec3Normalize(Vec3Make(v.x, v.y, v.z));
 }
 
+void BuildPaintBasis(Vec3 normal, Vec3& tangent, Vec3& bitangent)
+{
+    Vec3 up = std::fabs(normal.y) < 0.95f ? Vec3Make(0.0f, 1.0f, 0.0f) : Vec3Make(1.0f, 0.0f, 0.0f);
+    tangent = Vec3Normalize(Vec3Cross(up, normal));
+    bitangent = Vec3Normalize(Vec3Cross(normal, tangent));
+}
+
 void AppendStampToEntity(
     const SceneData& scene,
     std::vector<EntityPaintLayer>& entityLayers,
@@ -108,7 +115,6 @@ void App::AppendPersistentPaint(const PaintSplatSpawn& splat)
     auto& paint = m_state.paint;
     std::vector<TriangleMeshCollider::SphereContact> contacts;
     contacts.reserve(16);
-    core.worldCollider.GatherSphereContacts(splat.position, splat.radius + 0.03f, contacts);
 
     std::array<std::uint32_t, 16> entityIndices = {};
     std::uint32_t entityCount = 0;
@@ -131,10 +137,35 @@ void App::AppendPersistentPaint(const PaintSplatSpawn& splat)
         }
     };
 
+    Vec3 normal = Vec3Normalize(splat.normal);
+    Vec3 tangent = {};
+    Vec3 bitangent = {};
+    BuildPaintBasis(normal, tangent, bitangent);
+    float ringRadius = std::max(splat.radius * 0.85f, 0.05f);
+    float probeRadius = std::max(std::min(splat.radius * 0.18f, 0.12f), 0.035f);
+    Vec3 probeLift = Vec3Scale(normal, 0.01f);
+    std::array<Vec3, 9> probeOffsets = {
+        Vec3Make(0.0f, 0.0f, 0.0f),
+        Vec3Scale(tangent, ringRadius),
+        Vec3Scale(tangent, -ringRadius),
+        Vec3Scale(bitangent, ringRadius),
+        Vec3Scale(bitangent, -ringRadius),
+        Vec3Add(Vec3Scale(tangent, ringRadius * 0.7071f), Vec3Scale(bitangent, ringRadius * 0.7071f)),
+        Vec3Add(Vec3Scale(tangent, ringRadius * 0.7071f), Vec3Scale(bitangent, -ringRadius * 0.7071f)),
+        Vec3Add(Vec3Scale(tangent, -ringRadius * 0.7071f), Vec3Scale(bitangent, ringRadius * 0.7071f)),
+        Vec3Add(Vec3Scale(tangent, -ringRadius * 0.7071f), Vec3Scale(bitangent, -ringRadius * 0.7071f)),
+    };
+
     appendEntity(splat.entityIndex);
-    for (const auto& contact : contacts)
+    for (const Vec3& offset : probeOffsets)
     {
-        appendEntity(contact.entityIndex);
+        contacts.clear();
+        Vec3 probeCenter = Vec3Add(Vec3Add(splat.position, offset), probeLift);
+        core.worldCollider.GatherSphereContacts(probeCenter, probeRadius, contacts);
+        for (const auto& contact : contacts)
+        {
+            appendEntity(contact.entityIndex);
+        }
     }
 
     for (std::uint32_t i = 0; i < entityCount; ++i)
