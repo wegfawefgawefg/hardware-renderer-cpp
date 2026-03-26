@@ -123,6 +123,7 @@ void App::LoadDebugSettings()
     ExtractFloat(text, "\"paint_ball_gravity\"", paint.ballSettings.gravity);
     ExtractFloat(text, "\"paint_ball_restitution\"", paint.ballSettings.restitution);
     ExtractFloat(text, "\"paint_ball_radius\"", paint.ballSettings.radius);
+    ExtractFloat(text, "\"paint_blob_radius\"", paint.ballSettings.blobRadius);
     ExtractFloat(text, "\"paint_ball_color_r\"", paint.ballSettings.baseColor.x);
     ExtractFloat(text, "\"paint_ball_color_g\"", paint.ballSettings.baseColor.y);
     ExtractFloat(text, "\"paint_ball_color_b\"", paint.ballSettings.baseColor.z);
@@ -187,6 +188,7 @@ void App::SaveDebugSettings() const
         "  \"paint_ball_gravity\": %.6f,\n"
         "  \"paint_ball_restitution\": %.6f,\n"
         "  \"paint_ball_radius\": %.6f,\n"
+        "  \"paint_blob_radius\": %.6f,\n"
         "  \"paint_ball_color_r\": %.6f,\n"
         "  \"paint_ball_color_g\": %.6f,\n"
         "  \"paint_ball_color_b\": %.6f,\n"
@@ -235,6 +237,7 @@ void App::SaveDebugSettings() const
         paint.ballSettings.gravity,
         paint.ballSettings.restitution,
         paint.ballSettings.radius,
+        paint.ballSettings.blobRadius,
         paint.ballSettings.baseColor.x,
         paint.ballSettings.baseColor.y,
         paint.ballSettings.baseColor.z,

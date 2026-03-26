@@ -166,7 +166,7 @@ void PaintBallSystem::Update(
                 .position = Vec3Add(ball.position, Vec3Scale(bounceNormal, 0.015f)),
                 .normal = bounceNormal,
                 .color = ball.color,
-                .radius = std::max(ball.radius * 3.2f, 0.22f),
+                .radius = std::max(settings.blobRadius, 0.05f),
                 .entityIndex = impactEntity,
             });
 

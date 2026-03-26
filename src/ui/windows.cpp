@@ -274,6 +274,7 @@ void App::BuildPaintBallsWindow(bool& debugSettingsChanged)
         debugSettingsChanged |= ImGui::SliderFloat("Gravity", &paint.ballSettings.gravity, 4.0f, 36.0f, "%.1f");
         debugSettingsChanged |= ImGui::SliderFloat("Restitution", &paint.ballSettings.restitution, 0.0f, 0.95f, "%.2f");
         debugSettingsChanged |= ImGui::SliderFloat("Ball radius", &paint.ballSettings.radius, 0.04f, 0.30f, "%.2f");
+        debugSettingsChanged |= ImGui::SliderFloat("Blob radius", &paint.ballSettings.blobRadius, 0.08f, 1.20f, "%.2f");
         debugSettingsChanged |= ImGui::ColorEdit3("Paint color", &paint.ballSettings.baseColor.x);
         debugSettingsChanged |= ImGui::Checkbox("Cycle color on shoot", &paint.ballSettings.cycleColorOnShoot);
         ImGui::Separator();

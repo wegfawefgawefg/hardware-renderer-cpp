@@ -1,5 +1,6 @@
 #include "app.h"
 
+#include <algorithm>
 #include <cmath>
 
 #include <SDL3/SDL_keyboard.h>
@@ -61,6 +62,32 @@ Vec3 TransformDirection(Mat4 m, Vec3 d)
     Vec4 v = Mat4MulVec4(m, Vec4Make(d.x, d.y, d.z, 0.0f));
     return Vec3Normalize(Vec3Make(v.x, v.y, v.z));
 }
+
+void AppendStampToEntity(
+    const SceneData& scene,
+    std::vector<EntityPaintLayer>& entityLayers,
+    std::uint32_t entityIndex,
+    const PaintSplatSpawn& splat
+)
+{
+    if (entityIndex >= scene.entities.size() || entityIndex >= entityLayers.size())
+    {
+        return;
+    }
+
+    const EntityData& entity = scene.entities[entityIndex];
+    Mat4 worldToLocal = InverseAffine(entity.transform);
+    EntityPaintLayer& layer = entityLayers[entityIndex];
+    PersistentPaintStamp& dst = layer.stamps[layer.nextStampIndex];
+    dst.localPosition = TransformPoint(worldToLocal, splat.position);
+    dst.localNormal = TransformDirection(worldToLocal, splat.normal);
+    dst.radius = splat.radius;
+    dst.color = splat.color;
+    dst.opacity = 1.0f;
+    dst.seed = static_cast<float>(layer.nextStampIndex);
+    layer.nextStampIndex = (layer.nextStampIndex + 1u) % kMaxAccumulatedPaintPerEntity;
+    layer.stampCount = std::min(layer.stampCount + 1u, kMaxAccumulatedPaintPerEntity);
+}
 }
 
 void App::AppendPaintSplat(const PaintSplatSpawn& splat)
@@ -79,23 +106,41 @@ void App::AppendPersistentPaint(const PaintSplatSpawn& splat)
 {
     auto& core = m_state.core;
     auto& paint = m_state.paint;
-    if (splat.entityIndex >= core.scene.entities.size() || splat.entityIndex >= paint.entityLayers.size())
+    std::vector<TriangleMeshCollider::SphereContact> contacts;
+    contacts.reserve(16);
+    core.worldCollider.GatherSphereContacts(splat.position, splat.radius + 0.03f, contacts);
+
+    std::array<std::uint32_t, 16> entityIndices = {};
+    std::uint32_t entityCount = 0;
+    auto appendEntity = [&](std::uint32_t entityIndex)
     {
-        return;
+        if (entityIndex == UINT32_MAX)
+        {
+            return;
+        }
+        for (std::uint32_t i = 0; i < entityCount; ++i)
+        {
+            if (entityIndices[i] == entityIndex)
+            {
+                return;
+            }
+        }
+        if (entityCount < entityIndices.size())
+        {
+            entityIndices[entityCount++] = entityIndex;
+        }
+    };
+
+    appendEntity(splat.entityIndex);
+    for (const auto& contact : contacts)
+    {
+        appendEntity(contact.entityIndex);
     }
 
-    const EntityData& entity = core.scene.entities[splat.entityIndex];
-    Mat4 worldToLocal = InverseAffine(entity.transform);
-    EntityPaintLayer& layer = paint.entityLayers[splat.entityIndex];
-    PersistentPaintStamp& dst = layer.stamps[layer.nextStampIndex];
-    dst.localPosition = TransformPoint(worldToLocal, splat.position);
-    dst.localNormal = TransformDirection(worldToLocal, splat.normal);
-    dst.radius = splat.radius;
-    dst.color = splat.color;
-    dst.opacity = 1.0f;
-    dst.seed = static_cast<float>(layer.nextStampIndex);
-    layer.nextStampIndex = (layer.nextStampIndex + 1u) % kMaxAccumulatedPaintPerEntity;
-    layer.stampCount = std::min(layer.stampCount + 1u, kMaxAccumulatedPaintPerEntity);
+    for (std::uint32_t i = 0; i < entityCount; ++i)
+    {
+        AppendStampToEntity(core.scene, paint.entityLayers, entityIndices[i], splat);
+    }
 }
 
 std::uint32_t App::CountAccumulatedPaintStamps() const
