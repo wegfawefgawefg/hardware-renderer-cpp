@@ -842,6 +842,21 @@ void VulkanRenderer::Render(
             );
         }
     }
+    for (std::uint32_t i = 0; i < debug.customCubeCount && i < DebugRenderOptions::kMaxCustomCubes; ++i)
+    {
+        Vec4 cube = debug.customCubes[i];
+        Vec4 color = debug.customCubeColors[i];
+        if (cube.w > 0.0001f)
+        {
+            AppendCube(
+                lightSolids,
+                m_lightSolidVertexCount,
+                Vec3Make(cube.x, cube.y, cube.z),
+                cube.w,
+                Vec3Make(color.x, color.y, color.z)
+            );
+        }
+    }
     std::memcpy(m_lightMarkerBuffer.mapped, lightMarkers.data(), sizeof(lightMarkers));
     std::memcpy(m_lightLineBuffer.mapped, lightLines.data(), sizeof(lightLines));
     std::memcpy(m_lightSolidBuffer.mapped, lightSolids.data(), sizeof(lightSolids));

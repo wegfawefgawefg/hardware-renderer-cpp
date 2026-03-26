@@ -73,6 +73,7 @@ struct LightMarkerVertex
 struct DebugRenderOptions
 {
     static constexpr std::uint32_t kMaxSelectionSpheres = 16;
+    static constexpr std::uint32_t kMaxCustomCubes = 16;
     bool drawLightProxies = true;
     bool drawLightMarkers = true;
     bool drawLightDirections = false;
@@ -85,6 +86,9 @@ struct DebugRenderOptions
     std::uint32_t selectionSphereCount = 0;
     std::array<Vec4, kMaxSelectionSpheres> selectionSpheres = {};
     std::array<Vec4, kMaxSelectionSpheres> selectionSphereColors = {};
+    std::uint32_t customCubeCount = 0;
+    std::array<Vec4, kMaxCustomCubes> customCubes = {};
+    std::array<Vec4, kMaxCustomCubes> customCubeColors = {};
 };
 
 struct RenderProfilingStats

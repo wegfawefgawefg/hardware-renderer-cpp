@@ -510,6 +510,30 @@ void App::BuildImGui()
         }
         ImGui::End();
 
+        ImVec2 paintPos(
+            viewport->WorkPos.x + pad,
+            viewport->WorkPos.y + 628.0f
+        );
+        ImGui::SetNextWindowPos(paintPos, ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(340.0f, 180.0f), ImGuiCond_FirstUseEver);
+        if (ImGui::Begin("Paint Balls"))
+        {
+            ImGui::Text("Active: %u / %u", m_paintBalls.ActiveCount(), PaintBallSettings::kMaxBalls);
+            if (ImGui::Button("Reset paint balls"))
+            {
+                m_paintBalls.Reset();
+            }
+            int bounceLimit = static_cast<int>(m_paintBallSettings.bounceLimit);
+            debugSettingsChanged |= ImGui::SliderInt("Bounce limit", &bounceLimit, 0, 12);
+            m_paintBallSettings.bounceLimit = static_cast<std::uint32_t>(bounceLimit);
+            debugSettingsChanged |= ImGui::ColorEdit3("Paint color", &m_paintBallSettings.baseColor.x);
+            debugSettingsChanged |= ImGui::Checkbox("Cycle color on shoot", &m_paintBallSettings.cycleColorOnShoot);
+            ImGui::Separator();
+            ImGui::TextUnformatted("Left click fires");
+            ImGui::TextUnformatted("Shift + Left click places test-scene tools");
+        }
+        ImGui::End();
+
         if (m_sceneKind == SceneKind::VehicleLightTest)
         {
             ImVec2 vehiclePos(

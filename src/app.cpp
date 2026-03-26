@@ -185,16 +185,21 @@ void App::HandleEvent(const SDL_Event& event)
 
     case SDL_EVENT_MOUSE_BUTTON_DOWN:
         if (event.button.button == SDL_BUTTON_LEFT &&
-            !m_mouseCaptured &&
             (ImGui::GetCurrentContext() == nullptr || !ImGui::GetIO().WantCaptureMouse))
         {
-            if (m_sceneKind == SceneKind::ShadowTest)
+            const bool* keys = SDL_GetKeyboardState(nullptr);
+            bool placementModifier = keys[SDL_SCANCODE_LSHIFT] || keys[SDL_SCANCODE_RSHIFT];
+            if (!m_mouseCaptured && placementModifier && m_sceneKind == SceneKind::ShadowTest)
             {
                 TryPlaceShadowTestSpotlight(event.button.x, event.button.y);
             }
-            else if (m_sceneKind == SceneKind::VehicleLightTest)
+            else if (!m_mouseCaptured && placementModifier && m_sceneKind == SceneKind::VehicleLightTest)
             {
                 TryPlaceVehicleLight(event.button.x, event.button.y);
+            }
+            else
+            {
+                TryFirePaintBall();
             }
         }
         if (event.button.button == SDL_BUTTON_RIGHT)
@@ -254,6 +259,7 @@ void App::Update(float dtSeconds)
     PlayerUpdateFromInput(m_player, m_worldCollider, m_camera, dtSeconds, m_mouseCaptured);
     PlayerSyncCamera(m_player, m_camera);
     m_traffic.Update(m_scene, dtSeconds, 64);
+    UpdatePaintBalls(dtSeconds);
     m_renderer.UpdateSceneTransforms(m_scene);
     auto inputEnd = Clock::now();
     m_cpuProfiling.inputMs = std::chrono::duration<float, std::milli>(inputEnd - inputStart).count();
@@ -410,6 +416,28 @@ void App::Update(float dtSeconds)
                 : Vec3Make(1.0f, 1.0f, 1.0f);
             debugOptions.selectionSphereColors[i] = Vec4Make(color.x, color.y, color.z, 1.0f);
         }
+    }
+    debugOptions.customCubeCount = m_paintBalls.ActiveCount();
+    std::uint32_t cubeIndex = 0;
+    for (const PaintBall& ball : m_paintBalls.Balls())
+    {
+        if (!ball.active || cubeIndex >= DebugRenderOptions::kMaxCustomCubes)
+        {
+            continue;
+        }
+        debugOptions.customCubes[cubeIndex] = Vec4Make(
+            ball.position.x,
+            ball.position.y,
+            ball.position.z,
+            ball.radius
+        );
+        debugOptions.customCubeColors[cubeIndex] = Vec4Make(
+            ball.color.x,
+            ball.color.y,
+            ball.color.z,
+            1.0f
+        );
+        ++cubeIndex;
     }
 
     auto renderStart = Clock::now();

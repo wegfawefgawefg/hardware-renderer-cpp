@@ -151,6 +151,7 @@ add_executable(hardware-renderer-cpp
   src/app_debug_settings.cpp
   src/app_imgui.cpp
   src/app_lighting.cpp
+  src/app_paint_balls.cpp
   src/app_scene.cpp
   src/app_spotlight.cpp
   src/app_vehicle_lights.cpp
@@ -163,6 +164,7 @@ add_executable(hardware-renderer-cpp
   src/assets/texture_loader.cpp
   src/camera.cpp
   src/collision/triangle_collider.cpp
+  src/gameplay/paint_balls.cpp
   src/gameplay/player_controller.cpp
   src/gameplay/traffic.cpp
   src/main.cpp

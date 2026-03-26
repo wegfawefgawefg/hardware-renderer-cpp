@@ -12,6 +12,7 @@
 #include "camera.h"
 #include "assets/asset_registry.h"
 #include "collision/triangle_collider.h"
+#include "gameplay/paint_balls.h"
 #include "gameplay/player_controller.h"
 #include "gameplay/traffic.h"
 #include "animation/character.h"
@@ -84,6 +85,8 @@ struct App
     void SaveVehicleLightRigs() const;
     void TryPlaceVehicleLight(int mouseX, int mouseY);
     int FindActiveVehicleLightIndex() const;
+    void TryFirePaintBall();
+    void UpdatePaintBalls(float dtSeconds);
 
     SDL_Window* m_window = nullptr;
     VulkanRenderer m_renderer;
@@ -93,6 +96,7 @@ struct App
     TriangleMeshCollider m_worldCollider;
     PlayerController m_player;
     TrafficSystem m_traffic;
+    PaintBallSystem m_paintBalls;
     CharacterAnimationSet m_characterSet;
     CharacterRenderState m_characterRenderState;
     Camera m_camera;
@@ -157,6 +161,7 @@ struct App
     std::unordered_map<std::string, VehicleLightRig> m_vehicleLightRigs;
     bool m_debugDrawVehicleVolumes = true;
     bool m_debugDrawVehicleLightRanges = true;
+    PaintBallSettings m_paintBallSettings = {};
 
     std::array<std::uint32_t, 512 * 128> m_overlayPixels = {};
     std::uint32_t m_overlayWidth = 0;

@@ -114,6 +114,11 @@ void App::LoadDebugSettings()
     if (ExtractFloat(text, "\"debug_draw_light_labels\"", boolValue)) m_debugDrawLightLabels = boolValue != 0.0f;
     if (ExtractFloat(text, "\"debug_draw_vehicle_volumes\"", boolValue)) m_debugDrawVehicleVolumes = boolValue != 0.0f;
     if (ExtractFloat(text, "\"debug_draw_vehicle_light_ranges\"", boolValue)) m_debugDrawVehicleLightRanges = boolValue != 0.0f;
+    ExtractUInt(text, "\"paint_ball_bounce_limit\"", m_paintBallSettings.bounceLimit);
+    ExtractFloat(text, "\"paint_ball_color_r\"", m_paintBallSettings.baseColor.x);
+    ExtractFloat(text, "\"paint_ball_color_g\"", m_paintBallSettings.baseColor.y);
+    ExtractFloat(text, "\"paint_ball_color_b\"", m_paintBallSettings.baseColor.z);
+    if (ExtractFloat(text, "\"paint_ball_cycle_color\"", boolValue)) m_paintBallSettings.cycleColorOnShoot = boolValue != 0.0f;
 }
 
 void App::SaveDebugSettings() const
@@ -164,7 +169,12 @@ void App::SaveDebugSettings() const
         "  \"debug_draw_light_volumes\": %d,\n"
         "  \"debug_draw_light_labels\": %d,\n"
         "  \"debug_draw_vehicle_volumes\": %d,\n"
-        "  \"debug_draw_vehicle_light_ranges\": %d\n"
+        "  \"debug_draw_vehicle_light_ranges\": %d,\n"
+        "  \"paint_ball_bounce_limit\": %u,\n"
+        "  \"paint_ball_color_r\": %.6f,\n"
+        "  \"paint_ball_color_g\": %.6f,\n"
+        "  \"paint_ball_color_b\": %.6f,\n"
+        "  \"paint_ball_cycle_color\": %d\n"
         "}\n",
         static_cast<std::uint32_t>(m_sceneKind),
         m_cycleDayNight ? 1 : 0,
@@ -202,7 +212,12 @@ void App::SaveDebugSettings() const
         m_debugDrawLightVolumes ? 1 : 0,
         m_debugDrawLightLabels ? 1 : 0,
         m_debugDrawVehicleVolumes ? 1 : 0,
-        m_debugDrawVehicleLightRanges ? 1 : 0
+        m_debugDrawVehicleLightRanges ? 1 : 0,
+        m_paintBallSettings.bounceLimit,
+        m_paintBallSettings.baseColor.x,
+        m_paintBallSettings.baseColor.y,
+        m_paintBallSettings.baseColor.z,
+        m_paintBallSettings.cycleColorOnShoot ? 1 : 0
     );
 
     std::fclose(file);
