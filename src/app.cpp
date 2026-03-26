@@ -115,6 +115,7 @@ void App::Initialize()
     CenterWindowOnPrimaryDisplay(m_window);
     m_assetRegistry.ScanFbx(HARDWARE_RENDERER_ASSETS_ROOT);
     LoadDebugSettings();
+    LoadVehicleLightRigs();
     const std::filesystem::path* characterPath = m_assetRegistry.FindByRelativePath(kCharacterModelAsset);
     const std::filesystem::path* idlePath = m_assetRegistry.FindByRelativePath(kCharacterIdleAsset);
     const std::filesystem::path* runPath = m_assetRegistry.FindByRelativePath(kCharacterRunAsset);
@@ -184,11 +185,17 @@ void App::HandleEvent(const SDL_Event& event)
 
     case SDL_EVENT_MOUSE_BUTTON_DOWN:
         if (event.button.button == SDL_BUTTON_LEFT &&
-            m_sceneKind == SceneKind::ShadowTest &&
             !m_mouseCaptured &&
             (ImGui::GetCurrentContext() == nullptr || !ImGui::GetIO().WantCaptureMouse))
         {
-            TryPlaceShadowTestSpotlight(event.button.x, event.button.y);
+            if (m_sceneKind == SceneKind::ShadowTest)
+            {
+                TryPlaceShadowTestSpotlight(event.button.x, event.button.y);
+            }
+            else if (m_sceneKind == SceneKind::VehicleLightTest)
+            {
+                TryPlaceVehicleLight(event.button.x, event.button.y);
+            }
         }
         if (event.button.button == SDL_BUTTON_RIGHT)
         {
@@ -226,6 +233,8 @@ void App::HandleEvent(const SDL_Event& event)
 
 void App::Update(float dtSeconds)
 {
+    using Clock = std::chrono::steady_clock;
+    auto frameStart = Clock::now();
     m_elapsedSeconds += dtSeconds;
 
     if (dtSeconds > 0.0f)
@@ -241,10 +250,13 @@ void App::Update(float dtSeconds)
         }
     }
 
+    auto inputStart = Clock::now();
     PlayerUpdateFromInput(m_player, m_worldCollider, m_camera, dtSeconds, m_mouseCaptured);
     PlayerSyncCamera(m_player, m_camera);
     m_traffic.Update(m_scene, dtSeconds, 64);
     m_renderer.UpdateSceneTransforms(m_scene);
+    auto inputEnd = Clock::now();
+    m_cpuProfiling.inputMs = std::chrono::duration<float, std::milli>(inputEnd - inputStart).count();
 
     if (m_windowResized)
     {
@@ -259,7 +271,10 @@ void App::Update(float dtSeconds)
         m_titleRefreshSeconds = kTitleRefreshPeriod;
     }
 
+    auto imguiStart = Clock::now();
     BuildImGui();
+    auto imguiEnd = Clock::now();
+    m_cpuProfiling.imguiMs = std::chrono::duration<float, std::milli>(imguiEnd - imguiStart).count();
     if (m_reloadSceneRequested)
     {
         ReloadScene();
@@ -282,7 +297,10 @@ void App::Update(float dtSeconds)
         m_camera.position.z,
         1.0f
     );
+    auto lightingStart = Clock::now();
     ApplyLighting(uniforms, dtSeconds);
+    auto lightingEnd = Clock::now();
+    m_cpuProfiling.lightingMs = std::chrono::duration<float, std::milli>(lightingEnd - lightingStart).count();
     for (Mat4& skinJoint : uniforms.skinJoints)
     {
         skinJoint = Mat4Identity();
@@ -352,13 +370,60 @@ void App::Update(float dtSeconds)
         m_overlayRefreshSeconds = kOverlayRefreshPeriod;
     }
 
+    DebugRenderOptions debugOptions{};
+    debugOptions.drawLightProxies = m_drawLightProxies;
+    debugOptions.drawLightMarkers = m_debugDrawSceneLightGizmos;
+    debugOptions.drawLightDirections = m_debugDrawLightDirections;
+    debugOptions.drawLightVolumes = m_debugDrawLightVolumes;
+    debugOptions.drawActivationVolumes = m_debugDrawActivationVolumes;
+    debugOptions.mainDrawDistance = m_mainDrawDistance;
+    debugOptions.shadowDrawDistance = m_shadowDrawDistance;
+    Vec3 forward = CameraForward(m_camera);
+    Vec3 activationBase = Vec3Make(
+        m_player.position.x,
+        m_player.position.y - m_player.radius,
+        m_player.position.z
+    );
+    Vec3 centerA = Vec3Add(activationBase, Vec3Scale(forward, m_spotLightActivationForwardOffset));
+    Vec3 centerB = Vec3Add(activationBase, Vec3Scale(forward, m_shadowedSpotLightActivationForwardOffset));
+    debugOptions.activationVolumeA = Vec4Make(centerA.x, centerA.y, centerA.z, m_spotLightActivationDistance);
+    debugOptions.activationVolumeB = Vec4Make(centerB.x, centerB.y, centerB.z, m_shadowedSpotLightActivationDistance);
+    if (m_sceneKind == SceneKind::VehicleLightTest && m_debugDrawVehicleVolumes)
+    {
+        int activeVehicle = FindActiveVehicleLightIndex();
+        std::uint32_t sphereCount = std::min<std::uint32_t>(
+            static_cast<std::uint32_t>(m_scene.vehicleLightTestItems.size()),
+            DebugRenderOptions::kMaxSelectionSpheres
+        );
+        debugOptions.selectionSphereCount = sphereCount;
+        for (std::uint32_t i = 0; i < sphereCount; ++i)
+        {
+            const auto& item = m_scene.vehicleLightTestItems[i];
+            debugOptions.selectionSpheres[i] = Vec4Make(
+                item.origin.x,
+                item.origin.y + 1.0f,
+                item.origin.z,
+                item.selectionRadius
+            );
+            Vec3 color = static_cast<int>(i) == activeVehicle
+                ? Vec3Make(0.47f, 1.0f, 0.47f)
+                : Vec3Make(1.0f, 1.0f, 1.0f);
+            debugOptions.selectionSphereColors[i] = Vec4Make(color.x, color.y, color.z, 1.0f);
+        }
+    }
+
+    auto renderStart = Clock::now();
     m_renderer.Render(
         uniforms,
         m_overlayPixels,
         m_overlayWidth,
         m_overlayHeight,
-        m_hasCharacter ? &m_characterRenderState : nullptr
+        m_hasCharacter ? &m_characterRenderState : nullptr,
+        &debugOptions
     );
+    auto renderEnd = Clock::now();
+    m_cpuProfiling.renderMs = std::chrono::duration<float, std::milli>(renderEnd - renderStart).count();
+    m_cpuProfiling.frameMs = std::chrono::duration<float, std::milli>(renderEnd - frameStart).count();
 }
 
 void App::SyncRendererSize()

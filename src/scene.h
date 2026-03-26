@@ -53,6 +53,7 @@ struct SpotLightData
     float outerCos = 0.8f;
     float intensity = 1.0f;
     float yawDegrees = 0.0f;
+    float sourceOffsetScale = 1.0f;
 };
 
 struct ModelData
@@ -67,6 +68,7 @@ struct EntityData
 {
     std::uint32_t modelIndex = 0;
     Mat4 transform = {};
+    std::string assetPath;
     bool collidable = true;
     bool traffic = false;
     std::int32_t trafficDirection = -1;
@@ -77,6 +79,15 @@ struct SceneData
     std::vector<ModelData> models;
     std::vector<EntityData> entities;
     std::vector<SpotLightData> spotLights;
+    struct VehicleLightTestItem
+    {
+        std::string assetPath;
+        std::uint32_t entityIndex = 0;
+        Vec3 origin = {};
+        float scale = 1.0f;
+        float selectionRadius = 1.0f;
+    };
+    std::vector<VehicleLightTestItem> vehicleLightTestItems;
 };
 
 struct SceneBounds
@@ -93,8 +104,10 @@ enum class SceneKind
     City,
     ShadowTest,
     SpotShadowTest,
+    VehicleLightTest,
 };
 
 SceneBounds ComputeSceneBounds(const SceneData& scene);
 std::uint32_t CountSceneTriangles(const SceneData& scene);
+SceneData BuildVehicleLightTestScene(const AssetRegistry& assetRegistry);
 SceneData LoadSampleScene(const AssetRegistry& assetRegistry, SceneKind kind);

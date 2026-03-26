@@ -73,12 +73,25 @@ void App::ReloadScene()
         m_ambientIntensity = 0.05f;
         m_pointLightIntensity = 0.0f;
         m_shadowCascadeSplit = 16.0f;
-        m_spotLightMaxActive = 8;
-        m_spotLightActivationDistance = 32.0f;
-        m_spotLightActivationForwardOffset = 8.0f;
-        m_shadowedSpotLightMaxActive = 2;
-        m_shadowedSpotLightActivationDistance = 16.0f;
-        m_shadowedSpotLightActivationForwardOffset = 6.0f;
+    }
+    else if (m_sceneKind == SceneKind::VehicleLightTest)
+    {
+        m_shadowTestSpotTargetValid = false;
+        m_cycleDayNight = false;
+        m_timeOfDay = 0.72f;
+        m_sunAzimuthDegrees = -28.0f;
+        m_sunIntensity = 0.12f;
+        m_moonIntensity = 0.0f;
+        m_ambientIntensity = 0.06f;
+        m_pointLightIntensity = 0.0f;
+        m_shadowCascadeSplit = 20.0f;
+        m_player.position = Vec3Make(-56.0f, 1.0f, -6.0f);
+        m_player.velocity = Vec3Make(0.0f, 0.0f, 0.0f);
+        m_player.onGround = true;
+        m_camera.position = Vec3Make(-56.0f, 3.2f, -12.0f);
+        m_camera.yawRadians = DegreesToRadians(180.0f);
+        m_camera.pitchRadians = DegreesToRadians(-10.0f);
+        PlayerSyncCamera(m_player, m_camera);
     }
     else
     {

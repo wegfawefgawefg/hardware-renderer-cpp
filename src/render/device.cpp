@@ -95,4 +95,14 @@ void VulkanRenderer::CreateDevice()
 
     vkGetDeviceQueue(m_device, m_queueFamilyIndex, 0, &m_graphicsQueue);
     m_presentQueue = m_graphicsQueue;
+
+    VkPhysicalDeviceProperties properties{};
+    vkGetPhysicalDeviceProperties(m_physicalDevice, &properties);
+    m_gpuTimestampPeriodNs = properties.limits.timestampPeriod;
+
+    VkQueryPoolCreateInfo queryInfo{};
+    queryInfo.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
+    queryInfo.queryType = VK_QUERY_TYPE_TIMESTAMP;
+    queryInfo.queryCount = kGpuTimestampCount;
+    CheckVk(vkCreateQueryPool(m_device, &queryInfo, nullptr, &m_timestampQueryPool), "vkCreateQueryPool");
 }

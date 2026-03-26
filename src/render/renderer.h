@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <limits>
 #include <span>
@@ -18,6 +19,7 @@ constexpr std::uint32_t kMaxSceneSpotLights = 32;
 constexpr std::uint32_t kMaxShadowedSpotLights = 4;
 constexpr std::uint32_t kSunShadowCascadeCount = 2;
 constexpr std::uint32_t kTotalShadowMaps = kSunShadowCascadeCount + kMaxShadowedSpotLights;
+constexpr std::uint32_t kGpuTimestampCount = 6;
 
 struct alignas(16) SceneUniforms
 {
@@ -51,8 +53,9 @@ struct alignas(16) DrawPushConstants
     Mat4 model;
     std::uint32_t skinned = 0;
     std::uint32_t shadowCascade = 0;
-    std::uint32_t padding0 = 0;
-    std::uint32_t padding1 = 0;
+    std::uint32_t pointLightMask = 0;
+    std::uint32_t spotLightMask = 0;
+    std::uint32_t shadowedSpotLightMask = 0;
 };
 
 struct OverlayVertex
@@ -65,6 +68,35 @@ struct LightMarkerVertex
 {
     Vec3 position;
     Vec3 color;
+};
+
+struct DebugRenderOptions
+{
+    static constexpr std::uint32_t kMaxSelectionSpheres = 16;
+    bool drawLightProxies = true;
+    bool drawLightMarkers = true;
+    bool drawLightDirections = false;
+    bool drawLightVolumes = false;
+    bool drawActivationVolumes = false;
+    float mainDrawDistance = 160.0f;
+    float shadowDrawDistance = 200.0f;
+    Vec4 activationVolumeA = {};
+    Vec4 activationVolumeB = {};
+    std::uint32_t selectionSphereCount = 0;
+    std::array<Vec4, kMaxSelectionSpheres> selectionSpheres = {};
+    std::array<Vec4, kMaxSelectionSpheres> selectionSphereColors = {};
+};
+
+struct RenderProfilingStats
+{
+    float gpuSunShadowMs = 0.0f;
+    float gpuSpotShadowMs = 0.0f;
+    float gpuShadowMs = 0.0f;
+    float gpuMainMs = 0.0f;
+    float gpuDebugMs = 0.0f;
+    float gpuUiMs = 0.0f;
+    float gpuFrameMs = 0.0f;
+    bool gpuValid = false;
 };
 
 struct VulkanRenderer
@@ -82,12 +114,16 @@ struct VulkanRenderer
     void InitializeImGuiBackend();
     void ShutdownImGuiBackend();
     ImTextureID GetShadowDebugTexture(std::uint32_t cascadeIndex) const;
+    const RenderProfilingStats& GetProfilingStats() const { return m_profilingStats; }
+    std::uint32_t GetVisibleDrawItemCount() const { return static_cast<std::uint32_t>(m_visibleDrawItems.size()); }
+    std::uint32_t GetDrawItemCount() const { return static_cast<std::uint32_t>(m_drawItems.size()); }
     void Render(
         const SceneUniforms& uniforms,
         std::span<const std::uint32_t> overlayPixels,
         std::uint32_t overlayWidth,
         std::uint32_t overlayHeight,
-        const CharacterRenderState* characterState = nullptr
+        const CharacterRenderState* characterState = nullptr,
+        const DebugRenderOptions* debugOptions = nullptr
     );
 
     void CreateInstance();
@@ -105,6 +141,10 @@ struct VulkanRenderer
     void CreateOverlayDescriptorObjects();
     void CreateOverlayPipeline();
     void CreateLightPipeline();
+    void CreateLightLinePipeline();
+    void CreateLightSolidPipeline();
+    void UpdateMainPassVisibility(const SceneUniforms& uniforms);
+    void UpdateDrawLightMasks(const SceneUniforms& uniforms);
     void CreateShadowResources();
     void DestroyShadowResources();
     void CreateShadowRenderPass();
@@ -158,8 +198,11 @@ struct VulkanRenderer
     VkShaderModule m_overlayVertShaderModule = VK_NULL_HANDLE;
     VkShaderModule m_overlayFragShaderModule = VK_NULL_HANDLE;
     VkPipeline m_lightPipeline = VK_NULL_HANDLE;
+    VkPipeline m_lightLinePipeline = VK_NULL_HANDLE;
+    VkPipeline m_lightSolidPipeline = VK_NULL_HANDLE;
     VkShaderModule m_lightVertShaderModule = VK_NULL_HANDLE;
     VkShaderModule m_lightFragShaderModule = VK_NULL_HANDLE;
+    VkShaderModule m_lightLineFragShaderModule = VK_NULL_HANDLE;
     VkRenderPass m_shadowRenderPass = VK_NULL_HANDLE;
     VkPipelineLayout m_shadowPipelineLayout = VK_NULL_HANDLE;
     VkPipeline m_shadowPipeline = VK_NULL_HANDLE;
@@ -173,6 +216,8 @@ struct VulkanRenderer
     VkSemaphore m_imageAvailableSemaphore = VK_NULL_HANDLE;
     VkSemaphore m_renderFinishedSemaphore = VK_NULL_HANDLE;
     VkFence m_frameFence = VK_NULL_HANDLE;
+    VkQueryPool m_timestampQueryPool = VK_NULL_HANDLE;
+    float m_gpuTimestampPeriodNs = 1.0f;
 
     BufferResource m_vertexBuffer;
     BufferResource m_indexBuffer;
@@ -180,6 +225,8 @@ struct VulkanRenderer
     BufferResource m_overlayUploadBuffer;
     BufferResource m_overlayVertexBuffer;
     BufferResource m_lightMarkerBuffer;
+    BufferResource m_lightLineBuffer;
+    BufferResource m_lightSolidBuffer;
     BufferResource m_characterVertexBuffer;
     BufferResource m_characterIndexBuffer;
     std::vector<ImageResource> m_textureImages;
@@ -193,6 +240,11 @@ struct VulkanRenderer
     struct DrawItem
     {
         Mat4 model;
+        Vec3 localBoundsCenter = {};
+        float localBoundsRadius = 0.0f;
+        std::uint32_t pointLightMask = 0;
+        std::uint32_t spotLightMask = 0;
+        std::uint32_t shadowedSpotLightMask = 0;
         std::uint32_t firstIndex = 0;
         std::uint32_t indexCount = 0;
         std::uint32_t descriptorIndex = 0;
@@ -200,7 +252,13 @@ struct VulkanRenderer
         std::uint32_t entityIndex = 0;
     };
 
+    bool ShadowDrawItemVisible(const DrawItem& drawItem, std::uint32_t cascadeIndex) const;
+
     std::vector<DrawItem> m_drawItems;
+    std::vector<std::uint32_t> m_visibleDrawItems;
+    Vec3 m_cameraCullPosition = {};
+    float m_mainCullDistance = 160.0f;
+    float m_shadowCullDistance = 200.0f;
     CharacterRenderState m_characterState = {};
     std::uint32_t m_characterIndexCount = 0;
     std::uint32_t m_characterDescriptorIndex = std::numeric_limits<std::uint32_t>::max();
@@ -210,7 +268,11 @@ struct VulkanRenderer
     std::uint32_t m_overlayWidth = 0;
     std::uint32_t m_overlayHeight = 0;
     std::uint32_t m_shadowMapSize = 2048;
+    std::uint32_t m_activeShadowMapCount = kSunShadowCascadeCount;
+    std::uint32_t m_lightLineVertexCount = 0;
+    std::uint32_t m_lightSolidVertexCount = 0;
     Vec4 m_clearColor = {0.09f, 0.10f, 0.12f, 1.0f};
+    RenderProfilingStats m_profilingStats = {};
     bool m_imguiInitialized = false;
     bool m_initialized = false;
 };

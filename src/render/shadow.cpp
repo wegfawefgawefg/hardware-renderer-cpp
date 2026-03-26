@@ -196,6 +196,10 @@ void VulkanRenderer::RecordShadowPass(VkCommandBuffer commandBuffer, std::uint32
 
     for (const DrawItem& drawItem : m_drawItems)
     {
+        if (!ShadowDrawItemVisible(drawItem, cascadeIndex))
+        {
+            continue;
+        }
         DrawPushConstants pushConstants{};
         pushConstants.model = drawItem.model;
         pushConstants.skinned = drawItem.skinned;

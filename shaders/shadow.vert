@@ -36,8 +36,9 @@ layout(push_constant) uniform DrawPushConstants
     mat4 model;
     uint skinned;
     uint shadowCascade;
-    uint padding0;
-    uint padding1;
+    uint pointLightMask;
+    uint spotLightMask;
+    uint shadowedSpotLightMask;
 } drawPush;
 
 void main()

@@ -7,6 +7,7 @@
 #include <unordered_map>
 
 #include "assets/fbx_loader.h"
+#include "assets/obj_loader.h"
 #include "assets/texture_loader.h"
 
 namespace
@@ -59,47 +60,6 @@ Vec3 RotateYOffset(Vec3 v, float yawDegrees)
     );
 }
 
-void AddGroundPlane(SceneData& scene, Vec3 center, float y, float extent)
-{
-    ModelData ground{};
-    ground.materials.push_back(MaterialData{
-        .name = "ground",
-        .textureIndex = 0,
-    });
-    ground.textures.push_back(MakeSolidTexture(110, 116, 128, 255));
-
-    auto pushVertex = [&](float x, float z, float u, float v) {
-        Vertex vertex{};
-        vertex.position = Vec3Make(x, y, z);
-        vertex.normal = Vec3Make(0.0f, 1.0f, 0.0f);
-        vertex.uv = Vec2Make(u, v);
-        ground.mesh.vertices.push_back(vertex);
-    };
-
-    float x0 = center.x - extent;
-    float x1 = center.x + extent;
-    float z0 = center.z - extent;
-    float z1 = center.z + extent;
-    pushVertex(x0, z0, 0.0f, 0.0f);
-    pushVertex(x1, z0, 1.0f, 0.0f);
-    pushVertex(x1, z1, 1.0f, 1.0f);
-    pushVertex(x0, z1, 0.0f, 1.0f);
-
-    ground.mesh.indices = {0, 1, 2, 0, 2, 3};
-    ground.primitives.push_back(PrimitiveData{
-        .firstIndex = 0,
-        .indexCount = 6,
-        .materialIndex = 0,
-    });
-
-    std::uint32_t modelIndex = static_cast<std::uint32_t>(scene.models.size());
-    scene.models.push_back(std::move(ground));
-    scene.entities.push_back(EntityData{
-        .modelIndex = modelIndex,
-        .transform = Mat4Identity(),
-    });
-}
-
 float ComputeModelFootprint(const ModelData& model)
 {
     if (model.mesh.vertices.empty())
@@ -118,6 +78,20 @@ float ComputeModelFootprint(const ModelData& model)
     }
 
     return std::max(std::max(mx.x - mn.x, mx.z - mn.z), 0.001f);
+}
+
+ModelData LoadSceneModelByExtension(const std::filesystem::path& path)
+{
+    const std::string extension = path.extension().string();
+    if (extension == ".fbx" || extension == ".FBX")
+    {
+        return LoadFbxModel(path.string());
+    }
+    if (extension == ".obj" || extension == ".OBJ")
+    {
+        return LoadObjModel(path.string());
+    }
+    return {};
 }
 
 std::uint32_t AddModelInstanceWithFootprint(
@@ -144,7 +118,7 @@ std::uint32_t AddModelInstanceWithFootprint(
             return static_cast<std::uint32_t>(-1);
         }
 
-        ModelData model = LoadFbxModel(path->string());
+        ModelData model = LoadSceneModelByExtension(*path);
         if (model.mesh.indices.empty() || model.mesh.vertices.empty())
         {
             return static_cast<std::uint32_t>(-1);
@@ -164,6 +138,7 @@ std::uint32_t AddModelInstanceWithFootprint(
     scene.entities.push_back(EntityData{
         .modelIndex = modelIndex,
         .transform = PlacementTransform(position, yawDegrees, scale),
+        .assetPath = key,
         .collidable = collidable,
         .traffic = traffic,
         .trafficDirection = trafficDirection,
@@ -184,6 +159,30 @@ bool IsRoadTile(int tx, int tz)
 bool IsIntersectionTile(int tx, int tz)
 {
     return tx % kRoadStrideTiles == 0 && tz % kRoadStrideTiles == 0;
+}
+
+void AddGroundTile(
+    SceneData& scene,
+    const AssetRegistry& assetRegistry,
+    ModelCache& cache,
+    int tx,
+    int tz
+)
+{
+    if (IsRoadTile(tx, tz))
+    {
+        return;
+    }
+
+    AddModelInstanceWithFootprint(
+        scene,
+        assetRegistry,
+        cache,
+        "kenney/kenney_city-kit-roads/Models/OBJ format/tile-low.obj",
+        Vec3Make(TileCenter(tx), 0.0f, TileCenter(tz)),
+        0.0f,
+        kRoadTileSize
+    );
 }
 
 void AddRoadLights(
@@ -554,6 +553,7 @@ void AddStreetWorld(SceneData& scene, const AssetRegistry& assetRegistry)
     {
         for (int tx = minTile; tx <= maxTile; ++tx)
         {
+            AddGroundTile(scene, assetRegistry, cache, tx, tz);
             AddRoadTile(scene, assetRegistry, cache, tx, tz);
         }
     }
@@ -574,8 +574,6 @@ void AddStreetWorld(SceneData& scene, const AssetRegistry& assetRegistry)
 SceneData BuildSampleCity(const AssetRegistry& assetRegistry)
 {
     SceneData scene{};
-    const float halfExtent = TileCenter(kHalfCityTiles) + kRoadTileSize * 4.0f;
-    AddGroundPlane(scene, Vec3Make(0.0f, 0.0f, 0.0f), -0.02f, halfExtent);
     AddStreetWorld(scene, assetRegistry);
     return scene;
 }

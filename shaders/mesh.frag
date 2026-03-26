@@ -37,6 +37,16 @@ layout(location = 3) in vec4 fragShadowPosition0;
 layout(location = 4) in vec4 fragShadowPosition1;
 layout(location = 5) in float fragViewDepth;
 
+layout(push_constant) uniform DrawPushConstants
+{
+    mat4 model;
+    uint skinned;
+    uint shadowCascade;
+    uint pointLightMask;
+    uint spotLightMask;
+    uint shadowedSpotLightMask;
+} drawPush;
+
 layout(location = 0) out vec4 outColor;
 
 bool shadowPositionCovered(vec4 shadowPosition, int cascadeIndex)
@@ -118,10 +128,21 @@ void main()
 
     for (int i = 0; i < 4; ++i)
     {
+        if (((drawPush.pointLightMask >> i) & 1u) == 0u)
+        {
+            continue;
+        }
         vec3 lightOffset = uniforms.lightPositions[i].xyz - fragWorldPosition;
         float distanceToLight = length(lightOffset);
+        float lightRange = uniforms.lightPositions[i].w;
+        if (lightRange <= 0.0001 || distanceToLight >= lightRange)
+        {
+            continue;
+        }
         vec3 lightDir = distanceToLight > 0.0001 ? lightOffset / distanceToLight : vec3(0.0, 1.0, 0.0);
-        float attenuation = 1.0 / (1.0 + 0.14 * distanceToLight + 0.03 * distanceToLight * distanceToLight);
+        float attenuation = 1.0 - distanceToLight / lightRange;
+        attenuation = max(attenuation, 0.0);
+        attenuation *= attenuation;
         float ndotl = max(dot(normal, lightDir), 0.0);
         lighting += albedo * uniforms.lightColors[i].rgb * ndotl * attenuation;
     }
@@ -129,6 +150,10 @@ void main()
     int shadowedSpotLightCount = int(uniforms.sceneLightCounts.y);
     for (int i = 0; i < shadowedSpotLightCount; ++i)
     {
+        if (((drawPush.shadowedSpotLightMask >> i) & 1u) == 0u)
+        {
+            continue;
+        }
         vec3 lightOffset = uniforms.shadowedSpotLightPositions[i].xyz - fragWorldPosition;
         float distanceToLight = length(lightOffset);
         if (distanceToLight <= 0.0001 || distanceToLight >= uniforms.shadowedSpotLightPositions[i].w)
@@ -167,6 +192,10 @@ void main()
     int sceneLightCount = int(uniforms.sceneLightCounts.x);
     for (int i = 0; i < sceneLightCount; ++i)
     {
+        if (((drawPush.spotLightMask >> i) & 1u) == 0u)
+        {
+            continue;
+        }
         vec3 lightOffset = uniforms.spotLightPositions[i].xyz - fragWorldPosition;
         float distanceToLight = length(lightOffset);
         if (distanceToLight <= 0.0001 || distanceToLight >= uniforms.spotLightPositions[i].w)

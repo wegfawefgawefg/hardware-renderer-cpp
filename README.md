@@ -68,6 +68,10 @@ That keeps the repo focused on renderer structure instead of tying it to legacy 
 - `docs/roadmap.md`: where this renderer would naturally go next
 - `docs/features.md`: target feature set for the bigger castle/character direction
 - `docs/rearchitecture-notes.md`: what should be split and cleaned up before the repo grows much more
+- `docs/rendering-scalability-notes.md`: why the current forward path slows down and what to optimize next
+- `docs/light-culling-notes.md`: how global vs local lights should be culled in the current renderer
+- `docs/clustered-lighting-notes.md`: how clustered light lookup works in a raster pipeline
+- `docs/ideas.md`: gameplay and renderer experiment backlog for this sandbox
 
 ## Status
 

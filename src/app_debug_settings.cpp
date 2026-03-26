@@ -69,7 +69,30 @@ void App::LoadDebugSettings()
     std::ostringstream buffer;
     buffer << in.rdbuf();
     std::string text = buffer.str();
+    float boolValue = 0.0f;
 
+    std::uint32_t sceneKind = static_cast<std::uint32_t>(m_sceneKind);
+    if (ExtractUInt(text, "\"scene_kind\"", sceneKind) && sceneKind <= static_cast<std::uint32_t>(SceneKind::VehicleLightTest))
+    {
+        m_sceneKind = static_cast<SceneKind>(sceneKind);
+    }
+
+    ExtractFloat(text, "\"cycle_day_night\"", boolValue);
+    m_cycleDayNight = boolValue != 0.0f;
+    if (ExtractFloat(text, "\"animate_sun_azimuth\"", boolValue)) m_animateSunAzimuth = boolValue != 0.0f;
+    ExtractFloat(text, "\"time_of_day\"", m_timeOfDay);
+    ExtractFloat(text, "\"day_night_speed\"", m_dayNightSpeed);
+    ExtractFloat(text, "\"sun_azimuth_degrees\"", m_sunAzimuthDegrees);
+    ExtractFloat(text, "\"orbit_distance_scale\"", m_orbitDistanceScale);
+    ExtractFloat(text, "\"sun_intensity\"", m_sunIntensity);
+    ExtractFloat(text, "\"moon_intensity\"", m_moonIntensity);
+    ExtractFloat(text, "\"ambient_intensity\"", m_ambientIntensity);
+    ExtractFloat(text, "\"point_light_intensity\"", m_pointLightIntensity);
+    ExtractFloat(text, "\"shadow_cascade_split\"", m_shadowCascadeSplit);
+    ExtractUInt(text, "\"shadow_map_size\"", m_shadowMapSize);
+    if (ExtractFloat(text, "\"shadow_blur\"", boolValue)) m_shadowBlur = boolValue != 0.0f;
+    ExtractFloat(text, "\"main_draw_distance\"", m_mainDrawDistance);
+    ExtractFloat(text, "\"shadow_draw_distance\"", m_shadowDrawDistance);
     ExtractFloat(text, "\"spot_light_intensity_scale\"", m_spotLightIntensityScale);
     ExtractFloat(text, "\"spot_light_range_scale\"", m_spotLightRangeScale);
     ExtractFloat(text, "\"spot_light_inner_angle_degrees\"", m_spotLightInnerAngleDegrees);
@@ -83,11 +106,14 @@ void App::LoadDebugSettings()
     ExtractFloat(text, "\"source_offset_x\"", m_spotLightSourceOffset.x);
     ExtractFloat(text, "\"source_offset_y\"", m_spotLightSourceOffset.y);
     ExtractFloat(text, "\"source_offset_z\"", m_spotLightSourceOffset.z);
-    float boolValue = 0.0f;
+    if (ExtractFloat(text, "\"draw_light_proxies\"", boolValue)) m_drawLightProxies = boolValue != 0.0f;
     if (ExtractFloat(text, "\"debug_draw_activation_volumes\"", boolValue)) m_debugDrawActivationVolumes = boolValue != 0.0f;
     if (ExtractFloat(text, "\"debug_draw_scene_light_gizmos\"", boolValue)) m_debugDrawSceneLightGizmos = boolValue != 0.0f;
     if (ExtractFloat(text, "\"debug_draw_light_directions\"", boolValue)) m_debugDrawLightDirections = boolValue != 0.0f;
+    if (ExtractFloat(text, "\"debug_draw_light_volumes\"", boolValue)) m_debugDrawLightVolumes = boolValue != 0.0f;
     if (ExtractFloat(text, "\"debug_draw_light_labels\"", boolValue)) m_debugDrawLightLabels = boolValue != 0.0f;
+    if (ExtractFloat(text, "\"debug_draw_vehicle_volumes\"", boolValue)) m_debugDrawVehicleVolumes = boolValue != 0.0f;
+    if (ExtractFloat(text, "\"debug_draw_vehicle_light_ranges\"", boolValue)) m_debugDrawVehicleLightRanges = boolValue != 0.0f;
 }
 
 void App::SaveDebugSettings() const
@@ -102,6 +128,22 @@ void App::SaveDebugSettings() const
     std::fprintf(
         file,
         "{\n"
+        "  \"scene_kind\": %u,\n"
+        "  \"cycle_day_night\": %d,\n"
+        "  \"animate_sun_azimuth\": %d,\n"
+        "  \"time_of_day\": %.6f,\n"
+        "  \"day_night_speed\": %.6f,\n"
+        "  \"sun_azimuth_degrees\": %.6f,\n"
+        "  \"orbit_distance_scale\": %.6f,\n"
+        "  \"sun_intensity\": %.6f,\n"
+        "  \"moon_intensity\": %.6f,\n"
+        "  \"ambient_intensity\": %.6f,\n"
+        "  \"point_light_intensity\": %.6f,\n"
+        "  \"shadow_cascade_split\": %.6f,\n"
+        "  \"shadow_map_size\": %u,\n"
+        "  \"shadow_blur\": %d,\n"
+        "  \"main_draw_distance\": %.6f,\n"
+        "  \"shadow_draw_distance\": %.6f,\n"
         "  \"spot_light_intensity_scale\": %.6f,\n"
         "  \"spot_light_range_scale\": %.6f,\n"
         "  \"spot_light_inner_angle_degrees\": %.6f,\n"
@@ -115,11 +157,31 @@ void App::SaveDebugSettings() const
         "  \"source_offset_x\": %.6f,\n"
         "  \"source_offset_y\": %.6f,\n"
         "  \"source_offset_z\": %.6f,\n"
+        "  \"draw_light_proxies\": %d,\n"
         "  \"debug_draw_activation_volumes\": %d,\n"
         "  \"debug_draw_scene_light_gizmos\": %d,\n"
         "  \"debug_draw_light_directions\": %d,\n"
-        "  \"debug_draw_light_labels\": %d\n"
+        "  \"debug_draw_light_volumes\": %d,\n"
+        "  \"debug_draw_light_labels\": %d,\n"
+        "  \"debug_draw_vehicle_volumes\": %d,\n"
+        "  \"debug_draw_vehicle_light_ranges\": %d\n"
         "}\n",
+        static_cast<std::uint32_t>(m_sceneKind),
+        m_cycleDayNight ? 1 : 0,
+        m_animateSunAzimuth ? 1 : 0,
+        m_timeOfDay,
+        m_dayNightSpeed,
+        m_sunAzimuthDegrees,
+        m_orbitDistanceScale,
+        m_sunIntensity,
+        m_moonIntensity,
+        m_ambientIntensity,
+        m_pointLightIntensity,
+        m_shadowCascadeSplit,
+        m_shadowMapSize,
+        m_shadowBlur ? 1 : 0,
+        m_mainDrawDistance,
+        m_shadowDrawDistance,
         m_spotLightIntensityScale,
         m_spotLightRangeScale,
         m_spotLightInnerAngleDegrees,
@@ -133,10 +195,14 @@ void App::SaveDebugSettings() const
         m_spotLightSourceOffset.x,
         m_spotLightSourceOffset.y,
         m_spotLightSourceOffset.z,
+        m_drawLightProxies ? 1 : 0,
         m_debugDrawActivationVolumes ? 1 : 0,
         m_debugDrawSceneLightGizmos ? 1 : 0,
         m_debugDrawLightDirections ? 1 : 0,
-        m_debugDrawLightLabels ? 1 : 0
+        m_debugDrawLightVolumes ? 1 : 0,
+        m_debugDrawLightLabels ? 1 : 0,
+        m_debugDrawVehicleVolumes ? 1 : 0,
+        m_debugDrawVehicleLightRanges ? 1 : 0
     );
 
     std::fclose(file);

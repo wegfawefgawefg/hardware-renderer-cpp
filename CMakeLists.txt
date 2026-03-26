@@ -62,8 +62,10 @@ set(OVERLAY_VERT_SHADER_OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/shaders/overlay.vert.
 set(OVERLAY_FRAG_SHADER_OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/shaders/overlay.frag.spv)
 set(LIGHT_VERT_SHADER_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/shaders/light.vert)
 set(LIGHT_FRAG_SHADER_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/shaders/light.frag)
+set(LIGHT_LINE_FRAG_SHADER_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/shaders/light_line.frag)
 set(LIGHT_VERT_SHADER_OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/shaders/light.vert.spv)
 set(LIGHT_FRAG_SHADER_OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/shaders/light.frag.spv)
+set(LIGHT_LINE_FRAG_SHADER_OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/shaders/light_line.frag.spv)
 set(SHADOW_VERT_SHADER_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/shaders/shadow.vert)
 set(SHADOW_VERT_SHADER_OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/shaders/shadow.vert.spv)
 
@@ -116,6 +118,14 @@ add_custom_command(
 )
 
 add_custom_command(
+  OUTPUT ${LIGHT_LINE_FRAG_SHADER_OUTPUT}
+  COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/shaders
+  COMMAND ${GLSLANG_VALIDATOR} -V --target-env vulkan1.3 -S frag -o ${LIGHT_LINE_FRAG_SHADER_OUTPUT} ${LIGHT_LINE_FRAG_SHADER_SOURCE}
+  DEPENDS ${LIGHT_LINE_FRAG_SHADER_SOURCE}
+  VERBATIM
+)
+
+add_custom_command(
   OUTPUT ${SHADOW_VERT_SHADER_OUTPUT}
   COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/shaders
   COMMAND ${GLSLANG_VALIDATOR} -V --target-env vulkan1.3 -S vert -o ${SHADOW_VERT_SHADER_OUTPUT} ${SHADOW_VERT_SHADER_SOURCE}
@@ -132,6 +142,7 @@ add_custom_target(
     ${OVERLAY_FRAG_SHADER_OUTPUT}
     ${LIGHT_VERT_SHADER_OUTPUT}
     ${LIGHT_FRAG_SHADER_OUTPUT}
+    ${LIGHT_LINE_FRAG_SHADER_OUTPUT}
     ${SHADOW_VERT_SHADER_OUTPUT}
 )
 
@@ -142,6 +153,7 @@ add_executable(hardware-renderer-cpp
   src/app_lighting.cpp
   src/app_scene.cpp
   src/app_spotlight.cpp
+  src/app_vehicle_lights.cpp
   src/animation/character.cpp
   src/animation/ufbx_impl.cpp
   src/assets/asset_registry.cpp
@@ -157,9 +169,11 @@ add_executable(hardware-renderer-cpp
   src/math_types.cpp
   src/scene.cpp
   src/scene_city.cpp
+  src/scene_vehicle.cpp
   src/vulkan_helpers.cpp
   src/render/renderer.cpp
   src/render/device.cpp
+  src/render/culling.cpp
   src/render/frame.cpp
   src/render/imgui.cpp
   src/render/pipeline.cpp
@@ -204,6 +218,7 @@ target_compile_definitions(hardware-renderer-cpp
     HARDWARE_RENDERER_OVERLAY_FRAG_SHADER_PATH="${OVERLAY_FRAG_SHADER_OUTPUT}"
     HARDWARE_RENDERER_LIGHT_VERT_SHADER_PATH="${LIGHT_VERT_SHADER_OUTPUT}"
     HARDWARE_RENDERER_LIGHT_FRAG_SHADER_PATH="${LIGHT_FRAG_SHADER_OUTPUT}"
+    HARDWARE_RENDERER_LIGHT_LINE_FRAG_SHADER_PATH="${LIGHT_LINE_FRAG_SHADER_OUTPUT}"
     HARDWARE_RENDERER_SHADOW_VERT_SHADER_PATH="${SHADOW_VERT_SHADER_OUTPUT}"
     HARDWARE_RENDERER_ASSETS_ROOT="${CMAKE_CURRENT_SOURCE_DIR}/assets"
 )

@@ -17,6 +17,8 @@ void VulkanRenderer::RecordCommandBuffer(std::uint32_t imageIndex)
     VkCommandBufferBeginInfo beginInfo{};
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     CheckVk(vkBeginCommandBuffer(commandBuffer, &beginInfo), "vkBeginCommandBuffer");
+    vkCmdResetQueryPool(commandBuffer, m_timestampQueryPool, 0, kGpuTimestampCount);
+    vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, m_timestampQueryPool, 0);
 
     std::array<VkClearValue, 2> clearValues{};
     clearValues[0].color = {{m_clearColor.x, m_clearColor.y, m_clearColor.z, m_clearColor.w}};
@@ -108,10 +110,17 @@ void VulkanRenderer::RecordCommandBuffer(std::uint32_t imageIndex)
         );
     }
 
-    for (std::uint32_t shadowIndex = 0; shadowIndex < kTotalShadowMaps; ++shadowIndex)
+    std::uint32_t sunShadowCount = std::min<std::uint32_t>(m_activeShadowMapCount, kSunShadowCascadeCount);
+    for (std::uint32_t shadowIndex = 0; shadowIndex < sunShadowCount; ++shadowIndex)
     {
         RecordShadowPass(commandBuffer, shadowIndex);
     }
+    vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, m_timestampQueryPool, 1);
+    for (std::uint32_t shadowIndex = sunShadowCount; shadowIndex < m_activeShadowMapCount; ++shadowIndex)
+    {
+        RecordShadowPass(commandBuffer, shadowIndex);
+    }
+    vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, m_timestampQueryPool, 2);
 
     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline);
@@ -131,15 +140,19 @@ void VulkanRenderer::RecordCommandBuffer(std::uint32_t imageIndex)
     VkDeviceSize offsets[] = {0};
     vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
     vkCmdBindIndexBuffer(commandBuffer, m_indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
-    for (const DrawItem& drawItem : m_drawItems)
+    for (std::uint32_t visibleIndex : m_visibleDrawItems)
     {
+        const DrawItem& drawItem = m_drawItems[visibleIndex];
         DrawPushConstants pushConstants{};
         pushConstants.model = drawItem.model;
         pushConstants.skinned = drawItem.skinned;
+        pushConstants.pointLightMask = drawItem.pointLightMask;
+        pushConstants.spotLightMask = drawItem.spotLightMask;
+        pushConstants.shadowedSpotLightMask = drawItem.shadowedSpotLightMask;
         vkCmdPushConstants(
             commandBuffer,
             m_pipelineLayout,
-            VK_SHADER_STAGE_VERTEX_BIT,
+            VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
             0,
             sizeof(pushConstants),
             &pushConstants
@@ -162,6 +175,9 @@ void VulkanRenderer::RecordCommandBuffer(std::uint32_t imageIndex)
         DrawPushConstants pushConstants{};
         pushConstants.model = m_characterState.model;
         pushConstants.skinned = 1;
+        pushConstants.pointLightMask = 0xFu;
+        pushConstants.spotLightMask = 0xFFFFFFFFu;
+        pushConstants.shadowedSpotLightMask = (1u << kMaxShadowedSpotLights) - 1u;
         VkBuffer characterBuffers[] = {m_characterVertexBuffer.buffer};
         VkDeviceSize characterOffsets[] = {0};
         vkCmdBindVertexBuffers(commandBuffer, 0, 1, characterBuffers, characterOffsets);
@@ -169,7 +185,7 @@ void VulkanRenderer::RecordCommandBuffer(std::uint32_t imageIndex)
         vkCmdPushConstants(
             commandBuffer,
             m_pipelineLayout,
-            VK_SHADER_STAGE_VERTEX_BIT,
+            VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
             0,
             sizeof(pushConstants),
             &pushConstants
@@ -191,9 +207,47 @@ void VulkanRenderer::RecordCommandBuffer(std::uint32_t imageIndex)
         vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
         vkCmdBindIndexBuffer(commandBuffer, m_indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
     }
+    vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, m_timestampQueryPool, 3);
 
     VkBuffer lightBuffers[] = {m_lightMarkerBuffer.buffer};
     VkDeviceSize lightOffsets[] = {0};
+    if (m_lightSolidVertexCount > 0)
+    {
+        VkBuffer solidBuffers[] = {m_lightSolidBuffer.buffer};
+        VkDeviceSize solidOffsets[] = {0};
+        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_lightSolidPipeline);
+        vkCmdBindVertexBuffers(commandBuffer, 0, 1, solidBuffers, solidOffsets);
+        vkCmdBindDescriptorSets(
+            commandBuffer,
+            VK_PIPELINE_BIND_POINT_GRAPHICS,
+            m_pipelineLayout,
+            0,
+            1,
+            &m_descriptorSets[0],
+            0,
+            nullptr
+        );
+        vkCmdDraw(commandBuffer, m_lightSolidVertexCount, 1, 0, 0);
+    }
+    if (m_lightLineVertexCount > 0)
+    {
+        VkBuffer lineBuffers[] = {m_lightLineBuffer.buffer};
+        VkDeviceSize lineOffsets[] = {0};
+        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_lightLinePipeline);
+        vkCmdBindVertexBuffers(commandBuffer, 0, 1, lineBuffers, lineOffsets);
+        vkCmdBindDescriptorSets(
+            commandBuffer,
+            VK_PIPELINE_BIND_POINT_GRAPHICS,
+            m_pipelineLayout,
+            0,
+            1,
+            &m_descriptorSets[0],
+            0,
+            nullptr
+        );
+        vkCmdDraw(commandBuffer, m_lightLineVertexCount, 1, 0, 0);
+    }
+
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_lightPipeline);
     vkCmdBindVertexBuffers(commandBuffer, 0, 1, lightBuffers, lightOffsets);
     vkCmdBindDescriptorSets(
@@ -207,6 +261,7 @@ void VulkanRenderer::RecordCommandBuffer(std::uint32_t imageIndex)
         nullptr
     );
     vkCmdDraw(commandBuffer, kLightMarkerCount, 1, 0, 0);
+    vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, m_timestampQueryPool, 4);
 
     if (m_overlayWidth > 0 && m_overlayHeight > 0)
     {
@@ -231,6 +286,7 @@ void VulkanRenderer::RecordCommandBuffer(std::uint32_t imageIndex)
     {
         ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer);
     }
+    vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, m_timestampQueryPool, 5);
 
     vkCmdEndRenderPass(commandBuffer);
     CheckVk(vkEndCommandBuffer(commandBuffer), "vkEndCommandBuffer");

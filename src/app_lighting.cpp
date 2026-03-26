@@ -209,6 +209,29 @@ Mat4 MakeSpotShadowViewProj(Vec3 position, Vec3 direction, float outerAngleRadia
     return Mat4Mul(proj, view);
 }
 
+Vec3 VehicleLightDirection(float yawDegrees, float pitchDegrees)
+{
+    float yaw = DegreesToRadians(yawDegrees);
+    float pitch = DegreesToRadians(pitchDegrees);
+    float cp = std::cos(pitch);
+    return NormalizeOrFallback(
+        Vec3Make(std::sin(yaw) * cp, std::sin(pitch), std::cos(yaw) * cp),
+        Vec3Make(0.0f, -0.15f, 1.0f)
+    );
+}
+
+Vec3 TransformPoint(Mat4 transform, Vec3 point)
+{
+    Vec4 v = Mat4MulVec4(transform, Vec4Make(point.x, point.y, point.z, 1.0f));
+    return Vec3Make(v.x, v.y, v.z);
+}
+
+Vec3 TransformDirection(Mat4 transform, Vec3 direction)
+{
+    Vec4 v = Mat4MulVec4(transform, Vec4Make(direction.x, direction.y, direction.z, 0.0f));
+    return NormalizeOrFallback(Vec3Make(v.x, v.y, v.z), direction);
+}
+
 DayNightSample SampleDayNight(float timeOfDay)
 {
     static constexpr std::array<DayNightKey, 5> kKeys = {{
@@ -281,7 +304,12 @@ void App::ApplyLighting(SceneUniforms& uniforms, float dtSeconds)
     Vec3 center = m_sceneBounds.valid ? m_sceneBounds.center : Vec3Make(0.0f, 0.0f, 0.0f);
     float orbitRadius = (m_sceneBounds.valid ? m_sceneBounds.radius : 30.0f) * m_orbitDistanceScale;
     float solarAngle = (m_timeOfDay - 0.25f) * 6.28318530718f;
-    float azimuth = DegreesToRadians(m_sunAzimuthDegrees);
+    float azimuthDegrees = m_sunAzimuthDegrees;
+    if (m_animateSunAzimuth)
+    {
+        azimuthDegrees += (m_timeOfDay - 0.5f) * 180.0f;
+    }
+    float azimuth = DegreesToRadians(azimuthDegrees);
     Vec3 horizontal = Vec3Make(std::sin(azimuth), 0.0f, std::cos(azimuth));
     Vec3 sunDir = NormalizeOrFallback(
         Vec3Add(Vec3Scale(horizontal, std::cos(solarAngle)), Vec3Make(0.0f, std::sin(solarAngle), 0.0f)),
@@ -338,12 +366,84 @@ void App::ApplyLighting(SceneUniforms& uniforms, float dtSeconds)
         m_camera.position,
         Vec3Scale(CameraForward(m_camera), m_shadowedSpotLightActivationForwardOffset)
     );
-    std::vector<bool> shadowedMask(m_scene.spotLights.size(), false);
-
-    for (std::uint32_t lightIndex = 0; lightIndex < m_scene.spotLights.size(); ++lightIndex)
+    std::vector<SpotLightData> spotLightSources = m_scene.spotLights;
+    struct RearPointCandidate
     {
-        const SpotLightData& light = m_scene.spotLights[lightIndex];
-        Vec3 lightPosition = Vec3Add(light.position, RotateYOffset(m_spotLightSourceOffset, light.yawDegrees));
+        float dist2 = 1e30f;
+        Vec3 position = {};
+        Vec3 color = {};
+        float range = 0.0f;
+    };
+    std::vector<RearPointCandidate> rearPointCandidates;
+
+    if (m_sceneKind == SceneKind::City)
+    {
+        rearPointCandidates.reserve(m_scene.entities.size());
+        for (const EntityData& entity : m_scene.entities)
+        {
+            if (!entity.traffic || entity.assetPath.empty())
+            {
+                continue;
+            }
+            auto found = m_vehicleLightRigs.find(entity.assetPath);
+            if (found == m_vehicleLightRigs.end())
+            {
+                continue;
+            }
+
+            const VehicleLightRig& rig = found->second;
+            float entityScale = Vec3Length(Vec3Make(entity.transform.m[0], entity.transform.m[1], entity.transform.m[2]));
+            Vec3 headADir = VehicleLightDirection(rig.headA.yawDegrees, rig.headA.pitchDegrees);
+            Vec3 headBDir = VehicleLightDirection(rig.headB.yawDegrees, rig.headB.pitchDegrees);
+            Vec3 headAPos = TransformPoint(entity.transform, rig.headA.offset);
+            Vec3 headBPos = TransformPoint(entity.transform, rig.headB.offset);
+
+            SpotLightData headA{};
+            headA.position = headAPos;
+            headA.range = rig.headA.range * entityScale;
+            headA.direction = TransformDirection(entity.transform, headADir);
+            headA.color = Vec3Make(1.0f, 0.95f, 0.82f);
+            headA.intensity = 3.2f;
+            headA.sourceOffsetScale = 0.0f;
+            spotLightSources.push_back(headA);
+
+            SpotLightData headB{};
+            headB.position = headBPos;
+            headB.range = rig.headB.range * entityScale;
+            headB.direction = TransformDirection(entity.transform, headBDir);
+            headB.color = Vec3Make(1.0f, 0.95f, 0.82f);
+            headB.intensity = 3.2f;
+            headB.sourceOffsetScale = 0.0f;
+            spotLightSources.push_back(headB);
+
+            Vec3 rearAPos = TransformPoint(entity.transform, rig.rearA.offset);
+            Vec3 rearBPos = TransformPoint(entity.transform, rig.rearB.offset);
+            Vec3 rearAColor = Vec3Make(rig.rearA.intensity, 0.08f * rig.rearA.intensity, 0.08f * rig.rearA.intensity);
+            Vec3 rearBColor = Vec3Make(rig.rearB.intensity, 0.08f * rig.rearB.intensity, 0.08f * rig.rearB.intensity);
+            Vec3 rearADelta = Vec3Sub(rearAPos, m_camera.position);
+            Vec3 rearBDelta = Vec3Sub(rearBPos, m_camera.position);
+            rearPointCandidates.push_back(RearPointCandidate{
+                .dist2 = Vec3Dot(rearADelta, rearADelta),
+                .position = rearAPos,
+                .color = rearAColor,
+                .range = rig.rearA.range * entityScale,
+            });
+            rearPointCandidates.push_back(RearPointCandidate{
+                .dist2 = Vec3Dot(rearBDelta, rearBDelta),
+                .position = rearBPos,
+                .color = rearBColor,
+                .range = rig.rearB.range * entityScale,
+            });
+        }
+    }
+
+    std::vector<bool> shadowedMask(spotLightSources.size(), false);
+
+    for (std::uint32_t lightIndex = 0; lightIndex < spotLightSources.size(); ++lightIndex)
+    {
+        const SpotLightData& light = spotLightSources[lightIndex];
+        Vec3 sourceOffset = Vec3Scale(m_spotLightSourceOffset, light.sourceOffsetScale);
+        Vec3 lightPosition = Vec3Add(light.position, RotateYOffset(sourceOffset, light.yawDegrees));
         Vec3 shadowedDelta = Vec3Sub(lightPosition, shadowedActivationCenter);
         float shadowedDist2 = Vec3Dot(shadowedDelta, shadowedDelta);
         if (shadowedDist2 <= shadowedActivationDistance2)
@@ -403,18 +503,19 @@ void App::ApplyLighting(SceneUniforms& uniforms, float dtSeconds)
     std::uint32_t shadowedSpotCount = 0;
     for (std::size_t i = 0; i < shadowedBudget; ++i)
     {
-        if (shadowedLights[i].lightIndex >= m_scene.spotLights.size())
+        if (shadowedLights[i].lightIndex >= spotLightSources.size())
         {
             continue;
         }
 
-        const SpotLightData& light = m_scene.spotLights[shadowedLights[i].lightIndex];
+        const SpotLightData& light = spotLightSources[shadowedLights[i].lightIndex];
         if (light.intensity * sceneLightScale * m_spotLightIntensityScale <= 0.001f)
         {
             continue;
         }
 
-        Vec3 lightPosition = Vec3Add(light.position, RotateYOffset(m_spotLightSourceOffset, light.yawDegrees));
+        Vec3 sourceOffset = Vec3Scale(m_spotLightSourceOffset, light.sourceOffsetScale);
+        Vec3 lightPosition = Vec3Add(light.position, RotateYOffset(sourceOffset, light.yawDegrees));
         Vec3 lightDirection = light.direction;
         if (m_sceneKind == SceneKind::ShadowTest &&
             shadowedLights[i].lightIndex == 0 &&
@@ -458,19 +559,20 @@ void App::ApplyLighting(SceneUniforms& uniforms, float dtSeconds)
     std::uint32_t sceneLightCount = 0;
     for (std::size_t i = 0; i < activeBudget; ++i)
     {
-        if (selectedLights[i].lightIndex >= m_scene.spotLights.size() ||
+        if (selectedLights[i].lightIndex >= spotLightSources.size() ||
             shadowedMask[selectedLights[i].lightIndex])
         {
             continue;
         }
 
-        const SpotLightData& light = m_scene.spotLights[selectedLights[i].lightIndex];
+        const SpotLightData& light = spotLightSources[selectedLights[i].lightIndex];
         if (light.intensity * sceneLightScale * m_spotLightIntensityScale <= 0.001f)
         {
             continue;
         }
 
-        Vec3 lightPosition = Vec3Add(light.position, RotateYOffset(m_spotLightSourceOffset, light.yawDegrees));
+        Vec3 sourceOffset = Vec3Scale(m_spotLightSourceOffset, light.sourceOffsetScale);
+        Vec3 lightPosition = Vec3Add(light.position, RotateYOffset(sourceOffset, light.yawDegrees));
         Vec3 lightDirection = light.direction;
         if (m_sceneKind == SceneKind::ShadowTest &&
             selectedLights[i].lightIndex == 0 &&
@@ -510,6 +612,34 @@ void App::ApplyLighting(SceneUniforms& uniforms, float dtSeconds)
         0.0f
     );
 
+    if (m_sceneKind == SceneKind::City)
+    {
+        std::sort(
+            rearPointCandidates.begin(),
+            rearPointCandidates.end(),
+            [](const RearPointCandidate& a, const RearPointCandidate& b) { return a.dist2 < b.dist2; }
+        );
+        for (int i = 0; i < 4; ++i)
+        {
+            if (static_cast<std::size_t>(i) < rearPointCandidates.size())
+            {
+                const RearPointCandidate& candidate = rearPointCandidates[static_cast<std::size_t>(i)];
+                uniforms.lightPositions[i] = Vec4Make(
+                    candidate.position.x,
+                    candidate.position.y,
+                    candidate.position.z,
+                    candidate.range
+                );
+                uniforms.lightColors[i] = Vec4Make(candidate.color.x, candidate.color.y, candidate.color.z, 1.0f);
+            }
+            else
+            {
+                uniforms.lightPositions[i] = Vec4Make(0.0f, -1000.0f, 0.0f, 1.0f);
+                uniforms.lightColors[i] = Vec4Make(0.0f, 0.0f, 0.0f, 1.0f);
+            }
+        }
+    }
+
     float cameraNear = 0.1f;
     float cameraFar = 200.0f;
     float cameraAspect = static_cast<float>(std::max(m_windowWidth, 1u)) / static_cast<float>(std::max(m_windowHeight, 1u));
@@ -548,20 +678,99 @@ void App::ApplyLighting(SceneUniforms& uniforms, float dtSeconds)
     float cascadeBlendWidth = std::max(splitDistance * 0.12f, 2.0f);
     uniforms.shadowParams = Vec4Make(m_shadowBlur ? 1.0f : 0.0f, splitDistance, cascadeBlendWidth, 0.0f);
 
-    float t = m_elapsedSeconds;
-    float pointScale = m_pointLightIntensity;
-    Vec3 lightCenter = center;
-    float orbit = std::max((m_sceneBounds.valid ? m_sceneBounds.radius : 20.0f) * 0.6f, 6.0f);
-    float highY = center.y + std::max((m_sceneBounds.valid ? m_sceneBounds.radius : 20.0f) * 0.4f, 4.0f);
-    float midY = center.y + std::max((m_sceneBounds.valid ? m_sceneBounds.radius : 20.0f) * 0.22f, 2.5f);
-    float lowY = center.y + std::max((m_sceneBounds.valid ? m_sceneBounds.radius : 20.0f) * 0.15f, 1.5f);
+    if (m_sceneKind == SceneKind::VehicleLightTest)
+    {
+        for (int i = 0; i < 4; ++i)
+        {
+            uniforms.lightPositions[i] = Vec4Make(0.0f, -1000.0f, 0.0f, 1.0f);
+            uniforms.lightColors[i] = Vec4Make(0.0f, 0.0f, 0.0f, 1.0f);
+        }
 
-    uniforms.lightPositions[0] = Vec4Make(lightCenter.x + std::cos(t * 0.8f) * orbit, highY, lightCenter.z + std::sin(t * 0.8f) * orbit, 1.0f);
-    uniforms.lightColors[0] = Vec4Make(5.0f * pointScale, 4.8f * pointScale, 4.5f * pointScale, 1.0f);
-    uniforms.lightPositions[1] = Vec4Make(lightCenter.x - orbit * 0.8f, midY + std::sin(t * 2.1f) * 0.5f, lightCenter.z + std::cos(t * 0.9f) * orbit * 0.55f, 1.0f);
-    uniforms.lightColors[1] = Vec4Make(4.8f * pointScale, 0.45f * pointScale, 0.45f * pointScale, 1.0f);
-    uniforms.lightPositions[2] = Vec4Make(lightCenter.x + std::cos(t * 1.1f) * orbit * 0.55f, lowY + std::cos(t * 1.8f) * 0.6f, lightCenter.z - orbit * 0.75f, 1.0f);
-    uniforms.lightColors[2] = Vec4Make(0.45f * pointScale, 4.4f * pointScale, 0.55f * pointScale, 1.0f);
-    uniforms.lightPositions[3] = Vec4Make(lightCenter.x + orbit * 0.8f, midY + std::sin(t * 1.5f) * 0.55f, lightCenter.z + std::sin(t * 1.0f) * orbit * 0.62f, 1.0f);
-    uniforms.lightColors[3] = Vec4Make(0.55f * pointScale, 0.9f * pointScale, 4.8f * pointScale, 1.0f);
+        int vehicleIndex = FindActiveVehicleLightIndex();
+        if (vehicleIndex >= 0)
+        {
+            const SceneData::VehicleLightTestItem& item = m_scene.vehicleLightTestItems[static_cast<std::size_t>(vehicleIndex)];
+            VehicleLightRig rig = {};
+            if (auto found = m_vehicleLightRigs.find(item.assetPath); found != m_vehicleLightRigs.end())
+            {
+                rig = found->second;
+            }
+
+            auto worldPoint = [&](Vec3 local) {
+                return Vec3Add(item.origin, Vec3Scale(local, item.scale));
+            };
+
+            std::uint32_t shadowCount = 0;
+            std::uint32_t unshadowCount = 0;
+            auto addHeadlight = [&](const VehicleFrontLightConfig& cfg, float sign) {
+                Vec3 pos = worldPoint(cfg.offset);
+                Vec3 dir = VehicleLightDirection(cfg.yawDegrees, cfg.pitchDegrees);
+                if (shadowCount < std::min(m_shadowedSpotLightMaxActive, kMaxShadowedSpotLights))
+                {
+                    uniforms.shadowedSpotLightPositions[shadowCount] = Vec4Make(pos.x, pos.y, pos.z, cfg.range * item.scale);
+                    uniforms.shadowedSpotLightDirections[shadowCount] = Vec4Make(dir.x, dir.y, dir.z, 0.0f);
+                    uniforms.shadowedSpotLightColors[shadowCount] = Vec4Make(1.0f, 0.95f, 0.82f, 3.2f);
+                    uniforms.shadowedSpotLightParams[shadowCount] = Vec4Make(
+                        std::cos(DegreesToRadians(m_spotLightInnerAngleDegrees)),
+                        std::cos(DegreesToRadians(m_spotLightOuterAngleDegrees)),
+                        0.0f,
+                        0.0f
+                    );
+                    uniforms.shadowViewProj[kSunShadowCascadeCount + shadowCount] = MakeSpotShadowViewProj(
+                        pos,
+                        dir,
+                        DegreesToRadians(m_spotLightOuterAngleDegrees),
+                        cfg.range * item.scale
+                    );
+                    ++shadowCount;
+                }
+                else if (unshadowCount < std::min(m_spotLightMaxActive, kMaxSceneSpotLights))
+                {
+                    uniforms.spotLightPositions[unshadowCount] = Vec4Make(pos.x, pos.y, pos.z, cfg.range * item.scale);
+                    uniforms.spotLightDirections[unshadowCount] = Vec4Make(dir.x, dir.y, dir.z, 0.0f);
+                    uniforms.spotLightColors[unshadowCount] = Vec4Make(1.0f, 0.95f, 0.82f, 3.2f);
+                    uniforms.spotLightParams[unshadowCount] = Vec4Make(
+                        std::cos(DegreesToRadians(m_spotLightInnerAngleDegrees)),
+                        std::cos(DegreesToRadians(m_spotLightOuterAngleDegrees)),
+                        sign,
+                        0.0f
+                    );
+                    ++unshadowCount;
+                }
+            };
+
+            addHeadlight(rig.headA, -1.0f);
+            addHeadlight(rig.headB, 1.0f);
+
+            Vec3 rearA = worldPoint(rig.rearA.offset);
+            Vec3 rearB = worldPoint(rig.rearB.offset);
+            uniforms.lightPositions[0] = Vec4Make(rearA.x, rearA.y, rearA.z, rig.rearA.range * item.scale);
+            uniforms.lightColors[0] = Vec4Make(rig.rearA.intensity, 0.08f * rig.rearA.intensity, 0.08f * rig.rearA.intensity, 1.0f);
+            uniforms.lightPositions[1] = Vec4Make(rearB.x, rearB.y, rearB.z, rig.rearB.range * item.scale);
+            uniforms.lightColors[1] = Vec4Make(rig.rearB.intensity, 0.08f * rig.rearB.intensity, 0.08f * rig.rearB.intensity, 1.0f);
+            uniforms.sceneLightCounts = Vec4Make(static_cast<float>(unshadowCount), static_cast<float>(shadowCount), 0.0f, 0.0f);
+        }
+
+        return;
+    }
+
+    if (m_sceneKind != SceneKind::City)
+    {
+        float t = m_elapsedSeconds;
+        float pointScale = m_pointLightIntensity;
+        Vec3 lightCenter = center;
+        float orbit = std::max((m_sceneBounds.valid ? m_sceneBounds.radius : 20.0f) * 0.6f, 6.0f);
+        float highY = center.y + std::max((m_sceneBounds.valid ? m_sceneBounds.radius : 20.0f) * 0.4f, 4.0f);
+        float midY = center.y + std::max((m_sceneBounds.valid ? m_sceneBounds.radius : 20.0f) * 0.22f, 2.5f);
+        float lowY = center.y + std::max((m_sceneBounds.valid ? m_sceneBounds.radius : 20.0f) * 0.15f, 1.5f);
+
+        uniforms.lightPositions[0] = Vec4Make(lightCenter.x + std::cos(t * 0.8f) * orbit, highY, lightCenter.z + std::sin(t * 0.8f) * orbit, orbit * 1.6f);
+        uniforms.lightColors[0] = Vec4Make(5.0f * pointScale, 4.8f * pointScale, 4.5f * pointScale, 1.0f);
+        uniforms.lightPositions[1] = Vec4Make(lightCenter.x - orbit * 0.8f, midY + std::sin(t * 2.1f) * 0.5f, lightCenter.z + std::cos(t * 0.9f) * orbit * 0.55f, orbit * 1.2f);
+        uniforms.lightColors[1] = Vec4Make(4.8f * pointScale, 0.45f * pointScale, 0.45f * pointScale, 1.0f);
+        uniforms.lightPositions[2] = Vec4Make(lightCenter.x + std::cos(t * 1.1f) * orbit * 0.55f, lowY + std::cos(t * 1.8f) * 0.6f, lightCenter.z - orbit * 0.75f, orbit * 1.2f);
+        uniforms.lightColors[2] = Vec4Make(0.45f * pointScale, 4.4f * pointScale, 0.55f * pointScale, 1.0f);
+        uniforms.lightPositions[3] = Vec4Make(lightCenter.x + orbit * 0.8f, midY + std::sin(t * 1.5f) * 0.55f, lightCenter.z + std::sin(t * 1.0f) * orbit * 0.62f, orbit * 1.2f);
+        uniforms.lightColors[3] = Vec4Make(0.55f * pointScale, 0.9f * pointScale, 4.8f * pointScale, 1.0f);
+    }
 }

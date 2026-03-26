@@ -1,5 +1,6 @@
 #include "render/internal.h"
 
+#include <algorithm>
 #include <array>
 #include <cstring>
 
@@ -9,6 +10,40 @@ using namespace vulkan_renderer_internal;
 
 namespace
 {
+struct BoundsSphere
+{
+    Vec3 center = {};
+    float radius = 0.0f;
+};
+
+BoundsSphere ComputeMeshBounds(const MeshData& mesh)
+{
+    if (mesh.vertices.empty())
+    {
+        return {};
+    }
+
+    Vec3 min = mesh.vertices.front().position;
+    Vec3 max = mesh.vertices.front().position;
+    for (const Vertex& vertex : mesh.vertices)
+    {
+        min.x = std::min(min.x, vertex.position.x);
+        min.y = std::min(min.y, vertex.position.y);
+        min.z = std::min(min.z, vertex.position.z);
+        max.x = std::max(max.x, vertex.position.x);
+        max.y = std::max(max.y, vertex.position.y);
+        max.z = std::max(max.z, vertex.position.z);
+    }
+
+    Vec3 center = Vec3Scale(Vec3Add(min, max), 0.5f);
+    float radius = 0.0f;
+    for (const Vertex& vertex : mesh.vertices)
+    {
+        radius = std::max(radius, Vec3Length(Vec3Sub(vertex.position, center)));
+    }
+    return BoundsSphere{center, radius};
+}
+
 TextureData GetPrimitiveTexture(
     const SceneData& scene,
     const EntityData& entity,
@@ -34,7 +69,13 @@ void VulkanRenderer::CreateSceneBuffers(const SceneData& scene)
 {
     std::vector<Vertex> mergedVertices;
     std::vector<std::uint32_t> mergedIndices;
+    std::vector<BoundsSphere> modelBounds(scene.models.size());
+    for (std::size_t modelIndex = 0; modelIndex < scene.models.size(); ++modelIndex)
+    {
+        modelBounds[modelIndex] = ComputeMeshBounds(scene.models[modelIndex].mesh);
+    }
     m_drawItems.clear();
+    m_visibleDrawItems.clear();
 
     for (const EntityData& entity : scene.entities)
     {
@@ -44,6 +85,7 @@ void VulkanRenderer::CreateSceneBuffers(const SceneData& scene)
         }
 
         const ModelData& model = scene.models[entity.modelIndex];
+        const BoundsSphere& bounds = modelBounds[entity.modelIndex];
         std::uint32_t baseVertex = static_cast<std::uint32_t>(mergedVertices.size());
         std::uint32_t baseIndex = static_cast<std::uint32_t>(mergedIndices.size());
 
@@ -57,6 +99,8 @@ void VulkanRenderer::CreateSceneBuffers(const SceneData& scene)
         {
             DrawItem item{};
             item.model = entity.transform;
+            item.localBoundsCenter = bounds.center;
+            item.localBoundsRadius = bounds.radius;
             item.firstIndex = baseIndex + primitive.firstIndex;
             item.indexCount = primitive.indexCount;
             item.descriptorIndex = static_cast<std::uint32_t>(m_drawItems.size());
@@ -64,6 +108,7 @@ void VulkanRenderer::CreateSceneBuffers(const SceneData& scene)
             m_drawItems.push_back(item);
         }
     }
+    m_visibleDrawItems.reserve(m_drawItems.size());
 
     VkDeviceSize vertexSize = sizeof(Vertex) * mergedVertices.size();
     VkDeviceSize indexSize = sizeof(std::uint32_t) * mergedIndices.size();
@@ -106,6 +151,22 @@ void VulkanRenderer::CreateSceneBuffers(const SceneData& scene)
         m_physicalDevice,
         m_device,
         sizeof(LightMarkerVertex) * kLightMarkerCount,
+        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        true
+    );
+    m_lightLineBuffer = CreateBuffer(
+        m_physicalDevice,
+        m_device,
+        sizeof(LightMarkerVertex) * kLightLineVertexCount,
+        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        true
+    );
+    m_lightSolidBuffer = CreateBuffer(
+        m_physicalDevice,
+        m_device,
+        sizeof(LightMarkerVertex) * kLightSolidVertexCount,
         VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
         true

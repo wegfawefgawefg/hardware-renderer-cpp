@@ -27,6 +27,17 @@ Vec3 NormalizeOrFallback(Vec3 v, Vec3 fallback)
     return length > 1e-5f ? Vec3Scale(v, 1.0f / length) : fallback;
 }
 
+Vec3 VehicleLightDirection(float yawDegrees, float pitchDegrees)
+{
+    float yaw = DegreesToRadians(yawDegrees);
+    float pitch = DegreesToRadians(pitchDegrees);
+    float cp = std::cos(pitch);
+    return NormalizeOrFallback(
+        Vec3Make(std::sin(yaw) * cp, std::sin(pitch), std::cos(yaw) * cp),
+        Vec3Make(0.0f, -0.15f, 1.0f)
+    );
+}
+
 bool ProjectWorldToScreen(const App& app, Vec3 world, ImVec2& outScreen)
 {
     if (app.m_windowWidth == 0 || app.m_windowHeight == 0)
@@ -61,21 +72,6 @@ bool ProjectWorldToScreen(const App& app, Vec3 world, ImVec2& outScreen)
     outScreen.x = (ndcX * 0.5f + 0.5f) * static_cast<float>(app.m_windowWidth);
     outScreen.y = (ndcY * 0.5f + 0.5f) * static_cast<float>(app.m_windowHeight);
     return true;
-}
-
-float ProjectSphereRadius(const App& app, Vec3 center, float radius)
-{
-    ImVec2 centerScreen{};
-    ImVec2 edgeScreen{};
-    Vec3 right = CameraRight(app.m_camera);
-    if (!ProjectWorldToScreen(app, center, centerScreen) ||
-        !ProjectWorldToScreen(app, Vec3Add(center, Vec3Scale(right, radius)), edgeScreen))
-    {
-        return 0.0f;
-    }
-    float dx = edgeScreen.x - centerScreen.x;
-    float dy = edgeScreen.y - centerScreen.y;
-    return std::sqrt(dx * dx + dy * dy);
 }
 
 struct DebugSpotSelection
@@ -162,48 +158,65 @@ DebugSpotSelection CollectDebugSpotSelection(const App& app)
 
 void DrawLightDebugOverlay(const App& app)
 {
+    ImDrawList* drawList = ImGui::GetForegroundDrawList();
+    if (app.m_sceneKind == SceneKind::VehicleLightTest)
+    {
+        int activeVehicle = app.FindActiveVehicleLightIndex();
+        if (activeVehicle >= 0)
+        {
+            const auto& item = app.m_scene.vehicleLightTestItems[static_cast<std::size_t>(activeVehicle)];
+            App::VehicleLightRig rig = {};
+            if (auto found = app.m_vehicleLightRigs.find(item.assetPath); found != app.m_vehicleLightRigs.end())
+            {
+                rig = found->second;
+            }
+
+            auto worldPoint = [&](Vec3 local) {
+                return Vec3Add(item.origin, Vec3Scale(local, item.scale));
+            };
+            struct LightViz
+            {
+                const char* label;
+                Vec3 position;
+                Vec3 direction;
+                float range;
+                ImU32 color;
+                bool directional;
+            };
+            std::array<LightViz, 4> lights = {{
+                {"HA", worldPoint(rig.headA.offset), VehicleLightDirection(rig.headA.yawDegrees, rig.headA.pitchDegrees), rig.headA.range * item.scale, IM_COL32(255, 244, 160, 255), true},
+                {"HB", worldPoint(rig.headB.offset), VehicleLightDirection(rig.headB.yawDegrees, rig.headB.pitchDegrees), rig.headB.range * item.scale, IM_COL32(255, 220, 120, 255), true},
+                {"RA", worldPoint(rig.rearA.offset), Vec3Make(0.0f, 0.0f, -1.0f), rig.rearA.range * item.scale, IM_COL32(255, 90, 90, 255), false},
+                {"RB", worldPoint(rig.rearB.offset), Vec3Make(0.0f, 0.0f, -1.0f), rig.rearB.range * item.scale, IM_COL32(255, 50, 50, 255), false},
+            }};
+
+            for (const LightViz& light : lights)
+            {
+                ImVec2 sourceScreen{};
+                if (!ProjectWorldToScreen(app, light.position, sourceScreen))
+                {
+                    continue;
+                }
+                drawList->AddCircleFilled(sourceScreen, 4.0f, light.color, 12);
+                if (app.m_debugDrawLightLabels)
+                {
+                    drawList->AddText(ImVec2(sourceScreen.x + 8.0f, sourceScreen.y - 10.0f), light.color, light.label);
+                }
+            }
+        }
+        return;
+    }
+
     if (app.m_scene.spotLights.empty())
     {
         return;
     }
-
-    ImDrawList* drawList = ImGui::GetForegroundDrawList();
     DebugSpotSelection selection = CollectDebugSpotSelection(app);
     std::vector<std::uint8_t> state(app.m_scene.spotLights.size(), 0);
     for (std::uint32_t index : selection.unshadowed) state[index] = 1;
     for (std::uint32_t index : selection.shadowed) state[index] = 2;
 
-    if (app.m_debugDrawActivationVolumes)
-    {
-        Vec3 forward = CameraForward(app.m_camera);
-        Vec3 centerA = Vec3Add(app.m_camera.position, Vec3Scale(forward, app.m_spotLightActivationForwardOffset));
-        Vec3 centerB = Vec3Add(app.m_camera.position, Vec3Scale(forward, app.m_shadowedSpotLightActivationForwardOffset));
-        ImVec2 screenCenter{};
-        if (ProjectWorldToScreen(app, centerA, screenCenter))
-        {
-            float radius = ProjectSphereRadius(app, centerA, app.m_spotLightActivationDistance);
-            if (radius > 1.0f)
-            {
-                drawList->AddCircle(screenCenter, radius, IM_COL32(0, 255, 255, 160), 64, 1.5f);
-                drawList->AddCircle(screenCenter, std::max(radius - 2.0f, 1.0f), IM_COL32(0, 255, 255, 80), 64, 1.0f);
-                drawList->AddCircleFilled(screenCenter, 3.0f, IM_COL32(0, 255, 255, 200), 12);
-                drawList->AddText(ImVec2(screenCenter.x + 8.0f, screenCenter.y - 10.0f), IM_COL32(0, 255, 255, 220), "ACT");
-            }
-        }
-        if (ProjectWorldToScreen(app, centerB, screenCenter))
-        {
-            float radius = ProjectSphereRadius(app, centerB, app.m_shadowedSpotLightActivationDistance);
-            if (radius > 1.0f)
-            {
-                drawList->AddCircle(screenCenter, radius, IM_COL32(255, 0, 255, 180), 64, 1.75f);
-                drawList->AddCircle(screenCenter, std::max(radius - 2.0f, 1.0f), IM_COL32(255, 0, 255, 96), 64, 1.0f);
-                drawList->AddCircleFilled(screenCenter, 3.0f, IM_COL32(255, 0, 255, 220), 12);
-                drawList->AddText(ImVec2(screenCenter.x + 8.0f, screenCenter.y - 10.0f), IM_COL32(255, 0, 255, 220), "SHD");
-            }
-        }
-    }
-
-    if (!app.m_debugDrawSceneLightGizmos && !app.m_debugDrawLightDirections && !app.m_debugDrawLightLabels)
+    if (!app.m_debugDrawLightLabels)
     {
         return;
     }
@@ -220,26 +233,15 @@ void DrawLightDebugOverlay(const App& app)
         ImU32 color = IM_COL32(110, 110, 110, 220);
         if (state[i] == 1) color = IM_COL32(0, 255, 255, 255);
         if (state[i] == 2) color = IM_COL32(255, 0, 255, 255);
+        if (state[i] == 0)
+        {
+            continue;
+        }
 
         ImVec2 sourceScreen{};
         if (!ProjectWorldToScreen(app, source, sourceScreen))
         {
             continue;
-        }
-
-        if (app.m_debugDrawLightDirections)
-        {
-            ImVec2 endScreen{};
-            if (ProjectWorldToScreen(app, Vec3Add(source, Vec3Scale(direction, 3.0f)), endScreen))
-            {
-                drawList->AddLine(sourceScreen, endScreen, color, 2.0f);
-            }
-        }
-
-        if (app.m_debugDrawSceneLightGizmos)
-        {
-            drawList->AddCircleFilled(sourceScreen, 4.5f, color, 12);
-            drawList->AddCircle(sourceScreen, 6.5f, IM_COL32(0, 0, 0, 200), 12, 1.0f);
         }
 
         if (app.m_debugDrawLightLabels)
@@ -300,31 +302,35 @@ void App::BuildImGui()
     if (m_showImGui)
     {
         bool debugSettingsChanged = false;
+        ImGuiViewport* viewport = ImGui::GetMainViewport();
+        const float pad = 16.0f;
         ImGui::SetNextWindowPos(ImVec2(16.0f, 16.0f), ImGuiCond_FirstUseEver);
         ImGui::SetNextWindowSize(ImVec2(340.0f, 0.0f), ImGuiCond_FirstUseEver);
         if (ImGui::Begin("Lighting"))
         {
             int sceneKind = static_cast<int>(m_sceneKind);
-            const char* sceneNames[] = {"City", "Shadow Test", "Spot Shadow Test"};
-            if (ImGui::Combo("Scene", &sceneKind, sceneNames, 3))
+            const char* sceneNames[] = {"City", "Shadow Test", "Spot Shadow Test", "Vehicle Light Test"};
+            if (ImGui::Combo("Scene", &sceneKind, sceneNames, 4))
             {
                 m_sceneKind = static_cast<SceneKind>(sceneKind);
                 m_reloadSceneRequested = true;
+                debugSettingsChanged = true;
             }
             float ms = m_smoothedFps > 0.0f ? 1000.0f / m_smoothedFps : 0.0f;
             ImGui::Text("%.2f ms  %.0f fps", ms, m_smoothedFps);
             ImGui::Text("%u ents  %u tris", static_cast<std::uint32_t>(m_scene.entities.size()), m_sceneTriangleCount);
             ImGui::Separator();
-            ImGui::Checkbox("Cycle day/night", &m_cycleDayNight);
-            ImGui::SliderFloat("Time of day", &m_timeOfDay, 0.0f, 1.0f, "%.3f");
-            ImGui::SliderFloat("Cycle speed", &m_dayNightSpeed, 0.0f, 0.20f, "%.3f");
-            ImGui::SliderFloat("Sun azimuth", &m_sunAzimuthDegrees, -180.0f, 180.0f, "%.1f deg");
-            ImGui::SliderFloat("Orbit distance", &m_orbitDistanceScale, 0.5f, 3.0f, "%.2f");
-            ImGui::SliderFloat("Sun intensity", &m_sunIntensity, 0.0f, 3.0f, "%.2f");
-            ImGui::SliderFloat("Moon intensity", &m_moonIntensity, 0.0f, 1.0f, "%.2f");
-            ImGui::SliderFloat("Ambient intensity", &m_ambientIntensity, 0.0f, 1.0f, "%.2f");
-            ImGui::SliderFloat("Point lights", &m_pointLightIntensity, 0.0f, 3.0f, "%.2f");
-            ImGui::SliderFloat("Cascade split", &m_shadowCascadeSplit, 8.0f, 96.0f, "%.1f");
+            debugSettingsChanged |= ImGui::Checkbox("Cycle day/night", &m_cycleDayNight);
+            debugSettingsChanged |= ImGui::SliderFloat("Time of day", &m_timeOfDay, 0.0f, 1.0f, "%.3f");
+            debugSettingsChanged |= ImGui::SliderFloat("Cycle speed", &m_dayNightSpeed, 0.0f, 0.20f, "%.3f");
+            debugSettingsChanged |= ImGui::Checkbox("Animate azimuth", &m_animateSunAzimuth);
+            debugSettingsChanged |= ImGui::SliderFloat("Sun azimuth", &m_sunAzimuthDegrees, -180.0f, 180.0f, "%.1f deg");
+            debugSettingsChanged |= ImGui::SliderFloat("Orbit distance", &m_orbitDistanceScale, 0.5f, 3.0f, "%.2f");
+            debugSettingsChanged |= ImGui::SliderFloat("Sun intensity", &m_sunIntensity, 0.0f, 3.0f, "%.2f");
+            debugSettingsChanged |= ImGui::SliderFloat("Moon intensity", &m_moonIntensity, 0.0f, 1.0f, "%.2f");
+            debugSettingsChanged |= ImGui::SliderFloat("Ambient intensity", &m_ambientIntensity, 0.0f, 1.0f, "%.2f");
+            debugSettingsChanged |= ImGui::SliderFloat("Point lights", &m_pointLightIntensity, 0.0f, 3.0f, "%.2f");
+            debugSettingsChanged |= ImGui::SliderFloat("Cascade split", &m_shadowCascadeSplit, 8.0f, 96.0f, "%.1f");
             ImGui::Separator();
             ImGui::Text("RMB capture camera");
             ImGui::Text("Sun  %.1f %.1f %.1f", m_sunWorldPosition.x, m_sunWorldPosition.y, m_sunWorldPosition.z);
@@ -332,16 +338,71 @@ void App::BuildImGui()
         }
         ImGui::End();
 
-        ImGuiViewport* viewport = ImGui::GetMainViewport();
-        const float pad = 16.0f;
+        ImVec2 profilerPos(
+            viewport->WorkPos.x + pad,
+            viewport->WorkPos.y + 360.0f
+        );
+        ImGui::SetNextWindowPos(profilerPos, ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(340.0f, 250.0f), ImGuiCond_FirstUseEver);
+        if (ImGui::Begin("Profiler"))
+        {
+            auto drawMetric = [](const char* label, float valueMs, float totalMs, ImU32 color) {
+                float fraction = totalMs > 0.0001f ? std::clamp(valueMs / totalMs, 0.0f, 1.0f) : 0.0f;
+                ImGui::Text("%-10s %6.2f ms  %5.1f%%", label, valueMs, fraction * 100.0f);
+                ImVec2 start = ImGui::GetCursorScreenPos();
+                float width = ImGui::GetContentRegionAvail().x;
+                float height = 10.0f;
+                ImDrawList* draw = ImGui::GetWindowDrawList();
+                draw->AddRectFilled(start, ImVec2(start.x + width, start.y + height), IM_COL32(40, 44, 52, 255), 3.0f);
+                draw->AddRectFilled(start, ImVec2(start.x + width * fraction, start.y + height), color, 3.0f);
+                ImGui::Dummy(ImVec2(width, height + 6.0f));
+            };
+
+            ImGui::Text("Visible draw items: %u / %u",
+                m_renderer.GetVisibleDrawItemCount(),
+                m_renderer.GetDrawItemCount());
+            ImGui::Spacing();
+
+            ImGui::Text("CPU");
+            ImGui::Separator();
+            float cpuTotal = std::max(m_cpuProfiling.frameMs, 0.0001f);
+            drawMetric("input", m_cpuProfiling.inputMs, cpuTotal, IM_COL32(90, 170, 255, 255));
+            drawMetric("imgui", m_cpuProfiling.imguiMs, cpuTotal, IM_COL32(120, 220, 140, 255));
+            drawMetric("lighting", m_cpuProfiling.lightingMs, cpuTotal, IM_COL32(255, 190, 90, 255));
+            drawMetric("render", m_cpuProfiling.renderMs, cpuTotal, IM_COL32(255, 120, 120, 255));
+            drawMetric("frame", m_cpuProfiling.frameMs, cpuTotal, IM_COL32(210, 210, 220, 255));
+
+            const RenderProfilingStats& gpu = m_renderer.GetProfilingStats();
+            if (gpu.gpuValid)
+            {
+                ImGui::Spacing();
+                ImGui::Text("GPU");
+                ImGui::Separator();
+                float gpuTotal = std::max(gpu.gpuFrameMs, 0.0001f);
+                drawMetric("shadow", gpu.gpuShadowMs, gpuTotal, IM_COL32(180, 120, 255, 255));
+                drawMetric("sun", gpu.gpuSunShadowMs, gpuTotal, IM_COL32(150, 110, 255, 255));
+                drawMetric("spot", gpu.gpuSpotShadowMs, gpuTotal, IM_COL32(220, 150, 255, 255));
+                drawMetric("main", gpu.gpuMainMs, gpuTotal, IM_COL32(90, 170, 255, 255));
+                drawMetric("debug", gpu.gpuDebugMs, gpuTotal, IM_COL32(120, 220, 140, 255));
+                drawMetric("ui", gpu.gpuUiMs, gpuTotal, IM_COL32(255, 190, 90, 255));
+                drawMetric("frame", gpu.gpuFrameMs, gpuTotal, IM_COL32(210, 210, 220, 255));
+            }
+            else
+            {
+                ImGui::Spacing();
+                ImGui::TextUnformatted("GPU timestamps not available yet");
+            }
+        }
+        ImGui::End();
+
         const ImVec2 shadowWindowSize(300.0f, 348.0f);
         ImVec2 shadowWindowPos(
             viewport->WorkPos.x + viewport->WorkSize.x - shadowWindowSize.x - pad,
             viewport->WorkPos.y + pad
         );
-        ImGui::SetNextWindowPos(shadowWindowPos, ImGuiCond_Always);
-        ImGui::SetNextWindowSize(shadowWindowSize, ImGuiCond_Always);
-        if (ImGui::Begin("Sun View", nullptr, ImGuiWindowFlags_NoResize))
+        ImGui::SetNextWindowPos(shadowWindowPos, ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(shadowWindowSize, ImGuiCond_FirstUseEver);
+        if (ImGui::Begin("Sun View"))
         {
             ImGui::Text("Cascade 0");
             ImGui::Separator();
@@ -357,9 +418,9 @@ void App::BuildImGui()
             viewport->WorkPos.x + viewport->WorkSize.x - shadowWindowSize.x - pad,
             viewport->WorkPos.y + shadowWindowSize.y + pad * 2.0f
         );
-        ImGui::SetNextWindowPos(shadowControlsPos, ImGuiCond_Always);
-        ImGui::SetNextWindowSize(ImVec2(300.0f, 132.0f), ImGuiCond_Always);
-        if (ImGui::Begin("Shadows", nullptr, ImGuiWindowFlags_NoResize))
+        ImGui::SetNextWindowPos(shadowControlsPos, ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(300.0f, 132.0f), ImGuiCond_FirstUseEver);
+        if (ImGui::Begin("Shadows"))
         {
             static constexpr int kShadowSizes[] = {512, 1024, 2048, 4096};
             int currentSizeIndex = 0;
@@ -377,9 +438,12 @@ void App::BuildImGui()
             {
                 m_shadowMapSize = static_cast<std::uint32_t>(kShadowSizes[currentSizeIndex]);
                 m_reloadSceneRequested = true;
+                debugSettingsChanged = true;
             }
 
             debugSettingsChanged |= ImGui::Checkbox("Blur (3x3 PCF)", &m_shadowBlur);
+            debugSettingsChanged |= ImGui::SliderFloat("Main draw dist", &m_mainDrawDistance, 24.0f, 320.0f, "%.0f");
+            debugSettingsChanged |= ImGui::SliderFloat("Shadow dist", &m_shadowDrawDistance, 24.0f, 320.0f, "%.0f");
             ImGui::Text("Current: %u x %u", m_shadowMapSize, m_shadowMapSize);
         }
         ImGui::End();
@@ -388,9 +452,9 @@ void App::BuildImGui()
             viewport->WorkPos.x + viewport->WorkSize.x - shadowWindowSize.x - pad,
             viewport->WorkPos.y + shadowWindowSize.y + 132.0f + pad * 3.0f
         );
-        ImGui::SetNextWindowPos(spotControlsPos, ImGuiCond_Always);
-        ImGui::SetNextWindowSize(ImVec2(300.0f, 252.0f), ImGuiCond_Always);
-        if (ImGui::Begin("Spotlights", nullptr, ImGuiWindowFlags_NoResize))
+        ImGui::SetNextWindowPos(spotControlsPos, ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(300.0f, 252.0f), ImGuiCond_FirstUseEver);
+        if (ImGui::Begin("Spotlights"))
         {
             debugSettingsChanged |= ImGui::SliderFloat("Intensity", &m_spotLightIntensityScale, 0.0f, 4.0f, "%.2f");
             debugSettingsChanged |= ImGui::SliderFloat("Range", &m_spotLightRangeScale, 0.25f, 2.5f, "%.2f");
@@ -407,10 +471,13 @@ void App::BuildImGui()
             debugSettingsChanged |= ImGui::SliderFloat("Shadowed dist", &m_shadowedSpotLightActivationDistance, 2.0f, 64.0f, "%.1f");
             debugSettingsChanged |= ImGui::SliderFloat("Shadowed fwd", &m_shadowedSpotLightActivationForwardOffset, -16.0f, 32.0f, "%.1f");
             debugSettingsChanged |= ImGui::DragFloat3("Source offset", &m_spotLightSourceOffset.x, 0.01f, -2.0f, 2.0f, "%.3f");
+            debugSettingsChanged |= ImGui::Checkbox("Show light proxies", &m_drawLightProxies);
             debugSettingsChanged |= ImGui::Checkbox("Show activation", &m_debugDrawActivationVolumes);
             debugSettingsChanged |= ImGui::Checkbox("Show light gizmos", &m_debugDrawSceneLightGizmos);
             debugSettingsChanged |= ImGui::Checkbox("Show direction lines", &m_debugDrawLightDirections);
+            debugSettingsChanged |= ImGui::Checkbox("Show light volumes", &m_debugDrawLightVolumes);
             debugSettingsChanged |= ImGui::Checkbox("Show labels", &m_debugDrawLightLabels);
+            debugSettingsChanged |= ImGui::Checkbox("Show vehicle volumes", &m_debugDrawVehicleVolumes);
             if (m_spotLightOuterAngleDegrees < m_spotLightInnerAngleDegrees)
             {
                 m_spotLightOuterAngleDegrees = m_spotLightInnerAngleDegrees;
@@ -443,9 +510,57 @@ void App::BuildImGui()
         }
         ImGui::End();
 
+        if (m_sceneKind == SceneKind::VehicleLightTest)
+        {
+            ImVec2 vehiclePos(
+                viewport->WorkPos.x + viewport->WorkSize.x - shadowWindowSize.x - pad,
+                viewport->WorkPos.y + shadowWindowSize.y + 132.0f + 252.0f + pad * 4.0f
+            );
+            ImGui::SetNextWindowPos(vehiclePos, ImGuiCond_FirstUseEver);
+            ImGui::SetNextWindowSize(ImVec2(360.0f, 320.0f), ImGuiCond_FirstUseEver);
+            if (ImGui::Begin("Vehicle Lights"))
+            {
+                int activeVehicle = FindActiveVehicleLightIndex();
+                ImGui::Text("Active vehicle: %d", activeVehicle);
+                if (activeVehicle >= 0)
+                {
+                    const auto& item = m_scene.vehicleLightTestItems[static_cast<std::size_t>(activeVehicle)];
+                    VehicleLightRig& rig = m_vehicleLightRigs[item.assetPath];
+                    int slot = static_cast<int>(m_vehicleLightSlot);
+                    const char* slotNames[] = {"Head A", "Head B", "Rear A", "Rear B"};
+                    debugSettingsChanged |= ImGui::Combo("Edit slot", &slot, slotNames, 4);
+                    m_vehicleLightSlot = static_cast<VehicleLightSlot>(slot);
+                    if (m_vehicleLightSlot == VehicleLightSlot::HeadA || m_vehicleLightSlot == VehicleLightSlot::HeadB)
+                    {
+                        VehicleFrontLightConfig& light = m_vehicleLightSlot == VehicleLightSlot::HeadA ? rig.headA : rig.headB;
+                        debugSettingsChanged |= ImGui::DragFloat3("Offset", &light.offset.x, 0.01f, -4.0f, 4.0f, "%.3f");
+                        debugSettingsChanged |= ImGui::SliderFloat("Yaw", &light.yawDegrees, -180.0f, 180.0f, "%.1f");
+                        debugSettingsChanged |= ImGui::SliderFloat("Pitch", &light.pitchDegrees, -89.0f, 89.0f, "%.1f");
+                        debugSettingsChanged |= ImGui::SliderFloat("Range", &light.range, 1.0f, 24.0f, "%.1f");
+                    }
+                    else
+                    {
+                        VehicleRearLightConfig& light = m_vehicleLightSlot == VehicleLightSlot::RearA ? rig.rearA : rig.rearB;
+                        debugSettingsChanged |= ImGui::DragFloat3("Offset", &light.offset.x, 0.01f, -4.0f, 4.0f, "%.3f");
+                        debugSettingsChanged |= ImGui::SliderFloat("Range", &light.range, 0.5f, 12.0f, "%.1f");
+                        debugSettingsChanged |= ImGui::SliderFloat("Intensity", &light.intensity, 0.0f, 8.0f, "%.2f");
+                    }
+                    ImGui::Separator();
+                    ImGui::Text("Left click on vehicle to place selected slot");
+                    ImGui::TextUnformatted(item.assetPath.c_str());
+                }
+                else
+                {
+                    ImGui::Text("Stand inside a vehicle volume");
+                }
+            }
+            ImGui::End();
+        }
+
         if (debugSettingsChanged)
         {
             SaveDebugSettings();
+            SaveVehicleLightRigs();
         }
     }
 

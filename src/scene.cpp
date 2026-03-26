@@ -287,5 +287,9 @@ SceneData LoadSampleScene(const AssetRegistry& assetRegistry, SceneKind kind)
     {
         return BuildSpotShadowTestScene(assetRegistry);
     }
+    if (kind == SceneKind::VehicleLightTest)
+    {
+        return BuildVehicleLightTestScene(assetRegistry);
+    }
     return BuildSampleCity(assetRegistry);
 }
