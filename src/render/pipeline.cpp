@@ -22,7 +22,7 @@ void VulkanRenderer::CreateDescriptorObjects()
     VkDescriptorSetLayoutBinding shadowBinding{};
     shadowBinding.binding = 2;
     shadowBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    shadowBinding.descriptorCount = 2;
+    shadowBinding.descriptorCount = kTotalShadowMaps;
     shadowBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
     std::array<VkDescriptorSetLayoutBinding, 3> bindings = {uniformBinding, samplerBinding, shadowBinding};
@@ -37,7 +37,7 @@ void VulkanRenderer::CreateDescriptorObjects()
         {
             VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, descriptorCount},
             VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, descriptorCount},
-            VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, descriptorCount * 2},
+            VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, descriptorCount * kTotalShadowMaps},
         };
 
     VkDescriptorPoolCreateInfo poolInfo{};

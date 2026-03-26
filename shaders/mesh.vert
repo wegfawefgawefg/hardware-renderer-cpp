@@ -19,7 +19,16 @@ layout(binding = 0) uniform SceneUniforms
     vec4 celestialPositions[2];
     vec4 celestialColors[2];
     vec4 clearColor;
-    mat4 shadowViewProj[2];
+    vec4 spotLightPositions[32];
+    vec4 spotLightDirections[32];
+    vec4 spotLightColors[32];
+    vec4 spotLightParams[32];
+    vec4 shadowedSpotLightPositions[4];
+    vec4 shadowedSpotLightDirections[4];
+    vec4 shadowedSpotLightColors[4];
+    vec4 shadowedSpotLightParams[4];
+    vec4 sceneLightCounts;
+    mat4 shadowViewProj[6];
     vec4 shadowParams;
     mat4 skinJoints[64];
 } uniforms;

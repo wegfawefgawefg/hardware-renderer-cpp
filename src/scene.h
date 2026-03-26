@@ -43,6 +43,18 @@ struct MaterialData
     std::int32_t textureIndex = -1;
 };
 
+struct SpotLightData
+{
+    Vec3 position = {};
+    float range = 0.0f;
+    Vec3 direction = {0.0f, -1.0f, 0.0f};
+    float innerCos = 0.9f;
+    Vec3 color = {1.0f, 1.0f, 1.0f};
+    float outerCos = 0.8f;
+    float intensity = 1.0f;
+    float yawDegrees = 0.0f;
+};
+
 struct ModelData
 {
     MeshData mesh;
@@ -64,6 +76,7 @@ struct SceneData
 {
     std::vector<ModelData> models;
     std::vector<EntityData> entities;
+    std::vector<SpotLightData> spotLights;
 };
 
 struct SceneBounds
@@ -79,6 +92,7 @@ enum class SceneKind
 {
     City,
     ShadowTest,
+    SpotShadowTest,
 };
 
 SceneBounds ComputeSceneBounds(const SceneData& scene);

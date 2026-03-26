@@ -32,6 +32,7 @@ struct TriangleMeshCollider
 
     void BuildFromScene(const SceneData& scene);
     void BuildFromScene(const SceneData& scene, const BuildOptions& options);
+    RayHit Raycast(Vec3 origin, Vec3 direction, float maxDistance) const;
     RayHit RaycastDown(float x, float z, float yStart, float maxDistance) const;
     void GatherSphereContacts(Vec3 center, float radius, std::vector<SphereContact>& out) const;
     std::uint32_t TriangleCount() const;

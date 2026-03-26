@@ -160,6 +160,91 @@ void TriangleMeshCollider::BuildFromScene(const SceneData& scene)
     BuildFromScene(scene, BuildOptions{});
 }
 
+TriangleMeshCollider::RayHit TriangleMeshCollider::Raycast(
+    Vec3 origin,
+    Vec3 direction,
+    float maxDistance
+) const
+{
+    RayHit best{};
+    if (m_tris.empty() || maxDistance <= 0.0f)
+    {
+        return best;
+    }
+
+    Vec3 rayDir = Vec3Normalize(direction);
+    if (Vec3Length(rayDir) <= 1e-6f)
+    {
+        return best;
+    }
+
+    Vec3 rayEnd = Vec3Add(origin, Vec3Scale(rayDir, maxDistance));
+    float minX = std::min(origin.x, rayEnd.x);
+    float maxX = std::max(origin.x, rayEnd.x);
+    float minZ = std::min(origin.z, rayEnd.z);
+    float maxZ = std::max(origin.z, rayEnd.z);
+    float radius = std::max(maxX - minX, maxZ - minZ) * 0.5f + m_cellSize;
+    float centerX = (minX + maxX) * 0.5f;
+    float centerZ = (minZ + maxZ) * 0.5f;
+
+    std::vector<std::uint32_t> candidates;
+    candidates.reserve(512);
+    static std::uint32_t stamp = 1;
+    stamp = stamp == 0 ? 1 : stamp + 1;
+    GatherCandidates(centerX, centerZ, radius, candidates, stamp);
+
+    for (std::uint32_t triIndex : candidates)
+    {
+        const Tri& tri = m_tris[triIndex];
+        Vec3 edge1 = Vec3Sub(tri.b, tri.a);
+        Vec3 edge2 = Vec3Sub(tri.c, tri.a);
+        Vec3 pvec = Vec3Cross(rayDir, edge2);
+        float det = Vec3Dot(edge1, pvec);
+        if (!m_twoSided)
+        {
+            if (det < 1e-8f)
+            {
+                continue;
+            }
+        }
+        else if (std::fabs(det) < 1e-8f)
+        {
+            continue;
+        }
+
+        float invDet = 1.0f / det;
+        Vec3 tvec = Vec3Sub(origin, tri.a);
+        float u = Vec3Dot(tvec, pvec) * invDet;
+        if (u < 0.0f || u > 1.0f)
+        {
+            continue;
+        }
+
+        Vec3 qvec = Vec3Cross(tvec, edge1);
+        float v = Vec3Dot(rayDir, qvec) * invDet;
+        if (v < 0.0f || u + v > 1.0f)
+        {
+            continue;
+        }
+
+        float t = Vec3Dot(edge2, qvec) * invDet;
+        if (t < 0.0f || t > maxDistance)
+        {
+            continue;
+        }
+
+        if (!best.hit || t < best.distance)
+        {
+            best.hit = true;
+            best.distance = t;
+            best.position = Vec3Add(origin, Vec3Scale(rayDir, t));
+            best.normal = tri.n;
+        }
+    }
+
+    return best;
+}
+
 void TriangleMeshCollider::GatherCandidates(
     float x,
     float z,

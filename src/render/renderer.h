@@ -14,6 +14,11 @@
 #include "scene.h"
 #include "vulkan_helpers.h"
 
+constexpr std::uint32_t kMaxSceneSpotLights = 32;
+constexpr std::uint32_t kMaxShadowedSpotLights = 4;
+constexpr std::uint32_t kSunShadowCascadeCount = 2;
+constexpr std::uint32_t kTotalShadowMaps = kSunShadowCascadeCount + kMaxShadowedSpotLights;
+
 struct alignas(16) SceneUniforms
 {
     Mat4 view;
@@ -27,7 +32,16 @@ struct alignas(16) SceneUniforms
     Vec4 celestialPositions[2];
     Vec4 celestialColors[2];
     Vec4 clearColor;
-    Mat4 shadowViewProj[2];
+    Vec4 spotLightPositions[kMaxSceneSpotLights];
+    Vec4 spotLightDirections[kMaxSceneSpotLights];
+    Vec4 spotLightColors[kMaxSceneSpotLights];
+    Vec4 spotLightParams[kMaxSceneSpotLights];
+    Vec4 shadowedSpotLightPositions[kMaxShadowedSpotLights];
+    Vec4 shadowedSpotLightDirections[kMaxShadowedSpotLights];
+    Vec4 shadowedSpotLightColors[kMaxShadowedSpotLights];
+    Vec4 shadowedSpotLightParams[kMaxShadowedSpotLights];
+    Vec4 sceneLightCounts;
+    Mat4 shadowViewProj[kTotalShadowMaps];
     Vec4 shadowParams;
     Mat4 skinJoints[64];
 };
@@ -150,9 +164,9 @@ struct VulkanRenderer
     VkPipelineLayout m_shadowPipelineLayout = VK_NULL_HANDLE;
     VkPipeline m_shadowPipeline = VK_NULL_HANDLE;
     VkShaderModule m_shadowVertShaderModule = VK_NULL_HANDLE;
-    std::array<VkFramebuffer, 2> m_shadowFramebuffers = {VK_NULL_HANDLE, VK_NULL_HANDLE};
+    std::array<VkFramebuffer, kTotalShadowMaps> m_shadowFramebuffers = {};
     VkDescriptorPool m_imguiDescriptorPool = VK_NULL_HANDLE;
-    std::array<VkDescriptorSet, 2> m_imguiShadowDescriptors = {VK_NULL_HANDLE, VK_NULL_HANDLE};
+    std::array<VkDescriptorSet, kSunShadowCascadeCount> m_imguiShadowDescriptors = {};
 
     VkCommandPool m_commandPool = VK_NULL_HANDLE;
     std::vector<VkCommandBuffer> m_commandBuffers;
@@ -173,7 +187,7 @@ struct VulkanRenderer
     ImageResource m_overlayImage;
     VkSampler m_overlaySampler = VK_NULL_HANDLE;
     ImageResource m_depthImage;
-    std::array<ImageResource, 2> m_shadowImages = {};
+    std::array<ImageResource, kTotalShadowMaps> m_shadowImages = {};
     VkSampler m_shadowSampler = VK_NULL_HANDLE;
 
     struct DrawItem

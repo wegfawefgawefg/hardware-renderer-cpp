@@ -50,13 +50,14 @@ void App::BuildImGui()
 
     if (m_showImGui)
     {
+        bool debugSettingsChanged = false;
         ImGui::SetNextWindowPos(ImVec2(16.0f, 16.0f), ImGuiCond_FirstUseEver);
         ImGui::SetNextWindowSize(ImVec2(340.0f, 0.0f), ImGuiCond_FirstUseEver);
         if (ImGui::Begin("Lighting"))
         {
             int sceneKind = static_cast<int>(m_sceneKind);
-            const char* sceneNames[] = {"City", "Shadow Test"};
-            if (ImGui::Combo("Scene", &sceneKind, sceneNames, 2))
+            const char* sceneNames[] = {"City", "Shadow Test", "Spot Shadow Test"};
+            if (ImGui::Combo("Scene", &sceneKind, sceneNames, 3))
             {
                 m_sceneKind = static_cast<SceneKind>(sceneKind);
                 m_reloadSceneRequested = true;
@@ -129,10 +130,70 @@ void App::BuildImGui()
                 m_reloadSceneRequested = true;
             }
 
-            ImGui::Checkbox("Blur (3x3 PCF)", &m_shadowBlur);
+            debugSettingsChanged |= ImGui::Checkbox("Blur (3x3 PCF)", &m_shadowBlur);
             ImGui::Text("Current: %u x %u", m_shadowMapSize, m_shadowMapSize);
         }
         ImGui::End();
+
+        ImVec2 spotControlsPos(
+            viewport->WorkPos.x + viewport->WorkSize.x - shadowWindowSize.x - pad,
+            viewport->WorkPos.y + shadowWindowSize.y + 132.0f + pad * 3.0f
+        );
+        ImGui::SetNextWindowPos(spotControlsPos, ImGuiCond_Always);
+        ImGui::SetNextWindowSize(ImVec2(300.0f, 252.0f), ImGuiCond_Always);
+        if (ImGui::Begin("Spotlights", nullptr, ImGuiWindowFlags_NoResize))
+        {
+            debugSettingsChanged |= ImGui::SliderFloat("Intensity", &m_spotLightIntensityScale, 0.0f, 4.0f, "%.2f");
+            debugSettingsChanged |= ImGui::SliderFloat("Range", &m_spotLightRangeScale, 0.25f, 2.5f, "%.2f");
+            debugSettingsChanged |= ImGui::SliderFloat("Inner angle", &m_spotLightInnerAngleDegrees, 4.0f, 40.0f, "%.1f deg");
+            debugSettingsChanged |= ImGui::SliderFloat("Outer angle", &m_spotLightOuterAngleDegrees, 8.0f, 60.0f, "%.1f deg");
+            int maxActive = static_cast<int>(m_spotLightMaxActive);
+            debugSettingsChanged |= ImGui::SliderInt("Max active", &maxActive, 0, static_cast<int>(kMaxSceneSpotLights));
+            m_spotLightMaxActive = static_cast<std::uint32_t>(maxActive);
+            debugSettingsChanged |= ImGui::SliderFloat("Activation dist", &m_spotLightActivationDistance, 2.0f, 96.0f, "%.1f");
+            debugSettingsChanged |= ImGui::SliderFloat("Forward offset", &m_spotLightActivationForwardOffset, -16.0f, 48.0f, "%.1f");
+            int shadowedMaxActive = static_cast<int>(m_shadowedSpotLightMaxActive);
+            debugSettingsChanged |= ImGui::SliderInt("Shadowed active", &shadowedMaxActive, 0, static_cast<int>(kMaxShadowedSpotLights));
+            m_shadowedSpotLightMaxActive = static_cast<std::uint32_t>(shadowedMaxActive);
+            debugSettingsChanged |= ImGui::SliderFloat("Shadowed dist", &m_shadowedSpotLightActivationDistance, 2.0f, 64.0f, "%.1f");
+            debugSettingsChanged |= ImGui::SliderFloat("Shadowed fwd", &m_shadowedSpotLightActivationForwardOffset, -16.0f, 32.0f, "%.1f");
+            debugSettingsChanged |= ImGui::DragFloat3("Source offset", &m_spotLightSourceOffset.x, 0.01f, -2.0f, 2.0f, "%.3f");
+            if (m_spotLightOuterAngleDegrees < m_spotLightInnerAngleDegrees)
+            {
+                m_spotLightOuterAngleDegrees = m_spotLightInnerAngleDegrees;
+                debugSettingsChanged = true;
+            }
+            ImGui::Text("Scene spots: %zu", m_scene.spotLights.size());
+            ImGui::Text("GPU cap: %u", static_cast<std::uint32_t>(kMaxSceneSpotLights));
+            ImGui::Text("Active budget: %u", m_spotLightMaxActive);
+            ImGui::Text("Shadowed cap: %u", static_cast<std::uint32_t>(kMaxShadowedSpotLights));
+            if (m_sceneKind == SceneKind::ShadowTest)
+            {
+                ImGui::Separator();
+                ImGui::Text("Left click geometry to aim");
+                if (m_shadowTestSpotTargetValid)
+                {
+                    ImGui::Text(
+                        "Target %.2f %.2f %.2f",
+                        m_shadowTestSpotTargetWorld.x,
+                        m_shadowTestSpotTargetWorld.y,
+                        m_shadowTestSpotTargetWorld.z
+                    );
+                    ImGui::Text(
+                        "Offset %.2f %.2f %.2f",
+                        m_shadowTestSpotTargetOffset.x,
+                        m_shadowTestSpotTargetOffset.y,
+                        m_shadowTestSpotTargetOffset.z
+                    );
+                }
+            }
+        }
+        ImGui::End();
+
+        if (debugSettingsChanged)
+        {
+            SaveDebugSettings();
+        }
     }
 
     ImGui::Render();

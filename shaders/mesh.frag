@@ -13,13 +13,22 @@ layout(binding = 0) uniform SceneUniforms
     vec4 celestialPositions[2];
     vec4 celestialColors[2];
     vec4 clearColor;
-    mat4 shadowViewProj[2];
+    vec4 spotLightPositions[32];
+    vec4 spotLightDirections[32];
+    vec4 spotLightColors[32];
+    vec4 spotLightParams[32];
+    vec4 shadowedSpotLightPositions[4];
+    vec4 shadowedSpotLightDirections[4];
+    vec4 shadowedSpotLightColors[4];
+    vec4 shadowedSpotLightParams[4];
+    vec4 sceneLightCounts;
+    mat4 shadowViewProj[6];
     vec4 shadowParams;
     mat4 skinJoints[64];
 } uniforms;
 
 layout(binding = 1) uniform sampler2D albedoTexture;
-layout(binding = 2) uniform sampler2D shadowMaps[2];
+layout(binding = 2) uniform sampler2D shadowMaps[6];
 
 layout(location = 0) in vec3 fragWorldPosition;
 layout(location = 1) in vec3 fragNormal;
@@ -115,6 +124,77 @@ void main()
         float attenuation = 1.0 / (1.0 + 0.14 * distanceToLight + 0.03 * distanceToLight * distanceToLight);
         float ndotl = max(dot(normal, lightDir), 0.0);
         lighting += albedo * uniforms.lightColors[i].rgb * ndotl * attenuation;
+    }
+
+    int shadowedSpotLightCount = int(uniforms.sceneLightCounts.y);
+    for (int i = 0; i < shadowedSpotLightCount; ++i)
+    {
+        vec3 lightOffset = uniforms.shadowedSpotLightPositions[i].xyz - fragWorldPosition;
+        float distanceToLight = length(lightOffset);
+        if (distanceToLight <= 0.0001 || distanceToLight >= uniforms.shadowedSpotLightPositions[i].w)
+        {
+            continue;
+        }
+
+        vec3 lightDir = lightOffset / distanceToLight;
+        vec3 spotDir = normalize(uniforms.shadowedSpotLightDirections[i].xyz);
+        float coneCos = dot(-lightDir, spotDir);
+        float innerCos = uniforms.shadowedSpotLightParams[i].x;
+        float outerCos = uniforms.shadowedSpotLightParams[i].y;
+        float coneAttenuation = clamp((coneCos - outerCos) / max(innerCos - outerCos, 0.0001), 0.0, 1.0);
+        if (coneAttenuation <= 0.0)
+        {
+            continue;
+        }
+
+        float rangeAttenuation = 1.0 - distanceToLight / uniforms.shadowedSpotLightPositions[i].w;
+        rangeAttenuation = max(rangeAttenuation, 0.0);
+        rangeAttenuation *= rangeAttenuation;
+        float ndotl = max(dot(normal, lightDir), 0.0);
+        vec4 shadowPosition = uniforms.shadowViewProj[2 + i] * vec4(fragWorldPosition, 1.0);
+        float spotShadow = shadowPositionCovered(shadowPosition, 2 + i)
+            ? sampleShadow(2 + i, shadowPosition, normal, lightDir)
+            : 1.0;
+        lighting += albedo *
+            uniforms.shadowedSpotLightColors[i].rgb *
+            uniforms.shadowedSpotLightColors[i].w *
+            ndotl *
+            rangeAttenuation *
+            coneAttenuation *
+            spotShadow;
+    }
+
+    int sceneLightCount = int(uniforms.sceneLightCounts.x);
+    for (int i = 0; i < sceneLightCount; ++i)
+    {
+        vec3 lightOffset = uniforms.spotLightPositions[i].xyz - fragWorldPosition;
+        float distanceToLight = length(lightOffset);
+        if (distanceToLight <= 0.0001 || distanceToLight >= uniforms.spotLightPositions[i].w)
+        {
+            continue;
+        }
+
+        vec3 lightDir = lightOffset / distanceToLight;
+        vec3 spotDir = normalize(uniforms.spotLightDirections[i].xyz);
+        float coneCos = dot(-lightDir, spotDir);
+        float innerCos = uniforms.spotLightParams[i].x;
+        float outerCos = uniforms.spotLightParams[i].y;
+        float coneAttenuation = clamp((coneCos - outerCos) / max(innerCos - outerCos, 0.0001), 0.0, 1.0);
+        if (coneAttenuation <= 0.0)
+        {
+            continue;
+        }
+
+        float rangeAttenuation = 1.0 - distanceToLight / uniforms.spotLightPositions[i].w;
+        rangeAttenuation = max(rangeAttenuation, 0.0);
+        rangeAttenuation *= rangeAttenuation;
+        float ndotl = max(dot(normal, lightDir), 0.0);
+        lighting += albedo *
+            uniforms.spotLightColors[i].rgb *
+            uniforms.spotLightColors[i].w *
+            ndotl *
+            rangeAttenuation *
+            coneAttenuation;
     }
 
     vec3 color = lighting;

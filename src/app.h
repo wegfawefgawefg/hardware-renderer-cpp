@@ -34,8 +34,11 @@ struct App
     void ProcessImGuiEvent(const SDL_Event& event);
     void BuildImGui();
     void ApplyLighting(SceneUniforms& uniforms, float dtSeconds);
+    void TryPlaceShadowTestSpotlight(int mouseX, int mouseY);
     void UpdateOverlayText(const SceneUniforms* uniforms = nullptr);
     void ReloadScene();
+    void LoadDebugSettings();
+    void SaveDebugSettings() const;
 
     SDL_Window* m_window = nullptr;
     VulkanRenderer m_renderer;
@@ -81,6 +84,20 @@ struct App
     bool m_shadowBlur = true;
     std::uint32_t m_shadowMapSize = 2048;
     float m_shadowCascadeSplit = 32.0f;
+    float m_spotLightIntensityScale = 1.0f;
+    float m_spotLightRangeScale = 1.0f;
+    float m_spotLightInnerAngleDegrees = 18.0f;
+    float m_spotLightOuterAngleDegrees = 34.0f;
+    std::uint32_t m_spotLightMaxActive = 16;
+    float m_spotLightActivationDistance = 28.0f;
+    float m_spotLightActivationForwardOffset = 10.0f;
+    std::uint32_t m_shadowedSpotLightMaxActive = 2;
+    float m_shadowedSpotLightActivationDistance = 16.0f;
+    float m_shadowedSpotLightActivationForwardOffset = 6.0f;
+    Vec3 m_spotLightSourceOffset = {};
+    bool m_shadowTestSpotTargetValid = false;
+    Vec3 m_shadowTestSpotTargetWorld = {};
+    Vec3 m_shadowTestSpotTargetOffset = {};
 
     std::array<std::uint32_t, 512 * 128> m_overlayPixels = {};
     std::uint32_t m_overlayWidth = 0;

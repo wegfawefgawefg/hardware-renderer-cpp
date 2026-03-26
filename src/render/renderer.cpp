@@ -321,6 +321,45 @@ void VulkanRenderer::Render(
             uniforms.celestialColors[i].z
         );
     }
+    std::uint32_t sceneSpotCount = static_cast<std::uint32_t>(uniforms.sceneLightCounts.x);
+    for (std::uint32_t i = 0; i < kMaxSceneSpotLights; ++i)
+    {
+        std::size_t markerIndex = 6 + i;
+        if (i < sceneSpotCount)
+        {
+            lightMarkers[markerIndex].position = Vec3Make(
+                uniforms.spotLightPositions[i].x,
+                uniforms.spotLightPositions[i].y,
+                uniforms.spotLightPositions[i].z
+            );
+            lightMarkers[markerIndex].color = Vec3Make(0.25f, 1.0f, 1.0f);
+        }
+        else
+        {
+            lightMarkers[markerIndex].position = Vec3Make(0.0f, -10000.0f, 0.0f);
+            lightMarkers[markerIndex].color = Vec3Make(0.0f, 0.0f, 0.0f);
+        }
+    }
+
+    std::uint32_t shadowedSpotCount = static_cast<std::uint32_t>(uniforms.sceneLightCounts.y);
+    for (std::uint32_t i = 0; i < kMaxShadowedSpotLights; ++i)
+    {
+        std::size_t markerIndex = 6 + kMaxSceneSpotLights + i;
+        if (i < shadowedSpotCount)
+        {
+            lightMarkers[markerIndex].position = Vec3Make(
+                uniforms.shadowedSpotLightPositions[i].x,
+                uniforms.shadowedSpotLightPositions[i].y,
+                uniforms.shadowedSpotLightPositions[i].z
+            );
+            lightMarkers[markerIndex].color = Vec3Make(1.0f, 0.35f, 1.0f);
+        }
+        else
+        {
+            lightMarkers[markerIndex].position = Vec3Make(0.0f, -10000.0f, 0.0f);
+            lightMarkers[markerIndex].color = Vec3Make(0.0f, 0.0f, 0.0f);
+        }
+    }
     std::memcpy(m_lightMarkerBuffer.mapped, lightMarkers.data(), sizeof(lightMarkers));
 
     std::uint32_t imageIndex = 0;

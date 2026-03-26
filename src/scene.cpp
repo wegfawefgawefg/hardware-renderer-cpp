@@ -1,7 +1,10 @@
 #include "scene.h"
 
 #include <algorithm>
+#include <cmath>
+#include <filesystem>
 
+#include "assets/fbx_loader.h"
 #include "scene_city.h"
 
 namespace
@@ -67,7 +70,27 @@ ModelData MakeBoxModel(Vec3 halfExtents, std::uint8_t r, std::uint8_t g, std::ui
     return model;
 }
 
-SceneData BuildShadowTestScene()
+float ComputeModelFootprint(const ModelData& model)
+{
+    if (model.mesh.vertices.empty())
+    {
+        return 1.0f;
+    }
+
+    Vec3 mn = model.mesh.vertices.front().position;
+    Vec3 mx = model.mesh.vertices.front().position;
+    for (const Vertex& vertex : model.mesh.vertices)
+    {
+        mn.x = std::min(mn.x, vertex.position.x);
+        mn.z = std::min(mn.z, vertex.position.z);
+        mx.x = std::max(mx.x, vertex.position.x);
+        mx.z = std::max(mx.z, vertex.position.z);
+    }
+
+    return std::max(std::max(mx.x - mn.x, mx.z - mn.z), 0.001f);
+}
+
+SceneData BuildShadowTestScene(const AssetRegistry& assetRegistry)
 {
     SceneData scene{};
     scene.models.push_back(MakeBoxModel(Vec3Make(24.0f, 0.25f, 24.0f), 235, 235, 235));
@@ -89,6 +112,107 @@ SceneData BuildShadowTestScene()
         .transform = Mat4Translate(Vec3Make(2.5f, 1.0f, 2.5f)),
         .collidable = true,
     });
+
+    const std::filesystem::path* lampPath = assetRegistry.FindByRelativePath(
+        "kenney/kenney_city-kit-roads/Models/FBX format/light-square.fbx"
+    );
+    if (lampPath != nullptr)
+    {
+        ModelData lampModel = LoadFbxModel(lampPath->string());
+        if (!lampModel.mesh.vertices.empty() && !lampModel.mesh.indices.empty())
+        {
+            float footprint = ComputeModelFootprint(lampModel);
+            float scale = 1.6f / footprint;
+            std::uint32_t lampModelIndex = static_cast<std::uint32_t>(scene.models.size());
+            scene.models.push_back(std::move(lampModel));
+            scene.entities.push_back(EntityData{
+                .modelIndex = lampModelIndex,
+                .transform = Mat4Mul(
+                    Mat4Translate(Vec3Make(-1.0f, 0.0f, 2.0f)),
+                    Mat4Mul(Mat4RotateY(DegreesToRadians(0.0f)), Mat4Scale(scale))
+                ),
+                .collidable = false,
+            });
+        }
+    }
+
+    scene.spotLights.push_back(SpotLightData{
+        .position = Vec3Make(-1.0f, 5.35f, 2.0f),
+        .range = 16.0f,
+        .direction = Vec3Normalize(Vec3Make(0.15f, -1.0f, -0.10f)),
+        .innerCos = std::cos(DegreesToRadians(18.0f)),
+        .color = Vec3Make(1.0f, 0.86f, 0.68f),
+        .outerCos = std::cos(DegreesToRadians(30.0f)),
+        .intensity = 4.0f,
+        .yawDegrees = 0.0f,
+    });
+
+    return scene;
+}
+
+SceneData BuildSpotShadowTestScene(const AssetRegistry& assetRegistry)
+{
+    SceneData scene{};
+    scene.models.push_back(MakeBoxModel(Vec3Make(24.0f, 0.25f, 24.0f), 235, 235, 235));
+    scene.models.push_back(MakeBoxModel(Vec3Make(1.2f, 2.4f, 1.2f), 220, 120, 80));
+    scene.models.push_back(MakeBoxModel(Vec3Make(0.8f, 1.2f, 2.0f), 80, 140, 220));
+
+    scene.entities.push_back(EntityData{
+        .modelIndex = 0,
+        .transform = Mat4Translate(Vec3Make(0.0f, -0.25f, 0.0f)),
+        .collidable = true,
+    });
+
+    for (int z = -1; z <= 1; ++z)
+    {
+        for (int x = -1; x <= 1; ++x)
+        {
+            Vec3 lampBase = Vec3Make(static_cast<float>(x) * 10.0f, 0.0f, static_cast<float>(z) * 10.0f);
+            scene.entities.push_back(EntityData{
+                .modelIndex = ((x + z) & 1) == 0 ? 1u : 2u,
+                .transform = Mat4Translate(Vec3Add(lampBase, Vec3Make(1.6f, (((x + z) & 1) == 0) ? 2.4f : 1.2f, -1.4f))),
+                .collidable = true,
+            });
+        }
+    }
+
+    const std::filesystem::path* lampPath = assetRegistry.FindByRelativePath(
+        "kenney/kenney_city-kit-roads/Models/FBX format/light-square.fbx"
+    );
+    if (lampPath != nullptr)
+    {
+        ModelData lampModel = LoadFbxModel(lampPath->string());
+        if (!lampModel.mesh.vertices.empty() && !lampModel.mesh.indices.empty())
+        {
+            float footprint = ComputeModelFootprint(lampModel);
+            float scale = 1.6f / footprint;
+            std::uint32_t lampModelIndex = static_cast<std::uint32_t>(scene.models.size());
+            scene.models.push_back(std::move(lampModel));
+
+            for (int z = -1; z <= 1; ++z)
+            {
+                for (int x = -1; x <= 1; ++x)
+                {
+                    Vec3 lampBase = Vec3Make(static_cast<float>(x) * 10.0f, 0.0f, static_cast<float>(z) * 10.0f);
+                    scene.entities.push_back(EntityData{
+                        .modelIndex = lampModelIndex,
+                        .transform = Mat4Mul(Mat4Translate(lampBase), Mat4Scale(scale)),
+                        .collidable = false,
+                    });
+                    scene.spotLights.push_back(SpotLightData{
+                        .position = Vec3Add(lampBase, Vec3Make(0.0f, 5.35f, 0.0f)),
+                        .range = 14.0f,
+                        .direction = Vec3Normalize(Vec3Make(-0.062f, -5.350f, 1.303f)),
+                        .innerCos = std::cos(DegreesToRadians(18.0f)),
+                        .color = Vec3Make(1.0f, 0.86f, 0.68f),
+                        .outerCos = std::cos(DegreesToRadians(30.0f)),
+                        .intensity = 4.0f,
+                        .yawDegrees = 0.0f,
+                    });
+                }
+            }
+        }
+    }
 
     return scene;
 }
@@ -157,8 +281,11 @@ SceneData LoadSampleScene(const AssetRegistry& assetRegistry, SceneKind kind)
 {
     if (kind == SceneKind::ShadowTest)
     {
-        (void)assetRegistry;
-        return BuildShadowTestScene();
+        return BuildShadowTestScene(assetRegistry);
+    }
+    if (kind == SceneKind::SpotShadowTest)
+    {
+        return BuildSpotShadowTestScene(assetRegistry);
     }
     return BuildSampleCity(assetRegistry);
 }

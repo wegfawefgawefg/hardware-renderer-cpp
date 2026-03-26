@@ -137,9 +137,11 @@ add_custom_target(
 
 add_executable(hardware-renderer-cpp
   src/app.cpp
+  src/app_debug_settings.cpp
   src/app_imgui.cpp
   src/app_lighting.cpp
   src/app_scene.cpp
+  src/app_spotlight.cpp
   src/animation/character.cpp
   src/animation/ufbx_impl.cpp
   src/assets/asset_registry.cpp

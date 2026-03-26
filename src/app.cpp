@@ -9,6 +9,8 @@
 #include <stdexcept>
 #include <string_view>
 
+#include "imgui.h"
+
 namespace
 {
 constexpr std::string_view kWindowTitle = "hardware-renderer-cpp";
@@ -112,6 +114,7 @@ void App::Initialize()
 
     CenterWindowOnPrimaryDisplay(m_window);
     m_assetRegistry.ScanFbx(HARDWARE_RENDERER_ASSETS_ROOT);
+    LoadDebugSettings();
     const std::filesystem::path* characterPath = m_assetRegistry.FindByRelativePath(kCharacterModelAsset);
     const std::filesystem::path* idlePath = m_assetRegistry.FindByRelativePath(kCharacterIdleAsset);
     const std::filesystem::path* runPath = m_assetRegistry.FindByRelativePath(kCharacterRunAsset);
@@ -180,6 +183,13 @@ void App::HandleEvent(const SDL_Event& event)
         break;
 
     case SDL_EVENT_MOUSE_BUTTON_DOWN:
+        if (event.button.button == SDL_BUTTON_LEFT &&
+            m_sceneKind == SceneKind::ShadowTest &&
+            !m_mouseCaptured &&
+            (ImGui::GetCurrentContext() == nullptr || !ImGui::GetIO().WantCaptureMouse))
+        {
+            TryPlaceShadowTestSpotlight(event.button.x, event.button.y);
+        }
         if (event.button.button == SDL_BUTTON_RIGHT)
         {
             ResetMouseCapture(true);

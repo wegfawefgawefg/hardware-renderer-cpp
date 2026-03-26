@@ -21,6 +21,8 @@ constexpr int kHalfCityTiles = kCityTilesPerSide / 2;
 constexpr float kVehicleFootprint = 2.25f;
 constexpr float kBuildingFootprint = 5.0f;
 constexpr float kRoadLightOffset = kRoadTileSize * 0.48f;
+constexpr float kRoadLightHeight = 5.35f;
+constexpr Vec3 kRoadLightAimOffset = {-0.062f, -5.350f, 1.303f};
 
 float TrafficYawDegrees(int direction)
 {
@@ -42,6 +44,18 @@ Mat4 PlacementTransform(Vec3 position, float yawDegrees, float scale = 1.0f)
     return Mat4Mul(
         Mat4Translate(position),
         Mat4Mul(Mat4RotateY(DegreesToRadians(yawDegrees)), Mat4Scale(scale))
+    );
+}
+
+Vec3 RotateYOffset(Vec3 v, float yawDegrees)
+{
+    float radians = DegreesToRadians(yawDegrees);
+    float c = std::cos(radians);
+    float s = std::sin(radians);
+    return Vec3Make(
+        c * v.x + s * v.z,
+        v.y,
+        -s * v.x + c * v.z
     );
 }
 
@@ -183,13 +197,17 @@ void AddRoadLights(
     const Vec3 center = Vec3Make(TileCenter(tx), 0.0f, TileCenter(tz));
     if (tx % kRoadStrideTiles == 0)
     {
+        Vec3 leftPosition = Vec3Add(center, Vec3Make(-kRoadLightOffset, 0.0f, 0.0f));
+        Vec3 rightPosition = Vec3Add(center, Vec3Make(kRoadLightOffset, 0.0f, 0.0f));
+        float leftYaw = 90.0f;
+        float rightYaw = -90.0f;
         AddModelInstanceWithFootprint(
             scene,
             assetRegistry,
             cache,
             "kenney/kenney_city-kit-roads/Models/FBX format/light-square.fbx",
-            Vec3Add(center, Vec3Make(-kRoadLightOffset, 0.0f, 0.0f)),
-            90.0f,
+            leftPosition,
+            leftYaw,
             1.6f
         );
         AddModelInstanceWithFootprint(
@@ -197,20 +215,44 @@ void AddRoadLights(
             assetRegistry,
             cache,
             "kenney/kenney_city-kit-roads/Models/FBX format/light-square.fbx",
-            Vec3Add(center, Vec3Make(kRoadLightOffset, 0.0f, 0.0f)),
-            -90.0f,
+            rightPosition,
+            rightYaw,
             1.6f
         );
+        scene.spotLights.push_back(SpotLightData{
+            .position = Vec3Add(leftPosition, Vec3Make(0.0f, kRoadLightHeight, 0.0f)),
+            .range = 10.0f,
+            .direction = Vec3Normalize(RotateYOffset(kRoadLightAimOffset, leftYaw)),
+            .innerCos = std::cos(DegreesToRadians(18.0f)),
+            .color = Vec3Make(1.0f, 0.86f, 0.62f),
+            .outerCos = std::cos(DegreesToRadians(34.0f)),
+            .intensity = 2.4f,
+            .yawDegrees = leftYaw,
+        });
+        scene.spotLights.push_back(SpotLightData{
+            .position = Vec3Add(rightPosition, Vec3Make(0.0f, kRoadLightHeight, 0.0f)),
+            .range = 10.0f,
+            .direction = Vec3Normalize(RotateYOffset(kRoadLightAimOffset, rightYaw)),
+            .innerCos = std::cos(DegreesToRadians(18.0f)),
+            .color = Vec3Make(1.0f, 0.86f, 0.62f),
+            .outerCos = std::cos(DegreesToRadians(34.0f)),
+            .intensity = 2.4f,
+            .yawDegrees = rightYaw,
+        });
         return;
     }
 
+    Vec3 nearPosition = Vec3Add(center, Vec3Make(0.0f, 0.0f, -kRoadLightOffset));
+    Vec3 farPosition = Vec3Add(center, Vec3Make(0.0f, 0.0f, kRoadLightOffset));
+    float nearYaw = 0.0f;
+    float farYaw = 180.0f;
     AddModelInstanceWithFootprint(
         scene,
         assetRegistry,
         cache,
         "kenney/kenney_city-kit-roads/Models/FBX format/light-square.fbx",
-        Vec3Add(center, Vec3Make(0.0f, 0.0f, -kRoadLightOffset)),
-        0.0f,
+        nearPosition,
+        nearYaw,
         1.6f
     );
     AddModelInstanceWithFootprint(
@@ -218,10 +260,30 @@ void AddRoadLights(
         assetRegistry,
         cache,
         "kenney/kenney_city-kit-roads/Models/FBX format/light-square.fbx",
-        Vec3Add(center, Vec3Make(0.0f, 0.0f, kRoadLightOffset)),
-        180.0f,
+        farPosition,
+        farYaw,
         1.6f
     );
+    scene.spotLights.push_back(SpotLightData{
+        .position = Vec3Add(nearPosition, Vec3Make(0.0f, kRoadLightHeight, 0.0f)),
+        .range = 10.0f,
+        .direction = Vec3Normalize(RotateYOffset(kRoadLightAimOffset, nearYaw)),
+        .innerCos = std::cos(DegreesToRadians(18.0f)),
+        .color = Vec3Make(1.0f, 0.86f, 0.62f),
+        .outerCos = std::cos(DegreesToRadians(34.0f)),
+        .intensity = 2.4f,
+        .yawDegrees = nearYaw,
+    });
+    scene.spotLights.push_back(SpotLightData{
+        .position = Vec3Add(farPosition, Vec3Make(0.0f, kRoadLightHeight, 0.0f)),
+        .range = 10.0f,
+        .direction = Vec3Normalize(RotateYOffset(kRoadLightAimOffset, farYaw)),
+        .innerCos = std::cos(DegreesToRadians(18.0f)),
+        .color = Vec3Make(1.0f, 0.86f, 0.62f),
+        .outerCos = std::cos(DegreesToRadians(34.0f)),
+        .intensity = 2.4f,
+        .yawDegrees = farYaw,
+    });
 }
 
 void AddRoadTile(

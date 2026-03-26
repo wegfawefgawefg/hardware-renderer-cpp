@@ -487,7 +487,7 @@ void VulkanRenderer::UpdateDescriptorSet()
         imageInfo.imageView = m_textureImages[i].view;
         imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-        std::array<VkDescriptorImageInfo, 2> shadowInfos{};
+        std::array<VkDescriptorImageInfo, kTotalShadowMaps> shadowInfos{};
         for (std::size_t shadowIndex = 0; shadowIndex < shadowInfos.size(); ++shadowIndex)
         {
             shadowInfos[shadowIndex].sampler = m_shadowSampler;

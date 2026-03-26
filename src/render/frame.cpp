@@ -108,8 +108,10 @@ void VulkanRenderer::RecordCommandBuffer(std::uint32_t imageIndex)
         );
     }
 
-    RecordShadowPass(commandBuffer, 0);
-    RecordShadowPass(commandBuffer, 1);
+    for (std::uint32_t shadowIndex = 0; shadowIndex < kTotalShadowMaps; ++shadowIndex)
+    {
+        RecordShadowPass(commandBuffer, shadowIndex);
+    }
 
     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline);
