@@ -73,6 +73,11 @@ void VulkanRenderer::Shutdown()
         vkDestroySampler(m_device, m_textureSampler, nullptr);
         m_textureSampler = VK_NULL_HANDLE;
     }
+    if (m_paintSampler != VK_NULL_HANDLE)
+    {
+        vkDestroySampler(m_device, m_paintSampler, nullptr);
+        m_paintSampler = VK_NULL_HANDLE;
+    }
     if (m_overlaySampler != VK_NULL_HANDLE)
     {
         vkDestroySampler(m_device, m_overlaySampler, nullptr);
@@ -91,8 +96,14 @@ void VulkanRenderer::Shutdown()
         DestroyImage(m_device, textureImage);
     }
     m_textureImages.clear();
+    for (ImageResource& paintImage : m_paintImages)
+    {
+        DestroyImage(m_device, paintImage);
+    }
+    m_paintImages.clear();
+    DestroyImage(m_device, m_blankPaintImage);
     DestroyBuffer(m_device, m_overlayVertexBuffer);
-    DestroyBuffer(m_device, m_persistentPaintBuffer);
+    DestroyBuffer(m_device, m_paintUploadBuffer);
     DestroyBuffer(m_device, m_lightMarkerBuffer);
     DestroyBuffer(m_device, m_lightLineBuffer);
     DestroyBuffer(m_device, m_lightSolidBuffer);

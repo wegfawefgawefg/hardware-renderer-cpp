@@ -33,16 +33,7 @@ layout(binding = 0) uniform SceneUniforms
 
 layout(binding = 1) uniform sampler2D albedoTexture;
 layout(binding = 2) uniform sampler2D shadowMaps[6];
-struct PersistentPaintStamp
-{
-    vec4 positionRadius;
-    vec4 normalSeed;
-    vec4 colorOpacity;
-};
-layout(std430, binding = 3) readonly buffer PersistentPaintBuffer
-{
-    PersistentPaintStamp persistentPaintStamps[];
-};
+layout(binding = 3) uniform sampler2D paintTexture;
 
 layout(location = 0) in vec3 fragWorldPosition;
 layout(location = 1) in vec3 fragNormal;
@@ -61,8 +52,6 @@ layout(push_constant) uniform DrawPushConstants
     uint pointLightMask;
     uint spotLightMask;
     uint shadowedSpotLightMask;
-    uint persistentPaintOffset;
-    uint persistentPaintCount;
 } drawPush;
 
 layout(location = 0) out vec4 outColor;
@@ -149,48 +138,17 @@ vec3 applyPaintSplats(vec3 baseAlbedo, vec3 worldPosition, vec3 normal)
     return painted;
 }
 
-vec3 applyPersistentPaint(vec3 baseAlbedo, vec3 localPosition, vec3 localNormal)
+vec3 applyPersistentPaint(vec3 baseAlbedo, vec2 uv)
 {
-    vec3 painted = baseAlbedo;
-    uint end = drawPush.persistentPaintOffset + drawPush.persistentPaintCount;
-    for (uint i = drawPush.persistentPaintOffset; i < end; ++i)
-    {
-        PersistentPaintStamp stamp = persistentPaintStamps[i];
-        float radius = stamp.positionRadius.w;
-        if (radius <= 0.0001)
-        {
-            continue;
-        }
-
-        vec3 toFrag = localPosition - stamp.positionRadius.xyz;
-        float dist = length(toFrag);
-        if (dist >= radius)
-        {
-            continue;
-        }
-
-        vec3 stampNormal = normalize(stamp.normalSeed.xyz);
-        float facing = dot(localNormal, stampNormal);
-        if (facing <= 0.2)
-        {
-            continue;
-        }
-
-        float radial = 1.0 - dist / radius;
-        float noise = 0.5 + 0.5 * sin(dot(localPosition, vec3(9.3, 4.7, 7.1)) + stamp.normalSeed.w * 1.371);
-        float mask = smoothstep(0.12, 0.92, radial + (noise - 0.5) * 0.42);
-        mask *= smoothstep(0.2, 0.6, facing);
-        mask *= clamp(stamp.colorOpacity.w, 0.0, 1.0);
-        painted = mix(painted, stamp.colorOpacity.rgb, clamp(mask, 0.0, 1.0));
-    }
-    return painted;
+    vec4 paint = texture(paintTexture, uv);
+    return mix(baseAlbedo, paint.rgb, clamp(paint.a, 0.0, 1.0));
 }
 
 void main()
 {
     vec3 normal = normalize(fragNormal);
     vec3 albedo = texture(albedoTexture, fragUv).rgb;
-    albedo = applyPersistentPaint(albedo, fragLocalPosition, normalize(fragLocalNormal));
+    albedo = applyPersistentPaint(albedo, fragUv);
     albedo = applyPaintSplats(albedo, fragWorldPosition, normal);
     vec3 ambient = albedo * uniforms.ambientColor.rgb;
 

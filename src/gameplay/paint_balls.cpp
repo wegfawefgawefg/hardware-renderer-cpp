@@ -146,6 +146,9 @@ void PaintBallSystem::Update(
             }
 
             std::uint32_t impactEntity = UINT32_MAX;
+            std::uint32_t impactPrimitive = UINT32_MAX;
+            Vec2 impactUv = {};
+            float impactUvWorldScale = 1.0f;
             float deepestPenetration = -1.0f;
             for (const auto& contact : contacts)
             {
@@ -153,6 +156,9 @@ void PaintBallSystem::Update(
                 {
                     deepestPenetration = contact.penetration;
                     impactEntity = contact.entityIndex;
+                    impactPrimitive = contact.primitiveIndex;
+                    impactUv = contact.uv;
+                    impactUvWorldScale = contact.uvWorldScale;
                 }
             }
 
@@ -168,6 +174,9 @@ void PaintBallSystem::Update(
                 .color = ball.color,
                 .radius = std::max(settings.blobRadius, 0.05f),
                 .entityIndex = impactEntity,
+                .primitiveIndex = impactPrimitive,
+                .uv = impactUv,
+                .uvWorldScale = impactUvWorldScale,
             });
 
             if (ball.remainingBounces == 0)

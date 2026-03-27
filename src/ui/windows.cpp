@@ -260,10 +260,7 @@ void App::BuildPaintBallsWindow(bool& debugSettingsChanged)
         ImGui::SameLine();
         if (ImGui::Button("Reset accumulated"))
         {
-            for (EntityPaintLayer& layer : paint.entityLayers)
-            {
-                layer = {};
-            }
+            core.renderer.ResetAccumulatedPaint();
         }
 
         int bounceLimit = static_cast<int>(paint.ballSettings.bounceLimit);

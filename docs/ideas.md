@@ -16,6 +16,36 @@ This is the running list of gameplay / renderer experiments that fit this repo's
 - decals
 - paint gun
 
+## Cheap Quad Decals
+
+Add a separate cheap decal path that is intentionally *not* the heavier box/projector decal system.
+
+Target shape:
+
+- a floating quad stamp
+- centered from a hit point
+- oriented from the hit normal
+- width and height controls
+- a small normal offset so it can sit just above the hit surface
+- image/texture-driven rather than only procedural blobs
+
+Why this version:
+
+- prioritize very high decal counts over robustness
+- acceptable artifacts are fine if the system is cheap enough to allow hundreds or thousands of marks
+- good fit for bullet holes, scorch marks, blood marks, graffiti-like stamps, and other cheap repeated impacts
+
+Tradeoff versus box/projected decals:
+
+- cheaper and simpler
+- easier to spam at high counts
+- but more likely to clip, float, z-fight, or look wrong across corners / uneven geometry
+
+This should stay a consciously separate design from box/projected decals:
+
+- cheap quad decals = high count, low complexity, "good enough"
+- box/projected decals = more robust, more expensive, better on complex geometry
+
 ## Paint Gun
 
 The paint gun idea is stronger than a pure decal test because it can become real scene interaction.

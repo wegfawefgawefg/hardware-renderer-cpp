@@ -45,8 +45,6 @@ layout(push_constant) uniform DrawPushConstants
     uint pointLightMask;
     uint spotLightMask;
     uint shadowedSpotLightMask;
-    uint persistentPaintOffset;
-    uint persistentPaintCount;
 } drawPush;
 
 layout(location = 0) out vec3 fragWorldPosition;

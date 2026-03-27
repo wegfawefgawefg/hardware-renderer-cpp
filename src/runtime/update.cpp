@@ -288,7 +288,7 @@ void App::Update(float dtSeconds)
         ++cubeIndex;
     }
 
-    core.renderer.UpdatePersistentPaintData(paint.entityLayers);
+    core.renderer.FlushDirtyPaintTextures();
 
     auto renderStart = Clock::now();
     core.renderer.Render(

@@ -71,6 +71,7 @@ That keeps the repo focused on renderer structure instead of tying it to legacy 
 - `docs/rendering-scalability-notes.md`: why the current forward path slows down and what to optimize next
 - `docs/light-culling-notes.md`: how global vs local lights should be culled in the current renderer
 - `docs/clustered-lighting-notes.md`: how clustered light lookup works in a raster pipeline
+- `docs/paint-systems-notes.md`: intended split between transient splats and persistent texture-backed paint
 - `docs/ideas.md`: gameplay and renderer experiment backlog for this sandbox
 
 ## Status

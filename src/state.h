@@ -119,7 +119,6 @@ struct PaintState
     std::array<PaintSplat, kMaxPaintSplats> splats = {};
     std::uint32_t splatCount = 0;
     std::uint32_t nextSplatIndex = 0;
-    std::vector<EntityPaintLayer> entityLayers;
 };
 
 struct OverlayState

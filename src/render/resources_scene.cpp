@@ -83,10 +83,12 @@ void VulkanRenderer::CreateSceneBuffers(const SceneData& scene)
             item.indexCount = primitive.indexCount;
             item.descriptorIndex = static_cast<std::uint32_t>(m_drawItems.size());
             item.entityIndex = static_cast<std::uint32_t>(&entity - scene.entities.data());
+            item.primitiveIndex = static_cast<std::uint32_t>(&primitive - model.primitives.data());
             m_drawItems.push_back(item);
         }
     }
     m_visibleDrawItems.reserve(m_drawItems.size());
+    m_paintLayers.assign(m_drawItems.size(), {});
 
     VkDeviceSize vertexSize = sizeof(Vertex) * mergedVertices.size();
     VkDeviceSize indexSize = sizeof(std::uint32_t) * mergedIndices.size();
@@ -125,11 +127,11 @@ void VulkanRenderer::CreateSceneBuffers(const SceneData& scene)
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
         true
     );
-    m_persistentPaintBuffer = CreateBuffer(
+    m_paintUploadBuffer = CreateBuffer(
         m_physicalDevice,
         m_device,
-        sizeof(PersistentPaintGpuStamp) * kMaxPersistentPaintStamps,
-        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+        kPaintTextureSize * kPaintTextureSize * 4,
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
         true
     );

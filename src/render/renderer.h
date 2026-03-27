@@ -12,6 +12,7 @@
 #include "imgui.h"
 
 #include "animation/character.h"
+#include "gameplay/paint_balls.h"
 #include "paint_runtime.h"
 #include "scene.h"
 #include "vulkan_helpers.h"
@@ -19,7 +20,7 @@
 constexpr std::uint32_t kMaxSceneSpotLights = 32;
 constexpr std::uint32_t kMaxShadowedSpotLights = 4;
 constexpr std::uint32_t kMaxPaintSplats = 128;
-constexpr std::uint32_t kMaxPersistentPaintStamps = 4096;
+constexpr std::uint32_t kPaintTextureSize = 64;
 constexpr std::uint32_t kSunShadowCascadeCount = 2;
 constexpr std::uint32_t kTotalShadowMaps = kSunShadowCascadeCount + kMaxShadowedSpotLights;
 constexpr std::uint32_t kGpuTimestampCount = 6;
@@ -63,15 +64,6 @@ struct alignas(16) DrawPushConstants
     std::uint32_t pointLightMask = 0;
     std::uint32_t spotLightMask = 0;
     std::uint32_t shadowedSpotLightMask = 0;
-    std::uint32_t persistentPaintOffset = 0;
-    std::uint32_t persistentPaintCount = 0;
-};
-
-struct alignas(16) PersistentPaintGpuStamp
-{
-    Vec4 positionRadius;
-    Vec4 normalSeed;
-    Vec4 colorOpacity;
 };
 
 struct OverlayVertex
@@ -165,7 +157,10 @@ struct VulkanRenderer
     void CreateLightSolidPipeline();
     void UpdateMainPassVisibility(const SceneUniforms& uniforms);
     void UpdateDrawLightMasks(const SceneUniforms& uniforms);
-    void UpdatePersistentPaintData(const std::vector<EntityPaintLayer>& entityLayers);
+    void AppendPersistentPaint(const PaintSplatSpawn& splat);
+    void ResetAccumulatedPaint();
+    std::uint32_t GetAccumulatedPaintHitCount() const;
+    void FlushDirtyPaintTextures();
     void BuildDebugLightGeometry(
         const SceneUniforms& uniforms,
         const DebugRenderOptions& debug,
@@ -184,6 +179,7 @@ struct VulkanRenderer
     void DestroyOverlayResources();
     void CreateDepthResources();
     void UpdateDescriptorSet();
+    void UpdatePaintDescriptorSet(std::uint32_t descriptorIndex);
     void UpdateOverlayDescriptorSet();
     void RecordShadowPass(VkCommandBuffer commandBuffer, std::uint32_t cascadeIndex);
     void RecordCommandBuffer(std::uint32_t imageIndex);
@@ -252,7 +248,7 @@ struct VulkanRenderer
     BufferResource m_uniformBuffer;
     BufferResource m_overlayUploadBuffer;
     BufferResource m_overlayVertexBuffer;
-    BufferResource m_persistentPaintBuffer;
+    BufferResource m_paintUploadBuffer;
     BufferResource m_lightMarkerBuffer;
     BufferResource m_lightLineBuffer;
     BufferResource m_lightSolidBuffer;
@@ -260,6 +256,9 @@ struct VulkanRenderer
     BufferResource m_characterIndexBuffer;
     std::vector<ImageResource> m_textureImages;
     VkSampler m_textureSampler = VK_NULL_HANDLE;
+    std::vector<ImageResource> m_paintImages;
+    VkSampler m_paintSampler = VK_NULL_HANDLE;
+    ImageResource m_blankPaintImage;
     ImageResource m_overlayImage;
     VkSampler m_overlaySampler = VK_NULL_HANDLE;
     ImageResource m_depthImage;
@@ -279,14 +278,22 @@ struct VulkanRenderer
         std::uint32_t descriptorIndex = 0;
         std::uint32_t skinned = 0;
         std::uint32_t entityIndex = 0;
-        std::uint32_t persistentPaintOffset = 0;
-        std::uint32_t persistentPaintCount = 0;
+        std::uint32_t primitiveIndex = 0;
+    };
+
+    struct PaintLayer
+    {
+        bool allocated = false;
+        bool dirty = false;
+        std::uint32_t hitCount = 0;
+        std::vector<std::uint8_t> pixels;
     };
 
     bool ShadowDrawItemVisible(const DrawItem& drawItem, std::uint32_t cascadeIndex) const;
 
     std::vector<DrawItem> m_drawItems;
     std::vector<std::uint32_t> m_visibleDrawItems;
+    std::vector<PaintLayer> m_paintLayers;
     Vec3 m_cameraCullPosition = {};
     float m_mainCullDistance = 160.0f;
     float m_shadowCullDistance = 200.0f;
@@ -300,6 +307,7 @@ struct VulkanRenderer
     std::uint32_t m_overlayHeight = 0;
     std::uint32_t m_shadowMapSize = 2048;
     std::uint32_t m_activeShadowMapCount = kSunShadowCascadeCount;
+    std::uint32_t m_accumulatedPaintHitCount = 0;
     std::uint32_t m_lightLineVertexCount = 0;
     std::uint32_t m_lightSolidVertexCount = 0;
     Vec4 m_clearColor = {0.09f, 0.10f, 0.12f, 1.0f};

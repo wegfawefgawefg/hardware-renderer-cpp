@@ -149,8 +149,6 @@ void VulkanRenderer::RecordCommandBuffer(std::uint32_t imageIndex)
         pushConstants.pointLightMask = drawItem.pointLightMask;
         pushConstants.spotLightMask = drawItem.spotLightMask;
         pushConstants.shadowedSpotLightMask = drawItem.shadowedSpotLightMask;
-        pushConstants.persistentPaintOffset = drawItem.persistentPaintOffset;
-        pushConstants.persistentPaintCount = drawItem.persistentPaintCount;
         vkCmdPushConstants(
             commandBuffer,
             m_pipelineLayout,
@@ -180,8 +178,6 @@ void VulkanRenderer::RecordCommandBuffer(std::uint32_t imageIndex)
         pushConstants.pointLightMask = 0xFu;
         pushConstants.spotLightMask = 0xFFFFFFFFu;
         pushConstants.shadowedSpotLightMask = (1u << kMaxShadowedSpotLights) - 1u;
-        pushConstants.persistentPaintOffset = 0;
-        pushConstants.persistentPaintCount = 0;
         VkBuffer characterBuffers[] = {m_characterVertexBuffer.buffer};
         VkDeviceSize characterOffsets[] = {0};
         vkCmdBindVertexBuffers(commandBuffer, 0, 1, characterBuffers, characterOffsets);

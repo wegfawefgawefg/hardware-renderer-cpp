@@ -32,7 +32,6 @@ void App::ReloadScene()
     m_state.paint.splats = {};
     m_state.paint.splatCount = 0;
     m_state.paint.nextSplatIndex = 0;
-    m_state.paint.entityLayers.assign(core.scene.entities.size(), EntityPaintLayer{});
     core.traffic.Initialize(core.scene);
     core.worldCollider.BuildFromScene(core.scene);
 

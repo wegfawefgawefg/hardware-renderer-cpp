@@ -72,6 +72,68 @@ Vec3 ClosestPointOnTriangle(Vec3 p, Vec3 a, Vec3 b, Vec3 c)
     float w = vc * denom;
     return Vec3Add(a, Vec3Add(Vec3Scale(ab, v), Vec3Scale(ac, w)));
 }
+
+Vec3 BarycentricForPoint(Vec3 p, Vec3 a, Vec3 b, Vec3 c)
+{
+    Vec3 v0 = Vec3Sub(b, a);
+    Vec3 v1 = Vec3Sub(c, a);
+    Vec3 v2 = Vec3Sub(p, a);
+    float d00 = Vec3Dot(v0, v0);
+    float d01 = Vec3Dot(v0, v1);
+    float d11 = Vec3Dot(v1, v1);
+    float d20 = Vec3Dot(v2, v0);
+    float d21 = Vec3Dot(v2, v1);
+    float denom = d00 * d11 - d01 * d01;
+    if (std::fabs(denom) <= 1e-8f)
+    {
+        return Vec3Make(1.0f, 0.0f, 0.0f);
+    }
+
+    float v = (d11 * d20 - d01 * d21) / denom;
+    float w = (d00 * d21 - d01 * d20) / denom;
+    float u = 1.0f - v - w;
+    return Vec3Make(u, v, w);
+}
+
+Vec2 InterpolateUv(const TriangleMeshCollider::Tri& tri, Vec3 p)
+{
+    Vec3 bary = BarycentricForPoint(p, tri.a, tri.b, tri.c);
+    return Vec2Make(
+        tri.uvA.x * bary.x + tri.uvB.x * bary.y + tri.uvC.x * bary.z,
+        tri.uvA.y * bary.x + tri.uvB.y * bary.y + tri.uvC.y * bary.z
+    );
+}
+
+float ComputeUvWorldScale(Vec3 a, Vec3 b, Vec3 c, Vec2 uvA, Vec2 uvB, Vec2 uvC)
+{
+    auto uvDistance = [](Vec2 lhs, Vec2 rhs)
+    {
+        float dx = lhs.x - rhs.x;
+        float dy = lhs.y - rhs.y;
+        return std::sqrt(dx * dx + dy * dy);
+    };
+    float worldAB = Vec3Length(Vec3Sub(b, a));
+    float worldBC = Vec3Length(Vec3Sub(c, b));
+    float worldCA = Vec3Length(Vec3Sub(a, c));
+    float uvAB = uvDistance(uvB, uvA);
+    float uvBC = uvDistance(uvC, uvB);
+    float uvCA = uvDistance(uvA, uvC);
+
+    float scaleSum = 0.0f;
+    float weightSum = 0.0f;
+    auto addEdge = [&](float worldLen, float uvLen)
+    {
+        if (uvLen > 1e-5f && worldLen > 1e-5f)
+        {
+            scaleSum += worldLen / uvLen;
+            weightSum += 1.0f;
+        }
+    };
+    addEdge(worldAB, uvAB);
+    addEdge(worldBC, uvBC);
+    addEdge(worldCA, uvCA);
+    return weightSum > 0.0f ? scaleSum / weightSum : 1.0f;
+}
 }
 
 TriangleMeshCollider::CellKey TriangleMeshCollider::CellFor(float x, float z) const
@@ -104,39 +166,49 @@ void TriangleMeshCollider::BuildFromScene(const SceneData& scene, const BuildOpt
 
         const ModelData& model = scene.models[entity.modelIndex];
         const MeshData& mesh = model.mesh;
-        for (std::size_t i = 0; i + 2 < mesh.indices.size(); i += 3)
+        for (std::uint32_t primitiveIndex = 0; primitiveIndex < model.primitives.size(); ++primitiveIndex)
         {
-            std::uint32_t i0 = mesh.indices[i + 0];
-            std::uint32_t i1 = mesh.indices[i + 1];
-            std::uint32_t i2 = mesh.indices[i + 2];
-            if (i0 >= mesh.vertices.size() || i1 >= mesh.vertices.size() || i2 >= mesh.vertices.size())
+            const PrimitiveData& primitive = model.primitives[primitiveIndex];
+            std::uint32_t endIndex = primitive.firstIndex + primitive.indexCount;
+            for (std::uint32_t i = primitive.firstIndex; i + 2 < endIndex; i += 3)
             {
-                continue;
+                std::uint32_t i0 = mesh.indices[i + 0];
+                std::uint32_t i1 = mesh.indices[i + 1];
+                std::uint32_t i2 = mesh.indices[i + 2];
+                if (i0 >= mesh.vertices.size() || i1 >= mesh.vertices.size() || i2 >= mesh.vertices.size())
+                {
+                    continue;
+                }
+
+                Vec3 a = TransformPoint(entity.transform, mesh.vertices[i0].position);
+                Vec3 b = TransformPoint(entity.transform, mesh.vertices[i1].position);
+                Vec3 c = TransformPoint(entity.transform, mesh.vertices[i2].position);
+
+                Vec3 n = Vec3Cross(Vec3Sub(b, a), Vec3Sub(c, a));
+                float nLength = Vec3Length(n);
+                if (nLength <= 1e-10f)
+                {
+                    continue;
+                }
+                n = Vec3Scale(n, 1.0f / nLength);
+
+                Tri tri{};
+                tri.a = a;
+                tri.b = b;
+                tri.c = c;
+                tri.n = n;
+                tri.minx = std::min({a.x, b.x, c.x});
+                tri.maxx = std::max({a.x, b.x, c.x});
+                tri.minz = std::min({a.z, b.z, c.z});
+                tri.maxz = std::max({a.z, b.z, c.z});
+                tri.entityIndex = entityIndex;
+                tri.primitiveIndex = primitiveIndex;
+                tri.uvA = mesh.vertices[i0].uv;
+                tri.uvB = mesh.vertices[i1].uv;
+                tri.uvC = mesh.vertices[i2].uv;
+                tri.uvWorldScale = ComputeUvWorldScale(a, b, c, tri.uvA, tri.uvB, tri.uvC);
+                m_tris.push_back(tri);
             }
-
-            Vec3 a = TransformPoint(entity.transform, mesh.vertices[i0].position);
-            Vec3 b = TransformPoint(entity.transform, mesh.vertices[i1].position);
-            Vec3 c = TransformPoint(entity.transform, mesh.vertices[i2].position);
-
-            Vec3 n = Vec3Cross(Vec3Sub(b, a), Vec3Sub(c, a));
-            float nLength = Vec3Length(n);
-            if (nLength <= 1e-10f)
-            {
-                continue;
-            }
-            n = Vec3Scale(n, 1.0f / nLength);
-
-            Tri tri{};
-            tri.a = a;
-            tri.b = b;
-            tri.c = c;
-            tri.n = n;
-            tri.minx = std::min({a.x, b.x, c.x});
-            tri.maxx = std::max({a.x, b.x, c.x});
-            tri.minz = std::min({a.z, b.z, c.z});
-            tri.maxz = std::max({a.z, b.z, c.z});
-            tri.entityIndex = entityIndex;
-            m_tris.push_back(tri);
         }
     }
 
@@ -242,6 +314,9 @@ TriangleMeshCollider::RayHit TriangleMeshCollider::Raycast(
             best.position = Vec3Add(origin, Vec3Scale(rayDir, t));
             best.normal = tri.n;
             best.entityIndex = tri.entityIndex;
+            best.primitiveIndex = tri.primitiveIndex;
+            best.uv = InterpolateUv(tri, best.position);
+            best.uvWorldScale = tri.uvWorldScale;
         }
     }
 
@@ -355,6 +430,9 @@ TriangleMeshCollider::RayHit TriangleMeshCollider::RaycastDown(
             best.position = p;
             best.normal = tri.n;
             best.entityIndex = tri.entityIndex;
+            best.primitiveIndex = tri.primitiveIndex;
+            best.uv = InterpolateUv(tri, best.position);
+            best.uvWorldScale = tri.uvWorldScale;
         }
     }
 
@@ -412,6 +490,9 @@ void TriangleMeshCollider::GatherSphereContacts(
             contact.penetration = radius;
         }
         contact.entityIndex = tri.entityIndex;
+        contact.primitiveIndex = tri.primitiveIndex;
+        contact.uv = InterpolateUv(tri, closest);
+        contact.uvWorldScale = tri.uvWorldScale;
         out.push_back(contact);
     }
 }

@@ -22,6 +22,9 @@ struct TriangleMeshCollider
         Vec3 position = {};
         Vec3 normal = {};
         std::uint32_t entityIndex = UINT32_MAX;
+        std::uint32_t primitiveIndex = UINT32_MAX;
+        Vec2 uv = {};
+        float uvWorldScale = 1.0f;
     };
 
     struct SphereContact
@@ -30,6 +33,9 @@ struct TriangleMeshCollider
         Vec3 normal = {};
         float penetration = 0.0f;
         std::uint32_t entityIndex = UINT32_MAX;
+        std::uint32_t primitiveIndex = UINT32_MAX;
+        Vec2 uv = {};
+        float uvWorldScale = 1.0f;
     };
 
     void BuildFromScene(const SceneData& scene);
@@ -50,6 +56,11 @@ struct TriangleMeshCollider
         float minz = 0.0f;
         float maxz = 0.0f;
         std::uint32_t entityIndex = UINT32_MAX;
+        std::uint32_t primitiveIndex = UINT32_MAX;
+        Vec2 uvA = {};
+        Vec2 uvB = {};
+        Vec2 uvC = {};
+        float uvWorldScale = 1.0f;
     };
 
     struct CellKey

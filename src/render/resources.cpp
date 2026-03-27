@@ -28,6 +28,73 @@ TextureData GetPrimitiveTexture(
 
     return MakeSolidTexture(255, 255, 255);
 }
+
+ImageResource CreateSolidColorImage(
+    VkPhysicalDevice physicalDevice,
+    VkDevice device,
+    VkQueue graphicsQueue,
+    VkCommandPool commandPool,
+    std::uint32_t width,
+    std::uint32_t height,
+    std::uint8_t r,
+    std::uint8_t g,
+    std::uint8_t b,
+    std::uint8_t a
+)
+{
+    std::vector<std::uint8_t> pixels(static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 4u, 0u);
+    for (std::size_t i = 0; i < pixels.size(); i += 4)
+    {
+        pixels[i + 0] = r;
+        pixels[i + 1] = g;
+        pixels[i + 2] = b;
+        pixels[i + 3] = a;
+    }
+
+    VkDeviceSize imageSize = static_cast<VkDeviceSize>(pixels.size());
+    BufferResource stagingBuffer = CreateBuffer(
+        physicalDevice,
+        device,
+        imageSize,
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        true
+    );
+    std::memcpy(stagingBuffer.mapped, pixels.data(), static_cast<std::size_t>(imageSize));
+
+    ImageResource image = CreateImage2D(
+        physicalDevice,
+        device,
+        width,
+        height,
+        VK_FORMAT_R8G8B8A8_UNORM,
+        VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+        VK_IMAGE_ASPECT_COLOR_BIT
+    );
+
+    TransitionImageLayout(
+        device,
+        graphicsQueue,
+        commandPool,
+        image.image,
+        VK_IMAGE_ASPECT_COLOR_BIT,
+        VK_IMAGE_LAYOUT_UNDEFINED,
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+    );
+    CopyBufferToImage(device, graphicsQueue, commandPool, stagingBuffer.buffer, image.image, width, height);
+    TransitionImageLayout(
+        device,
+        graphicsQueue,
+        commandPool,
+        image.image,
+        VK_IMAGE_ASPECT_COLOR_BIT,
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+    );
+
+    DestroyBuffer(device, stagingBuffer);
+    return image;
+}
 }
 
 void VulkanRenderer::CreateTextureResources(const SceneData& scene)
@@ -111,6 +178,33 @@ void VulkanRenderer::CreateTextureResources(const SceneData& scene)
     samplerInfo.minLod = 0.0f;
     samplerInfo.maxLod = 0.0f;
     CheckVk(vkCreateSampler(m_device, &samplerInfo, nullptr, &m_textureSampler), "vkCreateSampler");
+
+    VkSamplerCreateInfo paintSamplerInfo{};
+    paintSamplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    paintSamplerInfo.magFilter = VK_FILTER_LINEAR;
+    paintSamplerInfo.minFilter = VK_FILTER_LINEAR;
+    paintSamplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    paintSamplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    paintSamplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    paintSamplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    paintSamplerInfo.maxAnisotropy = 1.0f;
+    paintSamplerInfo.minLod = 0.0f;
+    paintSamplerInfo.maxLod = 0.0f;
+    CheckVk(vkCreateSampler(m_device, &paintSamplerInfo, nullptr, &m_paintSampler), "vkCreateSampler(paint)");
+
+    m_blankPaintImage = CreateSolidColorImage(
+        m_physicalDevice,
+        m_device,
+        m_graphicsQueue,
+        m_commandPool,
+        1,
+        1,
+        0,
+        0,
+        0,
+        0
+    );
+    m_paintImages.assign(m_drawItems.size(), {});
 }
 
 void VulkanRenderer::CreateOverlayResources()
@@ -324,22 +418,58 @@ void VulkanRenderer::UpdateDescriptorSet()
         shadowWrite.descriptorCount = static_cast<std::uint32_t>(shadowInfos.size());
         shadowWrite.pImageInfo = shadowInfos.data();
 
-        VkDescriptorBufferInfo paintInfo{};
-        paintInfo.buffer = m_persistentPaintBuffer.buffer;
-        paintInfo.offset = 0;
-        paintInfo.range = sizeof(PersistentPaintGpuStamp) * kMaxPersistentPaintStamps;
+        VkDescriptorImageInfo paintInfo{};
+        paintInfo.sampler = m_paintSampler;
+        if (i < m_paintImages.size() && m_paintImages[i].view != VK_NULL_HANDLE)
+        {
+            paintInfo.imageView = m_paintImages[i].view;
+        }
+        else
+        {
+            paintInfo.imageView = m_blankPaintImage.view;
+        }
+        paintInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
         VkWriteDescriptorSet paintWrite{};
         paintWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         paintWrite.dstSet = m_descriptorSets[i];
         paintWrite.dstBinding = 3;
-        paintWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        paintWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         paintWrite.descriptorCount = 1;
-        paintWrite.pBufferInfo = &paintInfo;
+        paintWrite.pImageInfo = &paintInfo;
 
         std::array<VkWriteDescriptorSet, 4> writes = {uniformWrite, imageWrite, shadowWrite, paintWrite};
         vkUpdateDescriptorSets(m_device, static_cast<std::uint32_t>(writes.size()), writes.data(), 0, nullptr);
     }
+}
+
+void VulkanRenderer::UpdatePaintDescriptorSet(std::uint32_t descriptorIndex)
+{
+    if (descriptorIndex >= m_descriptorSets.size())
+    {
+        return;
+    }
+
+    VkDescriptorImageInfo paintInfo{};
+    paintInfo.sampler = m_paintSampler;
+    if (descriptorIndex < m_paintImages.size() && m_paintImages[descriptorIndex].view != VK_NULL_HANDLE)
+    {
+        paintInfo.imageView = m_paintImages[descriptorIndex].view;
+    }
+    else
+    {
+        paintInfo.imageView = m_blankPaintImage.view;
+    }
+    paintInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+    VkWriteDescriptorSet paintWrite{};
+    paintWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    paintWrite.dstSet = m_descriptorSets[descriptorIndex];
+    paintWrite.dstBinding = 3;
+    paintWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    paintWrite.descriptorCount = 1;
+    paintWrite.pImageInfo = &paintInfo;
+    vkUpdateDescriptorSets(m_device, 1, &paintWrite, 0, nullptr);
 }
 
 void VulkanRenderer::UpdateOverlayDescriptorSet()
