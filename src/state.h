@@ -8,6 +8,7 @@
 #include "assets/asset_registry.h"
 #include "camera.h"
 #include "collision/triangle_collider.h"
+#include "gameplay/fracture.h"
 #include "gameplay/paint_balls.h"
 #include "gameplay/player_controller.h"
 #include "gameplay/traffic.h"
@@ -34,10 +35,21 @@ struct CoreState
     TriangleMeshCollider worldCollider;
     PlayerController player;
     TrafficSystem traffic;
+    FractureSystem fracture;
     PaintBallSystem paintBalls;
     CharacterAnimationSet characterSet;
     CharacterRenderState characterRenderState;
     Camera camera;
+};
+
+struct FractureState
+{
+    FractureSettings settings = {};
+    bool fireHeld = false;
+    float fireCooldown = 0.0f;
+    bool hitValid = false;
+    Vec3 hitPosition = {};
+    Vec3 hitNormal = {0.0f, 1.0f, 0.0f};
 };
 
 struct RuntimeState
@@ -149,6 +161,7 @@ struct State
     RuntimeState runtime;
     LightingState lighting;
     VehicleLightEditorState vehicleLights;
+    FractureState fracture;
     PaintState paint;
     OverlayState overlay;
 };

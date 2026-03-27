@@ -75,7 +75,7 @@ void App::LoadDebugSettings()
     float boolValue = 0.0f;
 
     std::uint32_t sceneKind = static_cast<std::uint32_t>(lighting.sceneKind);
-    if (ExtractUInt(text, "\"scene_kind\"", sceneKind) && sceneKind <= static_cast<std::uint32_t>(SceneKind::VehicleLightTest))
+    if (ExtractUInt(text, "\"scene_kind\"", sceneKind) && sceneKind <= static_cast<std::uint32_t>(SceneKind::FractureTest))
     {
         lighting.sceneKind = static_cast<SceneKind>(sceneKind);
     }

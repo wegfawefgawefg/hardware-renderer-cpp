@@ -32,7 +32,9 @@ struct App
     void TryPlaceVehicleLight(int mouseX, int mouseY);
     int FindActiveVehicleLightIndex() const;
     bool TryFirePaintBall();
+    bool TryFireFractureShot();
     bool TryApplySurfaceMaskBrush();
+    void UpdateFractureSandbox(float dtSeconds);
     void UpdatePaintBalls(float dtSeconds);
     void UpdateSurfaceMaskBrush(float dtSeconds);
     void AppendPaintSplat(const PaintSplatSpawn& splat);
@@ -46,6 +48,7 @@ struct App
     void BuildSpotlightsWindow(bool& debugSettingsChanged);
     void BuildPaintBallsWindow(bool& debugSettingsChanged);
     void BuildSurfaceMasksWindow(bool& debugSettingsChanged);
+    void BuildFractureWindow(bool& debugSettingsChanged);
     void BuildVehicleLightsWindow(bool& debugSettingsChanged);
 
     SDL_Window* m_window = nullptr;

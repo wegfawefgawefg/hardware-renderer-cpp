@@ -34,8 +34,8 @@ void App::BuildLightingWindow(bool& debugSettingsChanged)
     if (ImGui::Begin("Lighting"))
     {
         int sceneKind = static_cast<int>(lighting.sceneKind);
-        const char* sceneNames[] = {"Player Mask Test", "City", "Shadow Test", "Spot Shadow Test", "Vehicle Light Test"};
-        if (ImGui::Combo("Scene", &sceneKind, sceneNames, 5))
+        const char* sceneNames[] = {"Player Mask Test", "City", "Shadow Test", "Spot Shadow Test", "Vehicle Light Test", "Fracture Test"};
+        if (ImGui::Combo("Scene", &sceneKind, sceneNames, 6))
         {
             lighting.sceneKind = static_cast<SceneKind>(sceneKind);
             runtime.reloadSceneRequested = true;

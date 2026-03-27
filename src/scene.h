@@ -106,9 +106,11 @@ enum class SceneKind
     ShadowTest,
     SpotShadowTest,
     VehicleLightTest,
+    FractureTest,
 };
 
 SceneBounds ComputeSceneBounds(const SceneData& scene);
 std::uint32_t CountSceneTriangles(const SceneData& scene);
+SceneData BuildFractureTestScene(const AssetRegistry& assetRegistry);
 SceneData BuildVehicleLightTestScene(const AssetRegistry& assetRegistry);
 SceneData LoadSampleScene(const AssetRegistry& assetRegistry, SceneKind kind);

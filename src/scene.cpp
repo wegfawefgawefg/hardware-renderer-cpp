@@ -407,6 +407,10 @@ SceneData LoadSampleScene(const AssetRegistry& assetRegistry, SceneKind kind)
     {
         return BuildPlayerMaskTestScene(assetRegistry);
     }
+    if (kind == SceneKind::FractureTest)
+    {
+        return BuildFractureTestScene(assetRegistry);
+    }
     if (kind == SceneKind::ShadowTest)
     {
         return BuildShadowTestScene(assetRegistry);

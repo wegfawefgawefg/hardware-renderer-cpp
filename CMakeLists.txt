@@ -166,7 +166,10 @@ add_executable(hardware-renderer-cpp
   src/ui/system.cpp
   src/ui/overlay.cpp
   src/ui/windows.cpp
+  src/ui/windows_fracture.cpp
   src/lighting/apply.cpp
+  src/gameplay/fracture.cpp
+  src/gameplay/fracture_runtime.cpp
   src/gameplay/paint_runtime.cpp
   src/gameplay/vehicle_light_editor.cpp
   src/animation/character.cpp
@@ -186,6 +189,7 @@ add_executable(hardware-renderer-cpp
   src/main.cpp
   src/math_types.cpp
   src/scene.cpp
+  src/scene_fracture.cpp
   src/scene_city.cpp
   src/scene_city_layout.cpp
   src/scene_vehicle.cpp

@@ -101,6 +101,10 @@ void App::ReloadScene()
     m_state.paint.nextSplatIndex = 0;
     core.traffic.Initialize(core.scene);
     core.worldCollider.BuildFromScene(core.scene);
+    core.fracture.Clear();
+    m_state.fracture.hitValid = false;
+    m_state.fracture.fireHeld = false;
+    m_state.fracture.fireCooldown = 0.0f;
 
     if (core.sceneBounds.valid)
     {
@@ -130,6 +134,26 @@ void App::ReloadScene()
         core.camera.yawRadians = DegreesToRadians(180.0f);
         core.camera.pitchRadians = DegreesToRadians(-8.0f);
         PlayerSyncCamera(core.player, core.worldCollider, core.camera);
+    }
+    else if (lighting.sceneKind == SceneKind::FractureTest)
+    {
+        lighting.shadowTestSpotTargetValid = false;
+        lighting.cycleDayNight = false;
+        lighting.timeOfDay = 0.58f;
+        lighting.sunAzimuthDegrees = -18.0f;
+        lighting.sunIntensity = 1.4f;
+        lighting.moonIntensity = 0.0f;
+        lighting.ambientIntensity = 0.10f;
+        lighting.pointLightIntensity = 0.0f;
+        lighting.shadowCascadeSplit = 24.0f;
+        core.camera.position = Vec3Make(0.0f, 8.5f, 19.0f);
+        core.camera.yawRadians = DegreesToRadians(180.0f);
+        core.camera.pitchRadians = DegreesToRadians(-16.0f);
+        core.fracture.InitializeFromAsset(
+            core.assetRegistry,
+            "kenney/kenney_city-kit-commercial_2.1/Models/FBX format/building-skyscraper-b.fbx",
+            m_state.fracture.settings
+        );
     }
     else if (lighting.sceneKind == SceneKind::ShadowTest)
     {

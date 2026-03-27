@@ -16,6 +16,7 @@ void App::HandleEvent(const SDL_Event& event)
 {
     auto& runtime = m_state.runtime;
     auto& lighting = m_state.lighting;
+    auto& fracture = m_state.fracture;
     auto& paint = m_state.paint;
     ProcessImGuiEvent(event);
     bool imguiCapturingMouse = ImGui::GetCurrentContext() != nullptr && ImGui::GetIO().WantCaptureMouse;
@@ -61,7 +62,12 @@ void App::HandleEvent(const SDL_Event& event)
             }
             else if (runtime.mouseCaptured)
             {
-                if (paint.interactionMode == PaintInteractionMode::PaintBalls)
+                if (lighting.sceneKind == SceneKind::FractureTest)
+                {
+                    fracture.fireHeld = true;
+                    TryFireFractureShot();
+                }
+                else if (paint.interactionMode == PaintInteractionMode::PaintBalls)
                 {
                     paint.fireHeld = true;
                     TryFirePaintBall();
@@ -77,6 +83,7 @@ void App::HandleEvent(const SDL_Event& event)
     case SDL_EVENT_MOUSE_BUTTON_UP:
         if (event.button.button == SDL_BUTTON_LEFT)
         {
+            fracture.fireHeld = false;
             paint.fireHeld = false;
             paint.surfaceBrushHeld = false;
         }
@@ -106,6 +113,7 @@ void App::Update(float dtSeconds)
     auto& runtime = m_state.runtime;
     auto& lighting = m_state.lighting;
     auto& vehicleLights = m_state.vehicleLights;
+    auto& fracture = m_state.fracture;
     auto& paint = m_state.paint;
     auto& overlay = m_state.overlay;
 
@@ -123,7 +131,7 @@ void App::Update(float dtSeconds)
 
     auto inputStart = Clock::now();
     bool imguiCapturingKeyboard = ImGui::GetCurrentContext() != nullptr && ImGui::GetIO().WantCaptureKeyboard;
-    if (lighting.sceneKind == SceneKind::PlayerMaskTest)
+    if (lighting.sceneKind == SceneKind::PlayerMaskTest || lighting.sceneKind == SceneKind::FractureTest)
     {
         PlayerFlyUpdate(core.camera, dtSeconds, runtime.mouseCaptured && !imguiCapturingKeyboard);
     }
@@ -132,6 +140,7 @@ void App::Update(float dtSeconds)
         PlayerUpdateFromInput(core.player, core.worldCollider, core.camera, dtSeconds, runtime.mouseCaptured && !imguiCapturingKeyboard);
         PlayerSyncCamera(core.player, core.worldCollider, core.camera);
     }
+    UpdateFractureSandbox(dtSeconds);
     core.traffic.Update(core.scene, dtSeconds, 64);
     UpdatePaintBalls(dtSeconds);
     UpdateSurfaceMaskBrush(dtSeconds);
@@ -214,7 +223,9 @@ void App::Update(float dtSeconds)
         uniforms.paintSplatColors[i] = Vec4Make(splat.color.x, splat.color.y, splat.color.z, 1.0f);
     }
 
-    if (runtime.hasCharacter && m_state.lighting.sceneKind != SceneKind::PlayerMaskTest)
+    if (runtime.hasCharacter &&
+        m_state.lighting.sceneKind != SceneKind::PlayerMaskTest &&
+        m_state.lighting.sceneKind != SceneKind::FractureTest)
     {
         float moveMag = Vec3Length(Vec3Make(core.player.velocity.x, 0.0f, core.player.velocity.z));
         int wantedAnim = (!core.player.onGround && std::fabs(core.player.velocity.y) > 0.5f) ? 2 : (moveMag > 0.1f ? 1 : 0);
@@ -349,6 +360,21 @@ void App::Update(float dtSeconds)
         }
     }
     debugOptions.customCubeCount = cubeIndex;
+    if (lighting.sceneKind == SceneKind::FractureTest)
+    {
+        core.fracture.AppendDebugGeometry(debugOptions);
+        if (fracture.hitValid && debugOptions.selectionSphereCount < DebugRenderOptions::kMaxSelectionSpheres)
+        {
+            std::uint32_t sphereIndex = debugOptions.selectionSphereCount++;
+            debugOptions.selectionSpheres[sphereIndex] = Vec4Make(
+                fracture.hitPosition.x,
+                fracture.hitPosition.y,
+                fracture.hitPosition.z,
+                fracture.settings.blastRadius
+            );
+            debugOptions.selectionSphereColors[sphereIndex] = Vec4Make(1.0f, 0.55f, 0.15f, 1.0f);
+        }
+    }
 
     auto renderStart = Clock::now();
     core.renderer.Render(
