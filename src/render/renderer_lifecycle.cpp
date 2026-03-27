@@ -61,6 +61,14 @@ void VulkanRenderer::Initialize(
 
 void VulkanRenderer::Shutdown()
 {
+    if (!m_initialized &&
+        m_device == VK_NULL_HANDLE &&
+        m_instance == VK_NULL_HANDLE &&
+        m_surface == VK_NULL_HANDLE)
+    {
+        return;
+    }
+
     if (m_device != VK_NULL_HANDLE)
     {
         vkDeviceWaitIdle(m_device);

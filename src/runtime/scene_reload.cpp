@@ -45,7 +45,26 @@ void App::ReloadScene()
     runtime.characterModelYaw = core.camera.yawRadians;
     PlayerSyncCamera(core.player, core.worldCollider, core.camera);
 
-    if (lighting.sceneKind == SceneKind::ShadowTest)
+    if (lighting.sceneKind == SceneKind::PlayerMaskTest)
+    {
+        lighting.shadowTestSpotTargetValid = false;
+        lighting.cycleDayNight = false;
+        lighting.timeOfDay = 0.56f;
+        lighting.sunAzimuthDegrees = -40.0f;
+        lighting.sunIntensity = 1.4f;
+        lighting.moonIntensity = 0.0f;
+        lighting.ambientIntensity = 0.12f;
+        lighting.pointLightIntensity = 0.0f;
+        lighting.shadowCascadeSplit = 18.0f;
+        core.player.position = Vec3Make(0.0f, 1.0f, 10.5f);
+        core.player.velocity = Vec3Make(0.0f, 0.0f, 0.0f);
+        core.player.onGround = true;
+        core.camera.position = Vec3Make(0.0f, 3.0f, 15.0f);
+        core.camera.yawRadians = DegreesToRadians(180.0f);
+        core.camera.pitchRadians = DegreesToRadians(-8.0f);
+        PlayerSyncCamera(core.player, core.worldCollider, core.camera);
+    }
+    else if (lighting.sceneKind == SceneKind::ShadowTest)
     {
         lighting.cycleDayNight = false;
         lighting.timeOfDay = 0.50f;

@@ -54,6 +54,7 @@ void VulkanRenderer::Render(
         m_profilingStats.gpuValid = false;
     }
     CheckVk(vkResetFences(m_device, 1, &m_frameFence), "vkResetFences");
+    FlushDirtyPaintTextures();
 
     std::memcpy(m_uniformBuffer.mapped, &uniforms, sizeof(uniforms));
     std::uint32_t activeShadowedSpots =

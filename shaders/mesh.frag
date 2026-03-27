@@ -144,10 +144,57 @@ vec3 applyPersistentPaint(vec3 baseAlbedo, vec2 uv)
     return mix(baseAlbedo, paint.rgb, clamp(paint.a, 0.0, 1.0));
 }
 
+vec3 visualizeUv(vec2 uv)
+{
+    float scale = max(uniforms.paintSplatCounts.z, 1.0);
+    int mode = int(uniforms.paintSplatCounts.w + 0.5);
+    vec2 scaledUv = uv * scale;
+    vec2 tiledUv = fract(scaledUv);
+    if (mode == 1)
+    {
+        return vec3(tiledUv.x);
+    }
+    if (mode == 2)
+    {
+        return vec3(tiledUv.y);
+    }
+    if (mode == 3)
+    {
+        return vec3(tiledUv, 0.0);
+    }
+    if (mode == 4)
+    {
+        float u = clamp(uv.x * 0.25 + 0.5, 0.0, 1.0);
+        return vec3(u);
+    }
+    if (mode == 5)
+    {
+        float v = clamp(uv.y * 0.25 + 0.5, 0.0, 1.0);
+        return vec3(v);
+    }
+    if (mode == 6)
+    {
+        bool outOfRange = uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0;
+        vec2 fracUv = fract(abs(uv));
+        vec3 base = vec3(fracUv, 1.0 - 0.5 * (fracUv.x + fracUv.y));
+        return outOfRange ? mix(base, vec3(1.0, 0.0, 1.0), 0.8) : base * 0.35;
+    }
+    vec2 gridDist = abs(tiledUv - 0.5);
+    float gridLine = 1.0 - smoothstep(0.46, 0.50, max(gridDist.x, gridDist.y));
+    vec3 uvColor = vec3(tiledUv, 1.0 - 0.5 * (tiledUv.x + tiledUv.y));
+    uvColor = mix(uvColor, vec3(0.02), gridLine * 0.85);
+    return uvColor;
+}
+
 void main()
 {
     vec3 normal = normalize(fragNormal);
     vec3 albedo = texture(albedoTexture, fragUv).rgb;
+    if (uniforms.paintSplatCounts.y > 0.5)
+    {
+        outColor = vec4(visualizeUv(fragUv), 1.0);
+        return;
+    }
     albedo = applyPersistentPaint(albedo, fragUv);
     albedo = applyPaintSplats(albedo, fragWorldPosition, normal);
     vec3 ambient = albedo * uniforms.ambientColor.rgb;

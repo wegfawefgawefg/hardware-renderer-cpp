@@ -65,6 +65,7 @@ struct LightingState
 {
     bool cycleDayNight = true;
     bool animateSunAzimuth = true;
+    bool debugVisualizeUv = false;
     bool shadowBlur = true;
     bool debugDrawActivationVolumes = true;
     bool drawLightProxies = true;
@@ -73,7 +74,7 @@ struct LightingState
     bool debugDrawLightVolumes = true;
     bool debugDrawLightLabels = true;
     bool shadowTestSpotTargetValid = false;
-    SceneKind sceneKind = SceneKind::ShadowTest;
+    SceneKind sceneKind = SceneKind::PlayerMaskTest;
     std::uint32_t shadowMapSize = 2048;
     std::uint32_t spotLightMaxActive = 16;
     std::uint32_t shadowedSpotLightMaxActive = 2;
@@ -96,6 +97,8 @@ struct LightingState
     float spotLightActivationForwardOffset = 10.0f;
     float shadowedSpotLightActivationDistance = 16.0f;
     float shadowedSpotLightActivationForwardOffset = 6.0f;
+    float uvDebugScale = 8.0f;
+    std::uint32_t uvDebugMode = 0;
     Vec3 sunWorldPosition = {};
     Vec3 moonWorldPosition = {};
     Vec3 spotLightSourceOffset = {};

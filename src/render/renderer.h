@@ -285,6 +285,8 @@ struct VulkanRenderer
     {
         bool allocated = false;
         bool dirty = false;
+        bool descriptorDirty = false;
+        bool imageInitialized = false;
         std::uint32_t hitCount = 0;
         std::vector<std::uint8_t> pixels;
     };

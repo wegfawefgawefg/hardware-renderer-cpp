@@ -72,6 +72,7 @@ That keeps the repo focused on renderer structure instead of tying it to legacy 
 - `docs/light-culling-notes.md`: how global vs local lights should be culled in the current renderer
 - `docs/clustered-lighting-notes.md`: how clustered light lookup works in a raster pipeline
 - `docs/paint-systems-notes.md`: intended split between transient splats and persistent texture-backed paint
+- `docs/world-paint-volume-notes.md`: sparse chunked 3D world-space paint volume idea for UV-independent persistence
 - `docs/ideas.md`: gameplay and renderer experiment backlog for this sandbox
 
 ## Status

@@ -36,6 +36,10 @@ void App::AppendPaintSplat(const PaintSplatSpawn& splat)
 
 void App::AppendPersistentPaint(const PaintSplatSpawn& splat)
 {
+    if (m_state.lighting.sceneKind != SceneKind::PlayerMaskTest)
+    {
+        return;
+    }
     auto& core = m_state.core;
     std::array<std::pair<std::uint32_t, std::uint32_t>, 16> touched = {};
     std::uint32_t touchedCount = 0;

@@ -5,10 +5,14 @@
 #include <filesystem>
 
 #include "assets/fbx_loader.h"
+#include "assets/texture_loader.h"
 #include "scene_city.h"
 
 namespace
 {
+constexpr std::string_view kCharacterModelAsset = "kenney/animated-characters-1/Model/characterMedium.fbx";
+constexpr std::string_view kCharacterTextureAsset = "kenney/animated-characters-1/Skins/survivorMaleB.png";
+
 Vec3 TransformPoint(Mat4 m, Vec3 p)
 {
     Vec4 out = Mat4MulVec4(m, Vec4Make(p.x, p.y, p.z, 1.0f));
@@ -88,6 +92,69 @@ float ComputeModelFootprint(const ModelData& model)
     }
 
     return std::max(std::max(mx.x - mn.x, mx.z - mn.z), 0.001f);
+}
+
+Vec3 ComputeModelMin(const ModelData& model)
+{
+    if (model.mesh.vertices.empty())
+    {
+        return {};
+    }
+
+    Vec3 mn = model.mesh.vertices.front().position;
+    for (const Vertex& vertex : model.mesh.vertices)
+    {
+        mn.x = std::min(mn.x, vertex.position.x);
+        mn.y = std::min(mn.y, vertex.position.y);
+        mn.z = std::min(mn.z, vertex.position.z);
+    }
+    return mn;
+}
+
+SceneData BuildPlayerMaskTestScene(const AssetRegistry& assetRegistry)
+{
+    SceneData scene{};
+    scene.models.push_back(MakeBoxModel(Vec3Make(18.0f, 0.25f, 18.0f), 220, 220, 220));
+    scene.entities.push_back(EntityData{
+        .modelIndex = 0,
+        .transform = Mat4Translate(Vec3Make(0.0f, -0.25f, 0.0f)),
+        .collidable = true,
+    });
+
+    const std::filesystem::path* characterPath = assetRegistry.FindByRelativePath(kCharacterModelAsset);
+    if (characterPath == nullptr)
+    {
+        return scene;
+    }
+
+    ModelData characterModel = LoadFbxModel(characterPath->string());
+    if (characterModel.mesh.vertices.empty() || characterModel.mesh.indices.empty())
+    {
+        return scene;
+    }
+
+    const std::filesystem::path* texturePath = assetRegistry.FindByRelativePath(kCharacterTextureAsset);
+    if (texturePath != nullptr && !characterModel.textures.empty())
+    {
+        characterModel.textures[0] = LoadTexture(texturePath->string());
+    }
+
+    Vec3 modelMin = ComputeModelMin(characterModel);
+    float footprint = ComputeModelFootprint(characterModel);
+    float scale = 7.5f / std::max(footprint, 0.001f);
+    std::uint32_t modelIndex = static_cast<std::uint32_t>(scene.models.size());
+    scene.models.push_back(std::move(characterModel));
+    scene.entities.push_back(EntityData{
+        .modelIndex = modelIndex,
+        .transform = Mat4Mul(
+            Mat4Translate(Vec3Make(0.0f, -modelMin.y * scale, 0.0f)),
+            Mat4Scale(scale)
+        ),
+        .assetPath = std::string(kCharacterModelAsset),
+        .collidable = true,
+    });
+
+    return scene;
 }
 
 SceneData BuildShadowTestScene(const AssetRegistry& assetRegistry)
@@ -279,6 +346,10 @@ std::uint32_t CountSceneTriangles(const SceneData& scene)
 
 SceneData LoadSampleScene(const AssetRegistry& assetRegistry, SceneKind kind)
 {
+    if (kind == SceneKind::PlayerMaskTest)
+    {
+        return BuildPlayerMaskTestScene(assetRegistry);
+    }
     if (kind == SceneKind::ShadowTest)
     {
         return BuildShadowTestScene(assetRegistry);

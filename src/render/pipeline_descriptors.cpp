@@ -26,7 +26,7 @@ void VulkanRenderer::CreateDescriptorObjects()
 
     VkDescriptorSetLayoutBinding paintBinding{};
     paintBinding.binding = 3;
-    paintBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    paintBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
     paintBinding.descriptorCount = 1;
     paintBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
@@ -43,7 +43,7 @@ void VulkanRenderer::CreateDescriptorObjects()
             VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, descriptorCount},
             VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, descriptorCount},
             VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, descriptorCount * kTotalShadowMaps},
-            VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, descriptorCount},
+            VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, descriptorCount},
         };
 
     VkDescriptorPoolCreateInfo poolInfo{};

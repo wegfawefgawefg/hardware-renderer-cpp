@@ -83,8 +83,11 @@ void App::LoadDebugSettings()
     ExtractFloat(text, "\"cycle_day_night\"", boolValue);
     lighting.cycleDayNight = boolValue != 0.0f;
     if (ExtractFloat(text, "\"animate_sun_azimuth\"", boolValue)) lighting.animateSunAzimuth = boolValue != 0.0f;
+    if (ExtractFloat(text, "\"debug_visualize_uv\"", boolValue)) lighting.debugVisualizeUv = boolValue != 0.0f;
     ExtractFloat(text, "\"time_of_day\"", lighting.timeOfDay);
     ExtractFloat(text, "\"day_night_speed\"", lighting.dayNightSpeed);
+    ExtractFloat(text, "\"uv_debug_scale\"", lighting.uvDebugScale);
+    ExtractUInt(text, "\"uv_debug_mode\"", lighting.uvDebugMode);
     ExtractFloat(text, "\"sun_azimuth_degrees\"", lighting.sunAzimuthDegrees);
     ExtractFloat(text, "\"orbit_distance_scale\"", lighting.orbitDistanceScale);
     ExtractFloat(text, "\"sun_intensity\"", lighting.sunIntensity);
@@ -148,8 +151,11 @@ void App::SaveDebugSettings() const
         "  \"scene_kind\": %u,\n"
         "  \"cycle_day_night\": %d,\n"
         "  \"animate_sun_azimuth\": %d,\n"
+        "  \"debug_visualize_uv\": %d,\n"
         "  \"time_of_day\": %.6f,\n"
         "  \"day_night_speed\": %.6f,\n"
+        "  \"uv_debug_scale\": %.6f,\n"
+        "  \"uv_debug_mode\": %u,\n"
         "  \"sun_azimuth_degrees\": %.6f,\n"
         "  \"orbit_distance_scale\": %.6f,\n"
         "  \"sun_intensity\": %.6f,\n"
@@ -197,8 +203,11 @@ void App::SaveDebugSettings() const
         static_cast<std::uint32_t>(lighting.sceneKind),
         lighting.cycleDayNight ? 1 : 0,
         lighting.animateSunAzimuth ? 1 : 0,
+        lighting.debugVisualizeUv ? 1 : 0,
         lighting.timeOfDay,
         lighting.dayNightSpeed,
+        lighting.uvDebugScale,
+        lighting.uvDebugMode,
         lighting.sunAzimuthDegrees,
         lighting.orbitDistanceScale,
         lighting.sunIntensity,

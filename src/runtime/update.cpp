@@ -177,7 +177,12 @@ void App::Update(float dtSeconds)
     {
         splatColor = Vec4Make(0.0f, 0.0f, 0.0f, 0.0f);
     }
-    uniforms.paintSplatCounts = Vec4Make(static_cast<float>(paint.splatCount), 0.0f, 0.0f, 0.0f);
+    uniforms.paintSplatCounts = Vec4Make(
+        static_cast<float>(paint.splatCount),
+        m_state.lighting.debugVisualizeUv ? 1.0f : 0.0f,
+        m_state.lighting.uvDebugScale,
+        static_cast<float>(m_state.lighting.uvDebugMode)
+    );
     for (std::uint32_t i = 0; i < paint.splatCount && i < kMaxPaintSplats; ++i)
     {
         const PaintSplat& splat = paint.splats[i];
@@ -186,7 +191,7 @@ void App::Update(float dtSeconds)
         uniforms.paintSplatColors[i] = Vec4Make(splat.color.x, splat.color.y, splat.color.z, 1.0f);
     }
 
-    if (runtime.hasCharacter)
+    if (runtime.hasCharacter && m_state.lighting.sceneKind != SceneKind::PlayerMaskTest)
     {
         float moveMag = Vec3Length(Vec3Make(core.player.velocity.x, 0.0f, core.player.velocity.z));
         int wantedAnim = (!core.player.onGround && std::fabs(core.player.velocity.y) > 0.5f) ? 2 : (moveMag > 0.1f ? 1 : 0);
@@ -287,8 +292,6 @@ void App::Update(float dtSeconds)
         debugOptions.customCubeColors[cubeIndex] = Vec4Make(ball.color.x, ball.color.y, ball.color.z, 1.0f);
         ++cubeIndex;
     }
-
-    core.renderer.FlushDirtyPaintTextures();
 
     auto renderStart = Clock::now();
     core.renderer.Render(

@@ -34,8 +34,8 @@ void App::BuildLightingWindow(bool& debugSettingsChanged)
     if (ImGui::Begin("Lighting"))
     {
         int sceneKind = static_cast<int>(lighting.sceneKind);
-        const char* sceneNames[] = {"City", "Shadow Test", "Spot Shadow Test", "Vehicle Light Test"};
-        if (ImGui::Combo("Scene", &sceneKind, sceneNames, 4))
+        const char* sceneNames[] = {"Player Mask Test", "City", "Shadow Test", "Spot Shadow Test", "Vehicle Light Test"};
+        if (ImGui::Combo("Scene", &sceneKind, sceneNames, 5))
         {
             lighting.sceneKind = static_cast<SceneKind>(sceneKind);
             runtime.reloadSceneRequested = true;
@@ -51,6 +51,12 @@ void App::BuildLightingWindow(bool& debugSettingsChanged)
         debugSettingsChanged |= ImGui::SliderFloat("Cycle speed", &lighting.dayNightSpeed, 0.0f, 0.20f, "%.3f");
         debugSettingsChanged |= ImGui::Checkbox("Animate azimuth", &lighting.animateSunAzimuth);
         debugSettingsChanged |= ImGui::SliderFloat("Sun azimuth", &lighting.sunAzimuthDegrees, -180.0f, 180.0f, "%.1f deg");
+        debugSettingsChanged |= ImGui::Checkbox("Visualize UVs", &lighting.debugVisualizeUv);
+        static const char* uvModeNames[] = {"Checker", "U", "V", "UV Color", "Raw U", "Raw V", "Out of 0..1"};
+        int uvMode = static_cast<int>(lighting.uvDebugMode);
+        debugSettingsChanged |= ImGui::Combo("UV mode", &uvMode, uvModeNames, 7);
+        lighting.uvDebugMode = static_cast<std::uint32_t>(uvMode);
+        debugSettingsChanged |= ImGui::SliderFloat("UV scale", &lighting.uvDebugScale, 1.0f, 32.0f, "%.1f");
         debugSettingsChanged |= ImGui::SliderFloat("Orbit distance", &lighting.orbitDistanceScale, 0.5f, 3.0f, "%.2f");
         debugSettingsChanged |= ImGui::SliderFloat("Sun intensity", &lighting.sunIntensity, 0.0f, 3.0f, "%.2f");
         debugSettingsChanged |= ImGui::SliderFloat("Moon intensity", &lighting.moonIntensity, 0.0f, 1.0f, "%.2f");

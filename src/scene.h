@@ -101,6 +101,7 @@ struct SceneBounds
 
 enum class SceneKind
 {
+    PlayerMaskTest,
     City,
     ShadowTest,
     SpotShadowTest,

@@ -56,6 +56,8 @@ void VulkanRenderer::AppendPersistentPaint(const PaintSplatSpawn& splat)
     if (!layer.allocated)
     {
         layer.allocated = true;
+        layer.descriptorDirty = true;
+        layer.imageInitialized = false;
         layer.pixels.assign(kPaintTextureSize * kPaintTextureSize * 4u, 0u);
         m_paintImages[drawIndex] = CreateImage2D(
             m_physicalDevice,
@@ -66,16 +68,6 @@ void VulkanRenderer::AppendPersistentPaint(const PaintSplatSpawn& splat)
             VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
             VK_IMAGE_ASPECT_COLOR_BIT
         );
-        TransitionImageLayout(
-            m_device,
-            m_graphicsQueue,
-            m_commandPool,
-            m_paintImages[drawIndex].image,
-            VK_IMAGE_ASPECT_COLOR_BIT,
-            VK_IMAGE_LAYOUT_UNDEFINED,
-            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-        );
-        UpdatePaintDescriptorSet(drawIndex);
     }
 
     float uvScale = std::max(splat.uvWorldScale, 0.001f);
@@ -158,7 +150,7 @@ void VulkanRenderer::ResetAccumulatedPaint()
             DestroyImage(m_device, m_paintImages[i]);
             m_paintImages[i] = {};
         }
-        UpdatePaintDescriptorSet(i);
+        layer.descriptorDirty = true;
     }
     m_accumulatedPaintHitCount = 0;
 }
@@ -180,37 +172,51 @@ void VulkanRenderer::FlushDirtyPaintTextures()
         PaintLayer& layer = m_paintLayers[i];
         if (!layer.allocated || !layer.dirty || i >= m_paintImages.size() || m_paintImages[i].image == VK_NULL_HANDLE)
         {
+            if (layer.descriptorDirty)
+            {
+                UpdatePaintDescriptorSet(i);
+                layer.descriptorDirty = false;
+            }
             continue;
         }
 
-        std::memcpy(m_paintUploadBuffer.mapped, layer.pixels.data(), layer.pixels.size());
-        TransitionImageLayout(
-            m_device,
-            m_graphicsQueue,
-            m_commandPool,
-            m_paintImages[i].image,
-            VK_IMAGE_ASPECT_COLOR_BIT,
-            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
-        );
-        CopyBufferToImage(
-            m_device,
-            m_graphicsQueue,
-            m_commandPool,
-            m_paintUploadBuffer.buffer,
-            m_paintImages[i].image,
-            kPaintTextureSize,
-            kPaintTextureSize
-        );
-        TransitionImageLayout(
-            m_device,
-            m_graphicsQueue,
-            m_commandPool,
-            m_paintImages[i].image,
-            VK_IMAGE_ASPECT_COLOR_BIT,
-            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-        );
-        layer.dirty = false;
+        if (layer.dirty)
+        {
+            std::memcpy(m_paintUploadBuffer.mapped, layer.pixels.data(), layer.pixels.size());
+            TransitionImageLayout(
+                m_device,
+                m_graphicsQueue,
+                m_commandPool,
+                m_paintImages[i].image,
+                VK_IMAGE_ASPECT_COLOR_BIT,
+                layer.imageInitialized ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_UNDEFINED,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+            );
+            CopyBufferToImage(
+                m_device,
+                m_graphicsQueue,
+                m_commandPool,
+                m_paintUploadBuffer.buffer,
+                m_paintImages[i].image,
+                kPaintTextureSize,
+                kPaintTextureSize
+            );
+            TransitionImageLayout(
+                m_device,
+                m_graphicsQueue,
+                m_commandPool,
+                m_paintImages[i].image,
+                VK_IMAGE_ASPECT_COLOR_BIT,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+            );
+            layer.dirty = false;
+            layer.imageInitialized = true;
+        }
+        if (layer.descriptorDirty)
+        {
+            UpdatePaintDescriptorSet(i);
+            layer.descriptorDirty = false;
+        }
     }
 }
