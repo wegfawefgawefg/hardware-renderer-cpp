@@ -10,7 +10,7 @@
 namespace
 {
 constexpr std::string_view kWindowTitle = "hardware-renderer-cpp";
-constexpr std::string_view kUiFontPath = "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf";
+constexpr std::string_view kUiFontAsset = "fonts/DejaVuSansMono.ttf";
 constexpr std::string_view kX11DialogWindowType = "_NET_WM_WINDOW_TYPE_DIALOG";
 constexpr std::string_view kCharacterModelAsset = "kenney/animated-characters-1/Model/characterMedium.fbx";
 constexpr std::string_view kCharacterIdleAsset = "kenney/animated-characters-1/Animations/idle.fbx";
@@ -99,10 +99,11 @@ void App::Initialize()
         throw std::runtime_error("SDL_CreateWindow failed");
     }
 
-    m_uiFont = TTF_OpenFont(kUiFontPath.data(), 22.0f);
+    const std::filesystem::path uiFontPath = MakeAssetPath(kUiFontAsset);
+    m_uiFont = TTF_OpenFont(uiFontPath.string().c_str(), 22.0f);
     if (m_uiFont == nullptr)
     {
-        throw std::runtime_error("TTF_OpenFont failed");
+        throw std::runtime_error(std::string("TTF_OpenFont failed: ") + SDL_GetError());
     }
 
     CenterWindowOnPrimaryDisplay(m_window);
