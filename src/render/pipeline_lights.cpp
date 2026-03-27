@@ -230,6 +230,8 @@ void VulkanRenderer::CreateLightLinePipeline()
 
 void VulkanRenderer::CreateLightSolidPipeline()
 {
+    m_lightSolidFragShaderModule = CreateShaderModule(m_device, kLightSolidFragShaderPath);
+
     VkPipelineShaderStageCreateInfo vertStage{};
     vertStage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
     vertStage.stage = VK_SHADER_STAGE_VERTEX_BIT;
@@ -239,7 +241,7 @@ void VulkanRenderer::CreateLightSolidPipeline()
     VkPipelineShaderStageCreateInfo fragStage{};
     fragStage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
     fragStage.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-    fragStage.module = m_lightLineFragShaderModule;
+    fragStage.module = m_lightSolidFragShaderModule;
     fragStage.pName = "main";
 
     VkVertexInputBindingDescription bindingDesc{};
@@ -293,17 +295,11 @@ void VulkanRenderer::CreateLightSolidPipeline()
     VkPipelineDepthStencilStateCreateInfo depthStencil{};
     depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
     depthStencil.depthTestEnable = VK_TRUE;
-    depthStencil.depthWriteEnable = VK_FALSE;
+    depthStencil.depthWriteEnable = VK_TRUE;
     depthStencil.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
 
     VkPipelineColorBlendAttachmentState colorAttachment{};
-    colorAttachment.blendEnable = VK_TRUE;
-    colorAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
-    colorAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-    colorAttachment.colorBlendOp = VK_BLEND_OP_ADD;
-    colorAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-    colorAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-    colorAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
+    colorAttachment.blendEnable = VK_FALSE;
     colorAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
                                      VK_COLOR_COMPONENT_G_BIT |
                                      VK_COLOR_COMPONENT_B_BIT |

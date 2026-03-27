@@ -31,6 +31,32 @@ cmake --build --preset debug
 ./build/debug/hardware-renderer-cpp
 ```
 
+## Assets
+
+Downloaded Kenney packs are expected under `assets/kenney/`.
+
+Use the fetch script from the repo root:
+
+```bash
+./scripts/fetch_kenney_assets.sh animated-characters-1
+./scripts/fetch_kenney_assets.sh \
+  kenney_city-kit-commercial_2.1 \
+  kenney_city-kit-industrial_1.0 \
+  kenney_city-kit-roads \
+  kenney_city-kit-suburban_20 \
+  kenney_car-kit
+```
+
+The script pulls each pack from its official Kenney asset page and unpacks it into:
+
+```text
+assets/kenney/<slug>/
+```
+
+Small repo-owned assets that are not downloaded packs, such as
+[`assets/waterdrops.png`](/home/vega/Coding/Graphics/hardware-renderer-cpp/assets/waterdrops.png),
+are intended to stay checked into git.
+
 ## VS Code
 
 Open the `hardware-renderer-cpp` folder and press `F5`.
@@ -39,11 +65,11 @@ That configures, builds, and launches `build/debug/hardware-renderer-cpp` under 
 
 ## Controls
 
-- `Right Mouse`: hold to capture mouse and look around
+- `F1`: toggle play mode / mouse mode
 - `W A S D`: move
-- `Space`: jump
-- `Shift`: sprint
-- `Escape`: quit
+- `Space`: jump or fly up depending on scene
+- `Shift`: sprint, fly down, or placement modifier depending on scene
+- `Escape`: release mouse first, then quit
 
 ## Sample Scene
 

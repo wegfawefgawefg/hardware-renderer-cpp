@@ -3,5 +3,5 @@ build/
 .DS_Store
 .vscode/.browse.VC.db*
 .vscode/ipch/
-assets/
+assets/kenney/
 imgui.ini

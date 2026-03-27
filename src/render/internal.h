@@ -18,6 +18,7 @@ constexpr std::string_view kBloomFragShaderPath = HARDWARE_RENDERER_BLOOM_FRAG_S
 constexpr std::string_view kLightVertShaderPath = HARDWARE_RENDERER_LIGHT_VERT_SHADER_PATH;
 constexpr std::string_view kLightFragShaderPath = HARDWARE_RENDERER_LIGHT_FRAG_SHADER_PATH;
 constexpr std::string_view kLightLineFragShaderPath = HARDWARE_RENDERER_LIGHT_LINE_FRAG_SHADER_PATH;
+constexpr std::string_view kLightSolidFragShaderPath = HARDWARE_RENDERER_LIGHT_SOLID_FRAG_SHADER_PATH;
 constexpr std::string_view kShadowVertShaderPath = HARDWARE_RENDERER_SHADOW_VERT_SHADER_PATH;
 constexpr std::uint32_t kLightMarkerCount = 6 + kMaxSceneSpotLights + kMaxShadowedSpotLights;
 constexpr std::uint32_t kLightLineVertexCount = 8192;

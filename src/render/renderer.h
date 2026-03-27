@@ -242,6 +242,7 @@ struct VulkanRenderer
     VkShaderModule m_lightVertShaderModule = VK_NULL_HANDLE;
     VkShaderModule m_lightFragShaderModule = VK_NULL_HANDLE;
     VkShaderModule m_lightLineFragShaderModule = VK_NULL_HANDLE;
+    VkShaderModule m_lightSolidFragShaderModule = VK_NULL_HANDLE;
     VkRenderPass m_shadowRenderPass = VK_NULL_HANDLE;
     VkPipelineLayout m_shadowPipelineLayout = VK_NULL_HANDLE;
     VkPipeline m_shadowPipeline = VK_NULL_HANDLE;

@@ -248,6 +248,11 @@ void VulkanRenderer::Shutdown()
         vkDestroyShaderModule(m_device, m_lightLineFragShaderModule, nullptr);
         m_lightLineFragShaderModule = VK_NULL_HANDLE;
     }
+    if (m_lightSolidFragShaderModule != VK_NULL_HANDLE)
+    {
+        vkDestroyShaderModule(m_device, m_lightSolidFragShaderModule, nullptr);
+        m_lightSolidFragShaderModule = VK_NULL_HANDLE;
+    }
     if (m_shadowPipeline != VK_NULL_HANDLE)
     {
         vkDestroyPipeline(m_device, m_shadowPipeline, nullptr);

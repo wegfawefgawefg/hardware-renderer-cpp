@@ -1,8 +1,5 @@
 #version 460
 
-layout(location = 0) in vec3 inPosition;
-layout(location = 1) in vec3 inColor;
-
 layout(binding = 0) uniform SceneUniforms
 {
     mat4 view;
@@ -35,13 +32,23 @@ layout(binding = 0) uniform SceneUniforms
     vec4 paintSplatCounts;
 } uniforms;
 
-layout(location = 0) out vec3 fragColor;
-layout(location = 1) out vec3 fragWorldPosition;
+layout(location = 0) in vec3 fragColor;
+layout(location = 1) in vec3 fragWorldPosition;
+layout(location = 0) out vec4 outColor;
 
 void main()
 {
-    fragColor = inColor;
-    fragWorldPosition = inPosition;
-    gl_PointSize = 22.0;
-    gl_Position = uniforms.proj * uniforms.view * vec4(inPosition, 1.0);
+    vec3 dpdx = dFdx(fragWorldPosition);
+    vec3 dpdy = dFdy(fragWorldPosition);
+    vec3 normal = normalize(cross(dpdx, dpdy));
+    if (!gl_FrontFacing)
+    {
+        normal = -normal;
+    }
+
+    vec3 sunDir = normalize(-uniforms.sunDirection.xyz);
+    float diffuse = max(dot(normal, sunDir), 0.0);
+    vec3 ambient = uniforms.ambientColor.rgb * 0.85 + vec3(0.08);
+    vec3 lit = fragColor * (ambient + uniforms.sunColor.rgb * diffuse * 0.85);
+    outColor = vec4(lit, 1.0);
 }
