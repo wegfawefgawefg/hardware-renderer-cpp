@@ -38,19 +38,33 @@ Downloaded Kenney packs are expected under `assets/kenney/`.
 Use the fetch script from the repo root:
 
 ```bash
-./scripts/fetch_kenney_assets.sh animated-characters-1
-./scripts/fetch_kenney_assets.sh \
-  kenney_city-kit-commercial_2.1 \
-  kenney_city-kit-industrial_1.0 \
-  kenney_city-kit-roads \
-  kenney_city-kit-suburban_20 \
-  kenney_car-kit
+./scripts/fetch_kenney_assets.sh
 ```
 
-The script pulls each pack from its official Kenney asset page and unpacks it into:
+With no arguments, it fetches the Kenney packs this project currently uses:
+
+- `animated-characters-1`
+- `city-kit-commercial`
+- `city-kit-industrial`
+- `city-kit-roads`
+- `city-kit-suburban`
+- `car-kit`
+
+You can still pass explicit Kenney page slugs if you want extra packs:
+
+```bash
+./scripts/fetch_kenney_assets.sh food-kit cube-pets
+```
+
+The script unpacks assets under `assets/kenney/`, preserving Kenney's archive folder names. The code currently expects roots like:
 
 ```text
-assets/kenney/<slug>/
+assets/kenney/animated-characters-1/
+assets/kenney/kenney_city-kit-commercial_2.1/
+assets/kenney/kenney_city-kit-industrial_1.0/
+assets/kenney/kenney_city-kit-roads/
+assets/kenney/kenney_city-kit-suburban_20/
+assets/kenney/kenney_car-kit/
 ```
 
 Small repo-owned assets that are not downloaded packs, such as
