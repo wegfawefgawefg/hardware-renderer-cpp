@@ -157,9 +157,9 @@ SurfaceMaskEffects applySurfaceMasks(vec3 baseAlbedo, vec2 uv, vec3 localPositio
     vec3 albedo = baseAlbedo;
     float luma = dot(albedo, vec3(0.299, 0.587, 0.114));
     vec3 desaturated = mix(albedo, vec3(luma), 0.60);
-    vec3 grimeTint = vec3(0.44, 0.33, 0.18);
-    albedo = mix(albedo, desaturated * grimeTint * 1.55, grime * 0.82);
-    albedo = mix(albedo, albedo * 0.72, wetness * 0.45);
+    vec3 grimeTint = vec3(0.36, 0.28, 0.14);
+    albedo = mix(albedo, desaturated * grimeTint * 1.85, grime * 0.95);
+    albedo = mix(albedo, albedo * 0.55, wetness * 0.65);
 
     float breakup = 0.5 + 0.5 * sin(dot(localPosition, vec3(7.3, 5.1, 6.7)) + uv.x * 13.0 + uv.y * 17.0);
     float visibility = clamp(1.0 - smoothstep(0.18, 0.92, vanish * (0.55 + 0.45 * breakup)), 0.0, 1.0);
@@ -167,7 +167,7 @@ SurfaceMaskEffects applySurfaceMasks(vec3 baseAlbedo, vec2 uv, vec3 localPositio
 
     SurfaceMaskEffects effects;
     effects.albedo = albedo;
-    effects.emissive = vec3(0.25, 1.15, 1.35) * (glow * glow * 1.8);
+    effects.emissive = vec3(0.25, 1.35, 1.55) * (glow * glow * 4.0);
     effects.wetness = wetness;
     effects.visibility = visibility;
     return effects;

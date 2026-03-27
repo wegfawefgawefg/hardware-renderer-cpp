@@ -117,8 +117,15 @@ struct VehicleLightEditorState
 struct PaintState
 {
     PaintBallSettings ballSettings = {};
+    SurfaceMaskBrushSettings surfaceMaskBrush = {};
+    PaintInteractionMode interactionMode = PaintInteractionMode::PaintBalls;
     bool fireHeld = false;
+    bool surfaceBrushHeld = false;
+    bool surfaceBrushHitValid = false;
     float fireCooldown = 0.0f;
+    float surfaceBrushCooldown = 0.0f;
+    Vec3 surfaceBrushHitPosition = {};
+    Vec3 surfaceBrushHitNormal = {0.0f, 1.0f, 0.0f};
     std::array<PaintSplat, kMaxPaintSplats> splats = {};
     std::uint32_t splatCount = 0;
     std::uint32_t nextSplatIndex = 0;

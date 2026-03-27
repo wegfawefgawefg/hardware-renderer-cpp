@@ -278,29 +278,55 @@ void App::BuildPaintBallsWindow(bool& debugSettingsChanged)
         debugSettingsChanged |= ImGui::SliderFloat("Restitution", &paint.ballSettings.restitution, 0.0f, 0.95f, "%.2f");
         debugSettingsChanged |= ImGui::SliderFloat("Ball radius", &paint.ballSettings.radius, 0.04f, 0.30f, "%.2f");
         debugSettingsChanged |= ImGui::SliderFloat("Blob radius", &paint.ballSettings.blobRadius, 0.08f, 1.20f, "%.2f");
-        static const char* maskChannelNames[] = {"Grime", "Glow", "Wetness", "Vanish"};
-        int maskChannel = static_cast<int>(paint.ballSettings.maskChannel);
-        debugSettingsChanged |= ImGui::Combo("Mask brush", &maskChannel, maskChannelNames, 4);
-        paint.ballSettings.maskChannel = static_cast<SurfaceMaskChannel>(maskChannel);
-        debugSettingsChanged |= ImGui::SliderFloat("Mask strength", &paint.ballSettings.maskStrength, 0.05f, 1.0f, "%.2f");
         debugSettingsChanged |= ImGui::ColorEdit3("Paint color", &paint.ballSettings.baseColor.x);
         debugSettingsChanged |= ImGui::Checkbox("Cycle color on shoot", &paint.ballSettings.cycleColorOnShoot);
         ImGui::Separator();
-        if (m_state.lighting.sceneKind == SceneKind::PlayerMaskTest)
+        ImGui::TextUnformatted("Play mode: hold left click to rapid fire paint balls");
+        ImGui::TextUnformatted("Mouse mode: Shift + Left click places test-scene tools");
+    }
+    ImGui::End();
+}
+
+void App::BuildSurfaceMasksWindow(bool& debugSettingsChanged)
+{
+    auto& paint = m_state.paint;
+    auto& lighting = m_state.lighting;
+    ImGuiViewport* viewport = ImGui::GetMainViewport();
+    ImVec2 pos(
+        viewport->WorkPos.x + viewport->WorkSize.x - kRightColumnWindowSize.x - kWindowPad,
+        viewport->WorkPos.y + kRightColumnWindowSize.y + 132.0f + 252.0f + kWindowPad * 4.0f
+    );
+    ImGui::SetNextWindowPos(pos, ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(300.0f, 220.0f), ImGuiCond_FirstUseEver);
+    if (ImGui::Begin("Surface Masks"))
+    {
+        static const char* interactionNames[] = {"Paint Balls", "Surface Brush"};
+        int interactionMode = static_cast<int>(paint.interactionMode);
+        debugSettingsChanged |= ImGui::Combo("Interaction", &interactionMode, interactionNames, 2);
+        paint.interactionMode = static_cast<PaintInteractionMode>(interactionMode);
+
+        static const char* maskChannelNames[] = {"Grime", "Glow", "Wetness", "Vanish"};
+        int maskChannel = static_cast<int>(paint.surfaceMaskBrush.channel);
+        debugSettingsChanged |= ImGui::Combo("Brush channel", &maskChannel, maskChannelNames, 4);
+        paint.surfaceMaskBrush.channel = static_cast<SurfaceMaskChannel>(maskChannel);
+        debugSettingsChanged |= ImGui::SliderFloat("Brush radius", &paint.surfaceMaskBrush.radius, 0.05f, 1.20f, "%.2f");
+        debugSettingsChanged |= ImGui::SliderFloat("Brush strength", &paint.surfaceMaskBrush.strength, 0.05f, 1.0f, "%.2f");
+        debugSettingsChanged |= ImGui::SliderFloat("Brush rate", &paint.surfaceMaskBrush.flowRate, 1.0f, 48.0f, "%.1f /s");
+        ImGui::Separator();
+        ImGui::TextUnformatted("Layer meanings in Player Mask Test:");
+        ImGui::BulletText("R grime");
+        ImGui::BulletText("G glow");
+        ImGui::BulletText("B wetness");
+        ImGui::BulletText("A vanish");
+        ImGui::Separator();
+        if (lighting.sceneKind == SceneKind::PlayerMaskTest)
         {
-            ImGui::TextUnformatted("Persistent surface masks:");
-            ImGui::BulletText("R grime");
-            ImGui::BulletText("G glow");
-            ImGui::BulletText("B wetness");
-            ImGui::BulletText("A vanish");
+            ImGui::TextUnformatted("Surface Brush uses a direct camera ray and does not spawn paint splats.");
         }
         else
         {
-            ImGui::TextUnformatted("Persistent masks are only active in Player Mask Test.");
+            ImGui::TextUnformatted("Persistent surface masks are only active in Player Mask Test.");
         }
-        ImGui::Separator();
-        ImGui::TextUnformatted("Play mode: hold left click to rapid fire");
-        ImGui::TextUnformatted("Mouse mode: Shift + Left click places test-scene tools");
     }
     ImGui::End();
 }

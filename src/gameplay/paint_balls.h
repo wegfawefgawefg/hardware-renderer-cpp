@@ -7,6 +7,20 @@
 #include "collision/triangle_collider.h"
 #include "math_types.h"
 
+enum class SurfaceMaskChannel : std::uint32_t
+{
+    Grime = 0,
+    Glow = 1,
+    Wetness = 2,
+    Vanish = 3,
+};
+
+enum class PaintInteractionMode : std::uint32_t
+{
+    PaintBalls = 0,
+    SurfaceBrush = 1,
+};
+
 struct PaintBallSettings
 {
     static constexpr std::uint32_t kMaxBalls = 64;
@@ -20,6 +34,16 @@ struct PaintBallSettings
     float fireRate = 8.0f;
     float gravity = 22.0f;
     float restitution = 0.72f;
+    SurfaceMaskChannel maskChannel = SurfaceMaskChannel::Grime;
+    float maskStrength = 0.8f;
+};
+
+struct SurfaceMaskBrushSettings
+{
+    SurfaceMaskChannel channel = SurfaceMaskChannel::Grime;
+    float strength = 0.85f;
+    float radius = 0.30f;
+    float flowRate = 18.0f;
 };
 
 struct PaintBall
@@ -44,6 +68,8 @@ struct PaintSplatSpawn
     std::uint32_t primitiveIndex = UINT32_MAX;
     Vec2 uv = {};
     float uvWorldScale = 1.0f;
+    std::uint32_t maskChannel = 0;
+    float maskStrength = 0.8f;
 };
 
 struct PaintBallSystem

@@ -137,6 +137,46 @@ bool App::TryFirePaintBall()
     return true;
 }
 
+bool App::TryApplySurfaceMaskBrush()
+{
+    auto& core = m_state.core;
+    auto& lighting = m_state.lighting;
+    auto& paint = m_state.paint;
+    paint.surfaceBrushHitValid = false;
+    if (lighting.sceneKind != SceneKind::PlayerMaskTest)
+    {
+        return false;
+    }
+
+    Vec3 forward = CameraRayDirection(core.camera);
+    TriangleMeshCollider::RayHit hit = core.worldCollider.Raycast(core.camera.position, forward, 200.0f);
+    if (!hit.hit)
+    {
+        return false;
+    }
+
+    paint.surfaceBrushHitValid = true;
+    paint.surfaceBrushHitPosition = hit.position;
+    paint.surfaceBrushHitNormal = hit.normal;
+
+    PaintSplatSpawn splat{};
+    splat.position = Vec3Add(hit.position, Vec3Scale(hit.normal, 0.01f));
+    splat.normal = hit.normal;
+    splat.color = paint.ballSettings.baseColor;
+    splat.radius = std::max(paint.surfaceMaskBrush.radius, 0.05f);
+    splat.entityIndex = hit.entityIndex;
+    splat.primitiveIndex = hit.primitiveIndex;
+    splat.uv = hit.uv;
+    splat.uvWorldScale = hit.uvWorldScale;
+    splat.maskChannel = static_cast<std::uint32_t>(paint.surfaceMaskBrush.channel);
+    splat.maskStrength = paint.surfaceMaskBrush.strength;
+    AppendPersistentPaint(splat);
+
+    float flowRate = std::max(paint.surfaceMaskBrush.flowRate, 0.01f);
+    paint.surfaceBrushCooldown = 1.0f / flowRate;
+    return true;
+}
+
 void App::UpdatePaintBalls(float dtSeconds)
 {
     auto& core = m_state.core;
@@ -162,5 +202,43 @@ void App::UpdatePaintBalls(float dtSeconds)
     {
         AppendPaintSplat(splat);
         AppendPersistentPaint(splat);
+    }
+}
+
+void App::UpdateSurfaceMaskBrush(float dtSeconds)
+{
+    auto& core = m_state.core;
+    auto& runtime = m_state.runtime;
+    auto& lighting = m_state.lighting;
+    auto& paint = m_state.paint;
+    paint.surfaceBrushCooldown = std::max(0.0f, paint.surfaceBrushCooldown - dtSeconds);
+    paint.surfaceBrushHitValid = false;
+
+    if (lighting.sceneKind != SceneKind::PlayerMaskTest ||
+        paint.interactionMode != PaintInteractionMode::SurfaceBrush)
+    {
+        return;
+    }
+
+    Vec3 forward = CameraRayDirection(core.camera);
+    TriangleMeshCollider::RayHit hit = core.worldCollider.Raycast(core.camera.position, forward, 200.0f);
+    if (hit.hit)
+    {
+        paint.surfaceBrushHitValid = true;
+        paint.surfaceBrushHitPosition = hit.position;
+        paint.surfaceBrushHitNormal = hit.normal;
+    }
+
+    if (paint.surfaceBrushHeld &&
+        runtime.mouseCaptured &&
+        (ImGui::GetCurrentContext() == nullptr || !ImGui::GetIO().WantCaptureMouse))
+    {
+        while (paint.surfaceBrushCooldown <= 0.0f)
+        {
+            if (!TryApplySurfaceMaskBrush())
+            {
+                break;
+            }
+        }
     }
 }

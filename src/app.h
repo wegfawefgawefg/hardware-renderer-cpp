@@ -32,7 +32,9 @@ struct App
     void TryPlaceVehicleLight(int mouseX, int mouseY);
     int FindActiveVehicleLightIndex() const;
     bool TryFirePaintBall();
+    bool TryApplySurfaceMaskBrush();
     void UpdatePaintBalls(float dtSeconds);
+    void UpdateSurfaceMaskBrush(float dtSeconds);
     void AppendPaintSplat(const PaintSplatSpawn& splat);
     void AppendPersistentPaint(const PaintSplatSpawn& splat);
     std::uint32_t CountAccumulatedPaintStamps() const;
@@ -43,6 +45,7 @@ struct App
     void BuildShadowsWindow(bool& debugSettingsChanged);
     void BuildSpotlightsWindow(bool& debugSettingsChanged);
     void BuildPaintBallsWindow(bool& debugSettingsChanged);
+    void BuildSurfaceMasksWindow(bool& debugSettingsChanged);
     void BuildVehicleLightsWindow(bool& debugSettingsChanged);
 
     SDL_Window* m_window = nullptr;

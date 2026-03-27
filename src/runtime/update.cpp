@@ -61,8 +61,16 @@ void App::HandleEvent(const SDL_Event& event)
             }
             else if (runtime.mouseCaptured)
             {
-                paint.fireHeld = true;
-                TryFirePaintBall();
+                if (paint.interactionMode == PaintInteractionMode::PaintBalls)
+                {
+                    paint.fireHeld = true;
+                    TryFirePaintBall();
+                }
+                else
+                {
+                    paint.surfaceBrushHeld = true;
+                    TryApplySurfaceMaskBrush();
+                }
             }
         }
         break;
@@ -70,6 +78,7 @@ void App::HandleEvent(const SDL_Event& event)
         if (event.button.button == SDL_BUTTON_LEFT)
         {
             paint.fireHeld = false;
+            paint.surfaceBrushHeld = false;
         }
         break;
     case SDL_EVENT_MOUSE_MOTION:
@@ -114,10 +123,18 @@ void App::Update(float dtSeconds)
 
     auto inputStart = Clock::now();
     bool imguiCapturingKeyboard = ImGui::GetCurrentContext() != nullptr && ImGui::GetIO().WantCaptureKeyboard;
-    PlayerUpdateFromInput(core.player, core.worldCollider, core.camera, dtSeconds, runtime.mouseCaptured && !imguiCapturingKeyboard);
-    PlayerSyncCamera(core.player, core.worldCollider, core.camera);
+    if (lighting.sceneKind == SceneKind::PlayerMaskTest)
+    {
+        PlayerFlyUpdate(core.camera, dtSeconds, runtime.mouseCaptured && !imguiCapturingKeyboard);
+    }
+    else
+    {
+        PlayerUpdateFromInput(core.player, core.worldCollider, core.camera, dtSeconds, runtime.mouseCaptured && !imguiCapturingKeyboard);
+        PlayerSyncCamera(core.player, core.worldCollider, core.camera);
+    }
     core.traffic.Update(core.scene, dtSeconds, 64);
     UpdatePaintBalls(dtSeconds);
+    UpdateSurfaceMaskBrush(dtSeconds);
     core.renderer.UpdateSceneTransforms(core.scene);
     auto inputEnd = Clock::now();
     runtime.cpuProfiling.inputMs = std::chrono::duration<float, std::milli>(inputEnd - inputStart).count();
@@ -292,6 +309,43 @@ void App::Update(float dtSeconds)
         debugOptions.customCubeColors[cubeIndex] = Vec4Make(ball.color.x, ball.color.y, ball.color.z, 1.0f);
         ++cubeIndex;
     }
+
+    if (paint.interactionMode == PaintInteractionMode::SurfaceBrush && paint.surfaceBrushHitValid)
+    {
+        if (debugOptions.selectionSphereCount < DebugRenderOptions::kMaxSelectionSpheres)
+        {
+            std::uint32_t sphereIndex = debugOptions.selectionSphereCount++;
+            debugOptions.selectionSpheres[sphereIndex] = Vec4Make(
+                paint.surfaceBrushHitPosition.x,
+                paint.surfaceBrushHitPosition.y,
+                paint.surfaceBrushHitPosition.z,
+                paint.surfaceMaskBrush.radius
+            );
+            Vec3 color = Vec3Make(0.25f, 1.0f, 0.95f);
+            if (paint.surfaceMaskBrush.channel == SurfaceMaskChannel::Grime) color = Vec3Make(0.60f, 0.42f, 0.20f);
+            if (paint.surfaceMaskBrush.channel == SurfaceMaskChannel::Glow) color = Vec3Make(0.20f, 1.0f, 1.0f);
+            if (paint.surfaceMaskBrush.channel == SurfaceMaskChannel::Wetness) color = Vec3Make(0.20f, 0.55f, 1.0f);
+            if (paint.surfaceMaskBrush.channel == SurfaceMaskChannel::Vanish) color = Vec3Make(1.0f, 0.25f, 1.0f);
+            debugOptions.selectionSphereColors[sphereIndex] = Vec4Make(color.x, color.y, color.z, 1.0f);
+        }
+
+        Vec3 beamStart = Vec3Add(core.camera.position, Vec3Scale(CameraForward(core.camera), 0.35f));
+        Vec3 beamEnd = paint.surfaceBrushHitPosition;
+        Vec3 beamColor = Vec3Make(0.25f, 1.0f, 0.95f);
+        if (paint.surfaceMaskBrush.channel == SurfaceMaskChannel::Grime) beamColor = Vec3Make(0.60f, 0.42f, 0.20f);
+        if (paint.surfaceMaskBrush.channel == SurfaceMaskChannel::Glow) beamColor = Vec3Make(0.20f, 1.0f, 1.0f);
+        if (paint.surfaceMaskBrush.channel == SurfaceMaskChannel::Wetness) beamColor = Vec3Make(0.20f, 0.55f, 1.0f);
+        if (paint.surfaceMaskBrush.channel == SurfaceMaskChannel::Vanish) beamColor = Vec3Make(1.0f, 0.25f, 1.0f);
+        for (int i = 0; i < 12 && cubeIndex < DebugRenderOptions::kMaxCustomCubes; ++i)
+        {
+            float t = static_cast<float>(i) / 11.0f;
+            Vec3 p = Vec3Add(beamStart, Vec3Scale(Vec3Sub(beamEnd, beamStart), t));
+            debugOptions.customCubes[cubeIndex] = Vec4Make(p.x, p.y, p.z, 0.018f);
+            debugOptions.customCubeColors[cubeIndex] = Vec4Make(beamColor.x, beamColor.y, beamColor.z, 1.0f);
+            ++cubeIndex;
+        }
+    }
+    debugOptions.customCubeCount = cubeIndex;
 
     auto renderStart = Clock::now();
     core.renderer.Render(
