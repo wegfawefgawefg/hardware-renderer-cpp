@@ -27,15 +27,16 @@ void VulkanRenderer::Initialize(
     CreateCommandObjects();
     CreateSyncObjects();
     CreateSceneBuffers(scene);
+    CreateTextureResources(scene);
     if (characterAsset != nullptr)
     {
         CreateCharacterResources(*characterAsset);
     }
-    CreateTextureResources(scene);
     CreateShadowRenderPass();
     CreateShadowResources();
     CreateDescriptorObjects();
     CreateOverlayDescriptorObjects();
+    CreatePostDescriptorObjects();
 
     int width = 0;
     int height = 0;
@@ -45,6 +46,7 @@ void VulkanRenderer::Initialize(
         static_cast<std::uint32_t>(width > 0 ? width : 1),
         static_cast<std::uint32_t>(height > 0 ? height : 1)
     );
+    CreateSceneRenderPass();
     CreateRenderPass();
     CreatePipeline();
     CreateShadowPipeline();
@@ -52,9 +54,11 @@ void VulkanRenderer::Initialize(
     CreateLightLinePipeline();
     CreateLightSolidPipeline();
     CreateOverlayPipeline();
+    CreatePostPipeline();
     CreateFramebuffers();
     UpdateDescriptorSet();
     UpdateOverlayDescriptorSet();
+    UpdatePostDescriptorSet();
 
     m_initialized = true;
 }
@@ -81,6 +85,11 @@ void VulkanRenderer::Shutdown()
         vkDestroySampler(m_device, m_textureSampler, nullptr);
         m_textureSampler = VK_NULL_HANDLE;
     }
+    if (m_effectSampler != VK_NULL_HANDLE)
+    {
+        vkDestroySampler(m_device, m_effectSampler, nullptr);
+        m_effectSampler = VK_NULL_HANDLE;
+    }
     if (m_paintSampler != VK_NULL_HANDLE)
     {
         vkDestroySampler(m_device, m_paintSampler, nullptr);
@@ -91,6 +100,11 @@ void VulkanRenderer::Shutdown()
         vkDestroySampler(m_device, m_overlaySampler, nullptr);
         m_overlaySampler = VK_NULL_HANDLE;
     }
+    if (m_sceneSampler != VK_NULL_HANDLE)
+    {
+        vkDestroySampler(m_device, m_sceneSampler, nullptr);
+        m_sceneSampler = VK_NULL_HANDLE;
+    }
     if (m_shadowSampler != VK_NULL_HANDLE)
     {
         vkDestroySampler(m_device, m_shadowSampler, nullptr);
@@ -98,12 +112,14 @@ void VulkanRenderer::Shutdown()
     }
 
     DestroyOverlayResources();
+    DestroySceneColorResources();
     DestroyShadowResources();
     for (ImageResource& textureImage : m_textureImages)
     {
         DestroyImage(m_device, textureImage);
     }
     m_textureImages.clear();
+    DestroyImage(m_device, m_effectPatternImage);
     for (ImageResource& paintImage : m_paintImages)
     {
         DestroyImage(m_device, paintImage);
@@ -111,6 +127,7 @@ void VulkanRenderer::Shutdown()
     m_paintImages.clear();
     DestroyImage(m_device, m_blankPaintImage);
     DestroyBuffer(m_device, m_overlayVertexBuffer);
+    DestroyBuffer(m_device, m_postVertexBuffer);
     DestroyBuffer(m_device, m_paintUploadBuffer);
     DestroyBuffer(m_device, m_lightMarkerBuffer);
     DestroyBuffer(m_device, m_lightLineBuffer);
@@ -135,6 +152,11 @@ void VulkanRenderer::Shutdown()
     {
         vkDestroyRenderPass(m_device, m_renderPass, nullptr);
         m_renderPass = VK_NULL_HANDLE;
+    }
+    if (m_sceneRenderPass != VK_NULL_HANDLE)
+    {
+        vkDestroyRenderPass(m_device, m_sceneRenderPass, nullptr);
+        m_sceneRenderPass = VK_NULL_HANDLE;
     }
     if (m_vertShaderModule != VK_NULL_HANDLE)
     {
@@ -166,10 +188,20 @@ void VulkanRenderer::Shutdown()
         vkDestroyPipeline(m_device, m_overlayPipeline, nullptr);
         m_overlayPipeline = VK_NULL_HANDLE;
     }
+    if (m_postPipeline != VK_NULL_HANDLE)
+    {
+        vkDestroyPipeline(m_device, m_postPipeline, nullptr);
+        m_postPipeline = VK_NULL_HANDLE;
+    }
     if (m_overlayPipelineLayout != VK_NULL_HANDLE)
     {
         vkDestroyPipelineLayout(m_device, m_overlayPipelineLayout, nullptr);
         m_overlayPipelineLayout = VK_NULL_HANDLE;
+    }
+    if (m_postPipelineLayout != VK_NULL_HANDLE)
+    {
+        vkDestroyPipelineLayout(m_device, m_postPipelineLayout, nullptr);
+        m_postPipelineLayout = VK_NULL_HANDLE;
     }
     if (m_overlayVertShaderModule != VK_NULL_HANDLE)
     {
@@ -180,6 +212,11 @@ void VulkanRenderer::Shutdown()
     {
         vkDestroyShaderModule(m_device, m_overlayFragShaderModule, nullptr);
         m_overlayFragShaderModule = VK_NULL_HANDLE;
+    }
+    if (m_bloomFragShaderModule != VK_NULL_HANDLE)
+    {
+        vkDestroyShaderModule(m_device, m_bloomFragShaderModule, nullptr);
+        m_bloomFragShaderModule = VK_NULL_HANDLE;
     }
     if (m_lightPipeline != VK_NULL_HANDLE)
     {
@@ -236,10 +273,20 @@ void VulkanRenderer::Shutdown()
         vkDestroyDescriptorPool(m_device, m_overlayDescriptorPool, nullptr);
         m_overlayDescriptorPool = VK_NULL_HANDLE;
     }
+    if (m_postDescriptorPool != VK_NULL_HANDLE)
+    {
+        vkDestroyDescriptorPool(m_device, m_postDescriptorPool, nullptr);
+        m_postDescriptorPool = VK_NULL_HANDLE;
+    }
     if (m_overlayDescriptorSetLayout != VK_NULL_HANDLE)
     {
         vkDestroyDescriptorSetLayout(m_device, m_overlayDescriptorSetLayout, nullptr);
         m_overlayDescriptorSetLayout = VK_NULL_HANDLE;
+    }
+    if (m_postDescriptorSetLayout != VK_NULL_HANDLE)
+    {
+        vkDestroyDescriptorSetLayout(m_device, m_postDescriptorSetLayout, nullptr);
+        m_postDescriptorSetLayout = VK_NULL_HANDLE;
     }
     if (m_imguiInitialized)
     {
@@ -297,6 +344,7 @@ void VulkanRenderer::Resize(std::uint32_t width, std::uint32_t height)
     DestroySwapchain();
     CreateSwapchain(width, height);
     CreateFramebuffers();
+    UpdatePostDescriptorSet();
     if (m_imguiInitialized)
     {
         ImGui_ImplVulkan_SetMinImageCount(static_cast<std::uint32_t>(m_swapchainImages.size()));

@@ -108,7 +108,7 @@ void VulkanRenderer::CreateLightPipeline()
     pipelineInfo.pColorBlendState = &colorBlend;
     pipelineInfo.pDynamicState = &dynamicState;
     pipelineInfo.layout = m_pipelineLayout;
-    pipelineInfo.renderPass = m_renderPass;
+    pipelineInfo.renderPass = m_sceneRenderPass;
     pipelineInfo.subpass = 0;
     CheckVk(
         vkCreateGraphicsPipelines(m_device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_lightPipeline),
@@ -219,7 +219,7 @@ void VulkanRenderer::CreateLightLinePipeline()
     pipelineInfo.pColorBlendState = &colorBlend;
     pipelineInfo.pDynamicState = &dynamicState;
     pipelineInfo.layout = m_pipelineLayout;
-    pipelineInfo.renderPass = m_renderPass;
+    pipelineInfo.renderPass = m_sceneRenderPass;
     pipelineInfo.subpass = 0;
 
     CheckVk(
@@ -329,7 +329,7 @@ void VulkanRenderer::CreateLightSolidPipeline()
     pipelineInfo.pColorBlendState = &colorBlend;
     pipelineInfo.pDynamicState = &dynamicState;
     pipelineInfo.layout = m_pipelineLayout;
-    pipelineInfo.renderPass = m_renderPass;
+    pipelineInfo.renderPass = m_sceneRenderPass;
     pipelineInfo.subpass = 0;
 
     CheckVk(

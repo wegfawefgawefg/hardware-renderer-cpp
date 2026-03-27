@@ -74,6 +74,41 @@ ModelData MakeBoxModel(Vec3 halfExtents, std::uint8_t r, std::uint8_t g, std::ui
     return model;
 }
 
+ModelData MakePlaneModel(float halfExtent, std::uint8_t r, std::uint8_t g, std::uint8_t b)
+{
+    ModelData model{};
+    model.textures.push_back(MakeSolidTextureData(r, g, b));
+    model.materials.push_back(MaterialData{.name = "solid", .textureIndex = 0});
+
+    model.mesh.vertices.push_back(Vertex{
+        .position = Vec3Make(-halfExtent, 0.0f, -halfExtent),
+        .normal = Vec3Make(0.0f, 1.0f, 0.0f),
+        .uv = Vec2Make(0.0f, 0.0f),
+    });
+    model.mesh.vertices.push_back(Vertex{
+        .position = Vec3Make(halfExtent, 0.0f, -halfExtent),
+        .normal = Vec3Make(0.0f, 1.0f, 0.0f),
+        .uv = Vec2Make(1.0f, 0.0f),
+    });
+    model.mesh.vertices.push_back(Vertex{
+        .position = Vec3Make(halfExtent, 0.0f, halfExtent),
+        .normal = Vec3Make(0.0f, 1.0f, 0.0f),
+        .uv = Vec2Make(1.0f, 1.0f),
+    });
+    model.mesh.vertices.push_back(Vertex{
+        .position = Vec3Make(-halfExtent, 0.0f, halfExtent),
+        .normal = Vec3Make(0.0f, 1.0f, 0.0f),
+        .uv = Vec2Make(0.0f, 1.0f),
+    });
+    model.mesh.indices.insert(model.mesh.indices.end(), {0, 2, 1, 0, 3, 2});
+    model.primitives.push_back(PrimitiveData{
+        .firstIndex = 0,
+        .indexCount = static_cast<std::uint32_t>(model.mesh.indices.size()),
+        .materialIndex = 0,
+    });
+    return model;
+}
+
 float ComputeModelFootprint(const ModelData& model)
 {
     if (model.mesh.vertices.empty())
@@ -114,10 +149,10 @@ Vec3 ComputeModelMin(const ModelData& model)
 SceneData BuildPlayerMaskTestScene(const AssetRegistry& assetRegistry)
 {
     SceneData scene{};
-    scene.models.push_back(MakeBoxModel(Vec3Make(18.0f, 0.25f, 18.0f), 220, 220, 220));
+    scene.models.push_back(MakePlaneModel(18.0f, 220, 220, 220));
     scene.entities.push_back(EntityData{
         .modelIndex = 0,
-        .transform = Mat4Translate(Vec3Make(0.0f, -0.25f, 0.0f)),
+        .transform = Mat4Identity(),
         .collidable = true,
     });
 
@@ -134,9 +169,31 @@ SceneData BuildPlayerMaskTestScene(const AssetRegistry& assetRegistry)
     }
 
     const std::filesystem::path* texturePath = assetRegistry.FindByRelativePath(kCharacterTextureAsset);
-    if (texturePath != nullptr && !characterModel.textures.empty())
+    if (texturePath != nullptr)
     {
-        characterModel.textures[0] = LoadTexture(texturePath->string());
+        TextureData skinTexture = LoadTexture(texturePath->string());
+        if (characterModel.textures.empty())
+        {
+            characterModel.textures.push_back(skinTexture);
+            if (characterModel.materials.empty())
+            {
+                characterModel.materials.push_back(MaterialData{.name = "skin", .textureIndex = 0});
+            }
+            else
+            {
+                for (MaterialData& material : characterModel.materials)
+                {
+                    material.textureIndex = 0;
+                }
+            }
+        }
+        else
+        {
+            for (TextureData& texture : characterModel.textures)
+            {
+                texture = skinTexture;
+            }
+        }
     }
 
     Vec3 modelMin = ComputeModelMin(characterModel);

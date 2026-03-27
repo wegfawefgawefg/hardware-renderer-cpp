@@ -171,7 +171,7 @@ void App::Update(float dtSeconds)
         200.0f
     );
     uniforms.proj.m[5] *= -1.0f;
-    uniforms.cameraPosition = Vec4Make(core.camera.position.x, core.camera.position.y, core.camera.position.z, 1.0f);
+    uniforms.cameraPosition = Vec4Make(core.camera.position.x, core.camera.position.y, core.camera.position.z, runtime.elapsedSeconds);
 
     auto lightingStart = Clock::now();
     ApplyLighting(uniforms, dtSeconds);
@@ -196,7 +196,7 @@ void App::Update(float dtSeconds)
     }
     uniforms.paintSplatCounts = Vec4Make(
         static_cast<float>(paint.splatCount),
-        m_state.lighting.debugVisualizeUv ? 1.0f : 0.0f,
+        static_cast<float>(m_state.lighting.materialDebugMode),
         m_state.lighting.uvDebugScale,
         static_cast<float>(m_state.lighting.uvDebugMode)
     );

@@ -75,7 +75,7 @@ void VulkanRenderer::AppendPersistentPaint(const PaintSplatSpawn& splat)
     std::uint32_t channel = std::min(splat.maskChannel, 3u);
     float strength = std::clamp(splat.maskStrength, 0.0f, 1.0f);
     float centerX = splat.uv.x * static_cast<float>(kPaintTextureSize - 1);
-    float centerY = (1.0f - splat.uv.y) * static_cast<float>(kPaintTextureSize - 1);
+    float centerY = splat.uv.y * static_cast<float>(kPaintTextureSize - 1);
     int minX = std::max(0, static_cast<int>(std::floor(centerX - uvRadius * kPaintTextureSize)));
     int maxX = std::min(static_cast<int>(kPaintTextureSize - 1), static_cast<int>(std::ceil(centerX + uvRadius * kPaintTextureSize)));
     int minY = std::max(0, static_cast<int>(std::floor(centerY - uvRadius * kPaintTextureSize)));
@@ -86,7 +86,7 @@ void VulkanRenderer::AppendPersistentPaint(const PaintSplatSpawn& splat)
         for (int x = minX; x <= maxX; ++x)
         {
             float u = (static_cast<float>(x) + 0.5f) / static_cast<float>(kPaintTextureSize - 1);
-            float v = 1.0f - (static_cast<float>(y) + 0.5f) / static_cast<float>(kPaintTextureSize - 1);
+            float v = (static_cast<float>(y) + 0.5f) / static_cast<float>(kPaintTextureSize - 1);
             float dist = UvDistance(Vec2Make(u, v), splat.uv);
             if (dist >= uvRadius)
             {

@@ -14,6 +14,7 @@ constexpr std::string_view kVertShaderPath = HARDWARE_RENDERER_VERT_SHADER_PATH;
 constexpr std::string_view kFragShaderPath = HARDWARE_RENDERER_FRAG_SHADER_PATH;
 constexpr std::string_view kOverlayVertShaderPath = HARDWARE_RENDERER_OVERLAY_VERT_SHADER_PATH;
 constexpr std::string_view kOverlayFragShaderPath = HARDWARE_RENDERER_OVERLAY_FRAG_SHADER_PATH;
+constexpr std::string_view kBloomFragShaderPath = HARDWARE_RENDERER_BLOOM_FRAG_SHADER_PATH;
 constexpr std::string_view kLightVertShaderPath = HARDWARE_RENDERER_LIGHT_VERT_SHADER_PATH;
 constexpr std::string_view kLightFragShaderPath = HARDWARE_RENDERER_LIGHT_FRAG_SHADER_PATH;
 constexpr std::string_view kLightLineFragShaderPath = HARDWARE_RENDERER_LIGHT_LINE_FRAG_SHADER_PATH;

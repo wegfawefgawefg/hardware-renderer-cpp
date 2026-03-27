@@ -1,0 +1,4 @@
+https://gpuopen.com/learn/rdna-performance-guide/
+
+https://www.vulkanprogrammingguide.com/
+https://github.khronos.org/Vulkan-Site/guide/latest/shader_memory_layout.html

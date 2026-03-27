@@ -127,6 +127,14 @@ void VulkanRenderer::CreateSceneBuffers(const SceneData& scene)
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
         true
     );
+    m_postVertexBuffer = CreateBuffer(
+        m_physicalDevice,
+        m_device,
+        sizeof(OverlayVertex) * 6,
+        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        true
+    );
     m_paintUploadBuffer = CreateBuffer(
         m_physicalDevice,
         m_device,
@@ -176,6 +184,7 @@ void VulkanRenderer::CreateSceneBuffers(const SceneData& scene)
         1
     );
     std::memcpy(m_overlayVertexBuffer.mapped, quad.data(), sizeof(quad));
+    std::memcpy(m_postVertexBuffer.mapped, quad.data(), sizeof(quad));
 }
 
 void VulkanRenderer::UpdateSceneTransforms(const SceneData& scene)

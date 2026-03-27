@@ -99,6 +99,7 @@ struct LightingState
     float shadowedSpotLightActivationForwardOffset = 6.0f;
     float uvDebugScale = 8.0f;
     std::uint32_t uvDebugMode = 0;
+    std::uint32_t materialDebugMode = 0;
     Vec3 sunWorldPosition = {};
     Vec3 moonWorldPosition = {};
     Vec3 spotLightSourceOffset = {};

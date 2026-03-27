@@ -145,13 +145,16 @@ struct VulkanRenderer
     void CreateSwapchain(std::uint32_t width, std::uint32_t height);
     void DestroySwapchain();
     void CreateRenderPass();
+    void CreateSceneRenderPass();
     void CreateFramebuffers();
     void CreateCommandObjects();
     void CreateSyncObjects();
     void CreateDescriptorObjects();
     void CreatePipeline();
     void CreateOverlayDescriptorObjects();
+    void CreatePostDescriptorObjects();
     void CreateOverlayPipeline();
+    void CreatePostPipeline();
     void CreateLightPipeline();
     void CreateLightLinePipeline();
     void CreateLightSolidPipeline();
@@ -177,10 +180,13 @@ struct VulkanRenderer
     void CreateCharacterResources(const SkinnedCharacterAsset& characterAsset);
     void CreateOverlayResources();
     void DestroyOverlayResources();
+    void CreateSceneColorResources();
+    void DestroySceneColorResources();
     void CreateDepthResources();
     void UpdateDescriptorSet();
     void UpdatePaintDescriptorSet(std::uint32_t descriptorIndex);
     void UpdateOverlayDescriptorSet();
+    void UpdatePostDescriptorSet();
     void RecordShadowPass(VkCommandBuffer commandBuffer, std::uint32_t cascadeIndex);
     void RecordCommandBuffer(std::uint32_t imageIndex);
 
@@ -205,8 +211,10 @@ struct VulkanRenderer
     std::vector<VkImage> m_swapchainImages;
     std::vector<VkImageView> m_swapchainImageViews;
     std::vector<VkFramebuffer> m_framebuffers;
+    VkFramebuffer m_sceneFramebuffer = VK_NULL_HANDLE;
 
     VkRenderPass m_renderPass = VK_NULL_HANDLE;
+    VkRenderPass m_sceneRenderPass = VK_NULL_HANDLE;
     VkDescriptorSetLayout m_descriptorSetLayout = VK_NULL_HANDLE;
     VkDescriptorPool m_descriptorPool = VK_NULL_HANDLE;
     std::vector<VkDescriptorSet> m_descriptorSets;
@@ -215,12 +223,18 @@ struct VulkanRenderer
     VkShaderModule m_vertShaderModule = VK_NULL_HANDLE;
     VkShaderModule m_fragShaderModule = VK_NULL_HANDLE;
     VkDescriptorSetLayout m_overlayDescriptorSetLayout = VK_NULL_HANDLE;
+    VkDescriptorSetLayout m_postDescriptorSetLayout = VK_NULL_HANDLE;
     VkDescriptorPool m_overlayDescriptorPool = VK_NULL_HANDLE;
+    VkDescriptorPool m_postDescriptorPool = VK_NULL_HANDLE;
     VkDescriptorSet m_overlayDescriptorSet = VK_NULL_HANDLE;
+    VkDescriptorSet m_postDescriptorSet = VK_NULL_HANDLE;
     VkPipelineLayout m_overlayPipelineLayout = VK_NULL_HANDLE;
+    VkPipelineLayout m_postPipelineLayout = VK_NULL_HANDLE;
     VkPipeline m_overlayPipeline = VK_NULL_HANDLE;
+    VkPipeline m_postPipeline = VK_NULL_HANDLE;
     VkShaderModule m_overlayVertShaderModule = VK_NULL_HANDLE;
     VkShaderModule m_overlayFragShaderModule = VK_NULL_HANDLE;
+    VkShaderModule m_bloomFragShaderModule = VK_NULL_HANDLE;
     VkPipeline m_lightPipeline = VK_NULL_HANDLE;
     VkPipeline m_lightLinePipeline = VK_NULL_HANDLE;
     VkPipeline m_lightSolidPipeline = VK_NULL_HANDLE;
@@ -248,6 +262,7 @@ struct VulkanRenderer
     BufferResource m_uniformBuffer;
     BufferResource m_overlayUploadBuffer;
     BufferResource m_overlayVertexBuffer;
+    BufferResource m_postVertexBuffer;
     BufferResource m_paintUploadBuffer;
     BufferResource m_lightMarkerBuffer;
     BufferResource m_lightLineBuffer;
@@ -256,11 +271,15 @@ struct VulkanRenderer
     BufferResource m_characterIndexBuffer;
     std::vector<ImageResource> m_textureImages;
     VkSampler m_textureSampler = VK_NULL_HANDLE;
+    ImageResource m_effectPatternImage;
+    VkSampler m_effectSampler = VK_NULL_HANDLE;
     std::vector<ImageResource> m_paintImages;
     VkSampler m_paintSampler = VK_NULL_HANDLE;
     ImageResource m_blankPaintImage;
     ImageResource m_overlayImage;
     VkSampler m_overlaySampler = VK_NULL_HANDLE;
+    ImageResource m_sceneColorImage;
+    VkSampler m_sceneSampler = VK_NULL_HANDLE;
     ImageResource m_depthImage;
     std::array<ImageResource, kTotalShadowMaps> m_shadowImages = {};
     VkSampler m_shadowSampler = VK_NULL_HANDLE;

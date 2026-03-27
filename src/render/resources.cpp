@@ -99,6 +99,61 @@ ImageResource CreateSolidColorImage(
 
 void VulkanRenderer::CreateTextureResources(const SceneData& scene)
 {
+    auto uploadTexture = [&](const TextureData& texture, VkFormat format) -> ImageResource {
+        VkDeviceSize imageSize = static_cast<VkDeviceSize>(texture.pixels.size());
+
+        BufferResource stagingBuffer = CreateBuffer(
+            m_physicalDevice,
+            m_device,
+            imageSize,
+            VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+            true
+        );
+        std::memcpy(stagingBuffer.mapped, texture.pixels.data(), static_cast<std::size_t>(imageSize));
+
+        ImageResource image = CreateImage2D(
+            m_physicalDevice,
+            m_device,
+            texture.width,
+            texture.height,
+            format,
+            VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+            VK_IMAGE_ASPECT_COLOR_BIT
+        );
+
+        TransitionImageLayout(
+            m_device,
+            m_graphicsQueue,
+            m_commandPool,
+            image.image,
+            VK_IMAGE_ASPECT_COLOR_BIT,
+            VK_IMAGE_LAYOUT_UNDEFINED,
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+        );
+        CopyBufferToImage(
+            m_device,
+            m_graphicsQueue,
+            m_commandPool,
+            stagingBuffer.buffer,
+            image.image,
+            texture.width,
+            texture.height
+        );
+        TransitionImageLayout(
+            m_device,
+            m_graphicsQueue,
+            m_commandPool,
+            image.image,
+            VK_IMAGE_ASPECT_COLOR_BIT,
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+        );
+
+        DestroyBuffer(m_device, stagingBuffer);
+        return image;
+    };
+
     for (const EntityData& entity : scene.entities)
     {
         if (entity.modelIndex >= scene.models.size())
@@ -110,58 +165,7 @@ void VulkanRenderer::CreateTextureResources(const SceneData& scene)
         for (const PrimitiveData& primitive : model.primitives)
         {
             TextureData texture = GetPrimitiveTexture(scene, entity, primitive);
-            VkDeviceSize imageSize = static_cast<VkDeviceSize>(texture.pixels.size());
-
-            BufferResource stagingBuffer = CreateBuffer(
-                m_physicalDevice,
-                m_device,
-                imageSize,
-                VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                true
-            );
-            std::memcpy(stagingBuffer.mapped, texture.pixels.data(), static_cast<std::size_t>(imageSize));
-
-            ImageResource image = CreateImage2D(
-                m_physicalDevice,
-                m_device,
-                texture.width,
-                texture.height,
-                VK_FORMAT_R8G8B8A8_SRGB,
-                VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-                VK_IMAGE_ASPECT_COLOR_BIT
-            );
-
-            TransitionImageLayout(
-                m_device,
-                m_graphicsQueue,
-                m_commandPool,
-                image.image,
-                VK_IMAGE_ASPECT_COLOR_BIT,
-                VK_IMAGE_LAYOUT_UNDEFINED,
-                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
-            );
-            CopyBufferToImage(
-                m_device,
-                m_graphicsQueue,
-                m_commandPool,
-                stagingBuffer.buffer,
-                image.image,
-                texture.width,
-                texture.height
-            );
-            TransitionImageLayout(
-                m_device,
-                m_graphicsQueue,
-                m_commandPool,
-                image.image,
-                VK_IMAGE_ASPECT_COLOR_BIT,
-                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-            );
-
-            m_textureImages.push_back(image);
-            DestroyBuffer(m_device, stagingBuffer);
+            m_textureImages.push_back(uploadTexture(texture, VK_FORMAT_R8G8B8A8_SRGB));
         }
     }
 
@@ -178,6 +182,22 @@ void VulkanRenderer::CreateTextureResources(const SceneData& scene)
     samplerInfo.minLod = 0.0f;
     samplerInfo.maxLod = 0.0f;
     CheckVk(vkCreateSampler(m_device, &samplerInfo, nullptr, &m_textureSampler), "vkCreateSampler");
+
+    VkSamplerCreateInfo effectSamplerInfo{};
+    effectSamplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    effectSamplerInfo.magFilter = VK_FILTER_LINEAR;
+    effectSamplerInfo.minFilter = VK_FILTER_LINEAR;
+    effectSamplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    effectSamplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    effectSamplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    effectSamplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    effectSamplerInfo.maxAnisotropy = 1.0f;
+    effectSamplerInfo.minLod = 0.0f;
+    effectSamplerInfo.maxLod = 0.0f;
+    CheckVk(vkCreateSampler(m_device, &effectSamplerInfo, nullptr, &m_effectSampler), "vkCreateSampler(effect)");
+
+    TextureData effectPattern = LoadTexture(std::string(HARDWARE_RENDERER_ASSETS_ROOT) + "/waterdrops.png");
+    m_effectPatternImage = uploadTexture(effectPattern, VK_FORMAT_R8G8B8A8_UNORM);
 
     VkSamplerCreateInfo paintSamplerInfo{};
     paintSamplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
@@ -273,6 +293,37 @@ void VulkanRenderer::DestroyOverlayResources()
 {
     DestroyImage(m_device, m_overlayImage);
     DestroyBuffer(m_device, m_overlayUploadBuffer);
+}
+
+void VulkanRenderer::CreateSceneColorResources()
+{
+    m_sceneColorImage = CreateImage2D(
+        m_physicalDevice,
+        m_device,
+        m_swapchainExtent.width,
+        m_swapchainExtent.height,
+        m_swapchainFormat,
+        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+        VK_IMAGE_ASPECT_COLOR_BIT
+    );
+
+    VkSamplerCreateInfo samplerInfo{};
+    samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    samplerInfo.magFilter = VK_FILTER_LINEAR;
+    samplerInfo.minFilter = VK_FILTER_LINEAR;
+    samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    samplerInfo.maxAnisotropy = 1.0f;
+    samplerInfo.minLod = 0.0f;
+    samplerInfo.maxLod = 0.0f;
+    CheckVk(vkCreateSampler(m_device, &samplerInfo, nullptr, &m_sceneSampler), "vkCreateSampler(scene)");
+}
+
+void VulkanRenderer::DestroySceneColorResources()
+{
+    DestroyImage(m_device, m_sceneColorImage);
 }
 
 void VulkanRenderer::CreateDepthResources()
@@ -438,7 +489,20 @@ void VulkanRenderer::UpdateDescriptorSet()
         paintWrite.descriptorCount = 1;
         paintWrite.pImageInfo = &paintInfo;
 
-        std::array<VkWriteDescriptorSet, 4> writes = {uniformWrite, imageWrite, shadowWrite, paintWrite};
+        VkDescriptorImageInfo effectInfo{};
+        effectInfo.sampler = m_effectSampler;
+        effectInfo.imageView = m_effectPatternImage.view;
+        effectInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+        VkWriteDescriptorSet effectWrite{};
+        effectWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        effectWrite.dstSet = m_descriptorSets[i];
+        effectWrite.dstBinding = 4;
+        effectWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        effectWrite.descriptorCount = 1;
+        effectWrite.pImageInfo = &effectInfo;
+
+        std::array<VkWriteDescriptorSet, 5> writes = {uniformWrite, imageWrite, shadowWrite, paintWrite, effectWrite};
         vkUpdateDescriptorSets(m_device, static_cast<std::uint32_t>(writes.size()), writes.data(), 0, nullptr);
     }
 }
@@ -482,6 +546,24 @@ void VulkanRenderer::UpdateOverlayDescriptorSet()
     VkWriteDescriptorSet imageWrite{};
     imageWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     imageWrite.dstSet = m_overlayDescriptorSet;
+    imageWrite.dstBinding = 0;
+    imageWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    imageWrite.descriptorCount = 1;
+    imageWrite.pImageInfo = &imageInfo;
+
+    vkUpdateDescriptorSets(m_device, 1, &imageWrite, 0, nullptr);
+}
+
+void VulkanRenderer::UpdatePostDescriptorSet()
+{
+    VkDescriptorImageInfo imageInfo{};
+    imageInfo.sampler = m_sceneSampler;
+    imageInfo.imageView = m_sceneColorImage.view;
+    imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+    VkWriteDescriptorSet imageWrite{};
+    imageWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    imageWrite.dstSet = m_postDescriptorSet;
     imageWrite.dstBinding = 0;
     imageWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
     imageWrite.descriptorCount = 1;

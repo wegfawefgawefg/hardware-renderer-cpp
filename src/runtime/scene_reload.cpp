@@ -16,6 +16,56 @@ Vec3 RotateYOffset(Vec3 v, float yawDegrees)
         -s * v.x + c * v.z
     );
 }
+
+ModelData BuildStaticCharacterModel(const SkinnedCharacterAsset& asset)
+{
+    ModelData model{};
+    model.mesh = asset.mesh;
+    model.textures.push_back(asset.texture);
+    model.materials.push_back(MaterialData{.name = "skin", .textureIndex = 0});
+    model.primitives.push_back(PrimitiveData{
+        .firstIndex = 0,
+        .indexCount = static_cast<std::uint32_t>(model.mesh.indices.size()),
+        .materialIndex = 0,
+    });
+    return model;
+}
+
+float ComputeStaticModelFootprint(const ModelData& model, Mat4 transform)
+{
+    if (model.mesh.vertices.empty())
+    {
+        return 1.0f;
+    }
+
+    Vec3 mn = Vec3Make(1e30f, 1e30f, 1e30f);
+    Vec3 mx = Vec3Make(-1e30f, -1e30f, -1e30f);
+    for (const Vertex& vertex : model.mesh.vertices)
+    {
+        Vec4 p = Mat4MulVec4(transform, Vec4Make(vertex.position.x, vertex.position.y, vertex.position.z, 1.0f));
+        mn.x = std::min(mn.x, p.x);
+        mn.z = std::min(mn.z, p.z);
+        mx.x = std::max(mx.x, p.x);
+        mx.z = std::max(mx.z, p.z);
+    }
+    return std::max(std::max(mx.x - mn.x, mx.z - mn.z), 0.001f);
+}
+
+float ComputeStaticModelMinY(const ModelData& model, Mat4 transform)
+{
+    if (model.mesh.vertices.empty())
+    {
+        return 0.0f;
+    }
+
+    float minY = 1e30f;
+    for (const Vertex& vertex : model.mesh.vertices)
+    {
+        Vec4 p = Mat4MulVec4(transform, Vec4Make(vertex.position.x, vertex.position.y, vertex.position.z, 1.0f));
+        minY = std::min(minY, p.y);
+    }
+    return minY;
+}
 }
 
 void App::ReloadScene()
@@ -27,6 +77,23 @@ void App::ReloadScene()
     core.renderer.Shutdown();
 
     core.scene = LoadSampleScene(core.assetRegistry, lighting.sceneKind);
+    if (lighting.sceneKind == SceneKind::PlayerMaskTest && runtime.hasCharacter && core.scene.models.size() >= 2 && core.scene.entities.size() >= 2)
+    {
+        ModelData characterModel = BuildStaticCharacterModel(core.characterSet.asset);
+        Mat4 baseTransform = core.characterSet.asset.modelOffset;
+        float footprint = ComputeStaticModelFootprint(characterModel, baseTransform);
+        float scale = 7.5f / std::max(footprint, 0.001f);
+        Mat4 scaledTransform = Mat4Mul(baseTransform, Mat4Scale(scale));
+        float minY = ComputeStaticModelMinY(characterModel, scaledTransform);
+
+        core.scene.models[1] = std::move(characterModel);
+        core.scene.entities[1].modelIndex = 1;
+        core.scene.entities[1].transform = Mat4Mul(
+            Mat4Translate(Vec3Make(0.0f, -minY, 0.0f)),
+            scaledTransform
+        );
+        core.scene.entities[1].collidable = true;
+    }
     core.sceneBounds = ComputeSceneBounds(core.scene);
     runtime.sceneTriangleCount = CountSceneTriangles(core.scene);
     m_state.paint.splats = {};

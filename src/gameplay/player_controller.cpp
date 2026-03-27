@@ -231,3 +231,52 @@ void PlayerUpdateFromInput(
         player.onGround = false;
     }
 }
+
+void PlayerFlyUpdate(Camera& camera, float dtSeconds, bool inputEnabled)
+{
+    if (!inputEnabled)
+    {
+        return;
+    }
+
+    const bool* keys = SDL_GetKeyboardState(nullptr);
+    Vec3 moveInput = {};
+    Vec3 forward = CameraForward(camera);
+    Vec3 right = CameraRight(camera);
+
+    if (keys[SDL_SCANCODE_W])
+    {
+        moveInput = Vec3Add(moveInput, forward);
+    }
+    if (keys[SDL_SCANCODE_S])
+    {
+        moveInput = Vec3Sub(moveInput, forward);
+    }
+    if (keys[SDL_SCANCODE_D])
+    {
+        moveInput = Vec3Add(moveInput, right);
+    }
+    if (keys[SDL_SCANCODE_A])
+    {
+        moveInput = Vec3Sub(moveInput, right);
+    }
+    if (keys[SDL_SCANCODE_SPACE])
+    {
+        moveInput = Vec3Add(moveInput, Vec3Make(0.0f, 1.0f, 0.0f));
+    }
+    if (keys[SDL_SCANCODE_LSHIFT] || keys[SDL_SCANCODE_RSHIFT])
+    {
+        moveInput = Vec3Sub(moveInput, Vec3Make(0.0f, 1.0f, 0.0f));
+    }
+
+    if (Vec3Length(moveInput) <= 0.0001f)
+    {
+        return;
+    }
+
+    constexpr float kFlySpeed = 9.0f;
+    camera.position = Vec3Add(
+        camera.position,
+        Vec3Scale(Vec3Normalize(moveInput), kFlySpeed * dtSeconds)
+    );
+}

@@ -88,6 +88,8 @@ void App::LoadDebugSettings()
     ExtractFloat(text, "\"day_night_speed\"", lighting.dayNightSpeed);
     ExtractFloat(text, "\"uv_debug_scale\"", lighting.uvDebugScale);
     ExtractUInt(text, "\"uv_debug_mode\"", lighting.uvDebugMode);
+    ExtractUInt(text, "\"material_debug_mode\"", lighting.materialDebugMode);
+    lighting.debugVisualizeUv = lighting.materialDebugMode == 2;
     ExtractFloat(text, "\"sun_azimuth_degrees\"", lighting.sunAzimuthDegrees);
     ExtractFloat(text, "\"orbit_distance_scale\"", lighting.orbitDistanceScale);
     ExtractFloat(text, "\"sun_intensity\"", lighting.sunIntensity);
@@ -165,6 +167,7 @@ void App::SaveDebugSettings() const
         "  \"cycle_day_night\": %d,\n"
         "  \"animate_sun_azimuth\": %d,\n"
         "  \"debug_visualize_uv\": %d,\n"
+        "  \"material_debug_mode\": %u,\n"
         "  \"time_of_day\": %.6f,\n"
         "  \"day_night_speed\": %.6f,\n"
         "  \"uv_debug_scale\": %.6f,\n"
@@ -222,6 +225,7 @@ void App::SaveDebugSettings() const
         lighting.cycleDayNight ? 1 : 0,
         lighting.animateSunAzimuth ? 1 : 0,
         lighting.debugVisualizeUv ? 1 : 0,
+        lighting.materialDebugMode,
         lighting.timeOfDay,
         lighting.dayNightSpeed,
         lighting.uvDebugScale,

@@ -34,6 +34,7 @@ layout(binding = 0) uniform SceneUniforms
 layout(binding = 1) uniform sampler2D albedoTexture;
 layout(binding = 2) uniform sampler2D shadowMaps[6];
 layout(binding = 3) uniform sampler2D paintTexture;
+layout(binding = 4) uniform sampler2D effectPatternTexture;
 
 layout(location = 0) in vec3 fragWorldPosition;
 layout(location = 1) in vec3 fragNormal;
@@ -63,6 +64,50 @@ struct SurfaceMaskEffects
     float wetness;
     float visibility;
 };
+
+float hash31(vec3 p)
+{
+    p = fract(p * 0.1031);
+    p += dot(p, p.yzx + 33.33);
+    return fract((p.x + p.y) * p.z);
+}
+
+float noise3(vec3 p)
+{
+    vec3 i = floor(p);
+    vec3 f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+
+    float n000 = hash31(i + vec3(0.0, 0.0, 0.0));
+    float n100 = hash31(i + vec3(1.0, 0.0, 0.0));
+    float n010 = hash31(i + vec3(0.0, 1.0, 0.0));
+    float n110 = hash31(i + vec3(1.0, 1.0, 0.0));
+    float n001 = hash31(i + vec3(0.0, 0.0, 1.0));
+    float n101 = hash31(i + vec3(1.0, 0.0, 1.0));
+    float n011 = hash31(i + vec3(0.0, 1.0, 1.0));
+    float n111 = hash31(i + vec3(1.0, 1.0, 1.0));
+
+    float nx00 = mix(n000, n100, f.x);
+    float nx10 = mix(n010, n110, f.x);
+    float nx01 = mix(n001, n101, f.x);
+    float nx11 = mix(n011, n111, f.x);
+    float nxy0 = mix(nx00, nx10, f.y);
+    float nxy1 = mix(nx01, nx11, f.y);
+    return mix(nxy0, nxy1, f.z);
+}
+
+float fbm3(vec3 p)
+{
+    float value = 0.0;
+    float amplitude = 0.5;
+    for (int i = 0; i < 4; ++i)
+    {
+        value += noise3(p) * amplitude;
+        p = p * 2.07 + vec3(17.1, 9.2, 13.7);
+        amplitude *= 0.5;
+    }
+    return value;
+}
 
 bool shadowPositionCovered(vec4 shadowPosition, int cascadeIndex)
 {
@@ -148,6 +193,7 @@ vec3 applyPaintSplats(vec3 baseAlbedo, vec3 worldPosition, vec3 normal)
 
 SurfaceMaskEffects applySurfaceMasks(vec3 baseAlbedo, vec2 uv, vec3 localPosition)
 {
+    float time = uniforms.cameraPosition.w;
     vec4 masks = texture(paintTexture, uv);
     float grime = clamp(masks.r, 0.0, 1.0);
     float glow = clamp(masks.g, 0.0, 1.0);
@@ -156,19 +202,46 @@ SurfaceMaskEffects applySurfaceMasks(vec3 baseAlbedo, vec2 uv, vec3 localPositio
 
     vec3 albedo = baseAlbedo;
     float luma = dot(albedo, vec3(0.299, 0.587, 0.114));
-    vec3 desaturated = mix(albedo, vec3(luma), 0.60);
-    vec3 grimeTint = vec3(0.36, 0.28, 0.14);
-    albedo = mix(albedo, desaturated * grimeTint * 1.85, grime * 0.95);
-    albedo = mix(albedo, albedo * 0.55, wetness * 0.65);
+    vec3 desaturated = mix(albedo, vec3(luma), 0.68);
 
-    float breakup = 0.5 + 0.5 * sin(dot(localPosition, vec3(7.3, 5.1, 6.7)) + uv.x * 13.0 + uv.y * 17.0);
-    float visibility = clamp(1.0 - smoothstep(0.18, 0.92, vanish * (0.55 + 0.45 * breakup)), 0.0, 1.0);
-    albedo = mix(uniforms.clearColor.rgb, albedo, visibility);
+    vec3 grimeSpace = localPosition * 3.4 + vec3(uv * 9.0, 2.0);
+    float grimeNoise = fbm3(grimeSpace);
+    float grimeBlobs = smoothstep(0.32, 0.78, grimeNoise);
+    float grimeStreaks = smoothstep(0.38, 0.86, fbm3(localPosition * vec3(1.8, 6.8, 1.8) + vec3(0.0, uv.y * 17.0, uv.x * 8.0)));
+    float grimeCrust = smoothstep(0.46, 0.90, fbm3(localPosition * 8.4 + vec3(uv * 21.0, 7.0)));
+    float grimeSpeckle = smoothstep(0.55, 0.93, fbm3(localPosition * 14.0 + vec3(uv * 37.0, 5.0)));
+    float grimeMask = clamp(grime * mix(grimeBlobs, grimeStreaks, 0.25) * mix(0.85, 1.45, grimeCrust) * mix(0.95, 1.25, grimeSpeckle), 0.0, 1.0);
+    vec3 grimeTint = mix(vec3(0.05, 0.04, 0.03), vec3(0.20, 0.15, 0.08), grimeCrust);
+    vec3 grimeLayer = mix(desaturated * 0.10, grimeTint, 0.72);
+    albedo = mix(albedo, grimeLayer, clamp(grimeMask * 1.18, 0.0, 1.0));
+
+    float wetNoise = smoothstep(0.26, 0.90, fbm3(localPosition * 5.7 + vec3(uv * 19.0, 4.0 + time * 0.18)));
+    vec2 dripUvA = uv * vec2(2.8, 4.8) + vec2(localPosition.x * 0.15, -time * 0.08 + localPosition.y * 0.08);
+    vec2 dripUvB = uv * vec2(4.2, 7.5) + vec2(1.7, -time * 0.14);
+    float dripA = texture(effectPatternTexture, dripUvA).r;
+    float dripB = texture(effectPatternTexture, dripUvB).g;
+    float wetRipples = 0.5 + 0.5 * sin(uv.x * 41.0 + uv.y * 19.0 + time * 5.5 + localPosition.y * 7.0);
+    wetRipples *= 0.5 + 0.5 * sin(uv.y * 33.0 - time * 4.8 + localPosition.x * 5.0);
+    wetRipples = smoothstep(0.18, 0.88, wetRipples);
+    float dripMask = smoothstep(0.25, 0.92, mix(dripA, dripB, 0.45));
+    float wetMask = clamp(wetness * mix(0.75, 1.35, wetNoise) * mix(0.70, 1.65, dripMask) * mix(0.80, 1.25, wetRipples), 0.0, 1.0);
+    vec3 wetTint = vec3(0.36, 0.48, 0.78);
+    albedo = mix(albedo, albedo * wetTint * 0.86, clamp(wetMask * 0.95, 0.0, 1.0));
+
+    float dissolveNoise = fbm3(localPosition * 4.8 + vec3(uv * 23.0, 7.0));
+    float dissolveThreshold = 1.0 - vanish;
+    float visibility = 1.0 - smoothstep(dissolveThreshold - 0.09, dissolveThreshold + 0.05, dissolveNoise);
+    float dissolveEdge = smoothstep(0.02, 0.18, visibility) * (1.0 - smoothstep(0.18, 0.34, visibility));
 
     SurfaceMaskEffects effects;
     effects.albedo = albedo;
-    effects.emissive = vec3(0.25, 1.35, 1.55) * (glow * glow * 4.0);
-    effects.wetness = wetness;
+    float glowPulse = 0.65 + 0.35 * fbm3(localPosition * 6.5 + vec3(uv * 25.0, 13.0));
+    float glowMask = clamp(glow * mix(0.75, 1.30, glowPulse), 0.0, 1.0);
+    vec3 glowColor = mix(vec3(0.18, 1.75, 0.48), vec3(0.62, 2.60, 0.78), glowPulse);
+    effects.emissive = glowColor * (glowMask * glowMask * 8.5);
+    effects.emissive += vec3(3.6, 1.4, 0.35) * vanish * dissolveEdge * 1.6;
+    effects.emissive += vec3(0.16, 0.28, 0.55) * wetMask * dripMask * 0.65;
+    effects.wetness = wetMask;
     effects.visibility = visibility;
     return effects;
 }
@@ -217,12 +290,22 @@ void main()
 {
     vec3 normal = normalize(fragNormal);
     vec3 albedo = texture(albedoTexture, fragUv).rgb;
-    if (uniforms.paintSplatCounts.y > 0.5)
+    int materialDebugMode = int(uniforms.paintSplatCounts.y + 0.5);
+    if (materialDebugMode == 2)
     {
         outColor = vec4(visualizeUv(fragUv), 1.0);
         return;
     }
+    if (materialDebugMode == 1)
+    {
+        outColor = vec4(albedo, 1.0);
+        return;
+    }
     SurfaceMaskEffects maskEffects = applySurfaceMasks(albedo, fragUv, fragLocalPosition);
+    if (maskEffects.visibility <= 0.01)
+    {
+        discard;
+    }
     albedo = maskEffects.albedo;
     albedo = applyPaintSplats(albedo, fragWorldPosition, normal);
     vec3 ambient = albedo * uniforms.ambientColor.rgb;
@@ -253,8 +336,9 @@ void main()
     }
     lighting += albedo * uniforms.sunColor.rgb * sunNdotL * sunShadow;
     vec3 sunHalfDir = normalize(sunDir + viewDir);
-    float sunSpec = pow(max(dot(normal, sunHalfDir), 0.0), mix(48.0, 10.0, maskEffects.wetness));
-    lighting += uniforms.sunColor.rgb * sunShadow * sunSpec * maskEffects.wetness * 0.35;
+    float sunFresnel = pow(1.0 - max(dot(normal, viewDir), 0.0), 4.0);
+    float sunSpec = pow(max(dot(normal, sunHalfDir), 0.0), mix(72.0, 5.0, maskEffects.wetness));
+    lighting += uniforms.sunColor.rgb * sunShadow * sunSpec * maskEffects.wetness * (0.45 + sunFresnel * 1.55);
 
     for (int i = 0; i < 4; ++i)
     {
@@ -276,8 +360,9 @@ void main()
         float ndotl = max(dot(normal, lightDir), 0.0);
         lighting += albedo * uniforms.lightColors[i].rgb * ndotl * attenuation;
         vec3 halfDir = normalize(lightDir + viewDir);
-        float spec = pow(max(dot(normal, halfDir), 0.0), mix(56.0, 12.0, maskEffects.wetness));
-        lighting += uniforms.lightColors[i].rgb * spec * attenuation * maskEffects.wetness * 0.20;
+        float fresnel = pow(1.0 - max(dot(normal, viewDir), 0.0), 4.0);
+        float spec = pow(max(dot(normal, halfDir), 0.0), mix(84.0, 5.0, maskEffects.wetness));
+        lighting += uniforms.lightColors[i].rgb * spec * attenuation * maskEffects.wetness * (0.20 + fresnel * 0.95);
     }
 
     int shadowedSpotLightCount = int(uniforms.sceneLightCounts.y);
@@ -321,14 +406,15 @@ void main()
             coneAttenuation *
             spotShadow;
         vec3 halfDir = normalize(lightDir + viewDir);
-        float spec = pow(max(dot(normal, halfDir), 0.0), mix(56.0, 12.0, maskEffects.wetness));
+        float fresnel = pow(1.0 - max(dot(normal, viewDir), 0.0), 4.0);
+        float spec = pow(max(dot(normal, halfDir), 0.0), mix(84.0, 5.0, maskEffects.wetness));
         lighting += uniforms.shadowedSpotLightColors[i].rgb *
             uniforms.shadowedSpotLightColors[i].w *
             spec *
             rangeAttenuation *
             coneAttenuation *
             spotShadow *
-            maskEffects.wetness * 0.25;
+            maskEffects.wetness * (0.24 + fresnel * 1.05);
     }
 
     int sceneLightCount = int(uniforms.sceneLightCounts.x);
@@ -367,13 +453,14 @@ void main()
             rangeAttenuation *
             coneAttenuation;
         vec3 halfDir = normalize(lightDir + viewDir);
-        float spec = pow(max(dot(normal, halfDir), 0.0), mix(56.0, 12.0, maskEffects.wetness));
+        float fresnel = pow(1.0 - max(dot(normal, viewDir), 0.0), 4.0);
+        float spec = pow(max(dot(normal, halfDir), 0.0), mix(84.0, 5.0, maskEffects.wetness));
         lighting += uniforms.spotLightColors[i].rgb *
             uniforms.spotLightColors[i].w *
             spec *
             rangeAttenuation *
             coneAttenuation *
-            maskEffects.wetness * 0.20;
+            maskEffects.wetness * (0.20 + fresnel * 0.95);
     }
 
     vec3 color = mix(uniforms.clearColor.rgb, lighting + maskEffects.emissive, maskEffects.visibility);

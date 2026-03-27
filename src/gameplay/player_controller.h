@@ -29,3 +29,4 @@ void PlayerUpdateFromInput(
     float dtSeconds,
     bool inputEnabled
 );
+void PlayerFlyUpdate(Camera& camera, float dtSeconds, bool inputEnabled);

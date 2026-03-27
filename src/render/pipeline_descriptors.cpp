@@ -30,7 +30,13 @@ void VulkanRenderer::CreateDescriptorObjects()
     paintBinding.descriptorCount = 1;
     paintBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
-    std::array<VkDescriptorSetLayoutBinding, 4> bindings = {uniformBinding, samplerBinding, shadowBinding, paintBinding};
+    VkDescriptorSetLayoutBinding effectBinding{};
+    effectBinding.binding = 4;
+    effectBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    effectBinding.descriptorCount = 1;
+    effectBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+    std::array<VkDescriptorSetLayoutBinding, 5> bindings = {uniformBinding, samplerBinding, shadowBinding, paintBinding, effectBinding};
     VkDescriptorSetLayoutCreateInfo layoutInfo{};
     layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
     layoutInfo.bindingCount = static_cast<std::uint32_t>(bindings.size());
@@ -38,11 +44,12 @@ void VulkanRenderer::CreateDescriptorObjects()
     CheckVk(vkCreateDescriptorSetLayout(m_device, &layoutInfo, nullptr, &m_descriptorSetLayout), "vkCreateDescriptorSetLayout");
 
     std::uint32_t descriptorCount = static_cast<std::uint32_t>(m_textureImages.size());
-    std::array<VkDescriptorPoolSize, 4> poolSizes =
+    std::array<VkDescriptorPoolSize, 5> poolSizes =
         {
             VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, descriptorCount},
             VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, descriptorCount},
             VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, descriptorCount * kTotalShadowMaps},
+            VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, descriptorCount},
             VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, descriptorCount},
         };
 
@@ -99,5 +106,44 @@ void VulkanRenderer::CreateOverlayDescriptorObjects()
     CheckVk(
         vkAllocateDescriptorSets(m_device, &allocInfo, &m_overlayDescriptorSet),
         "vkAllocateDescriptorSets(overlay)"
+    );
+}
+
+void VulkanRenderer::CreatePostDescriptorObjects()
+{
+    VkDescriptorSetLayoutBinding samplerBinding{};
+    samplerBinding.binding = 0;
+    samplerBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    samplerBinding.descriptorCount = 1;
+    samplerBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+    VkDescriptorSetLayoutCreateInfo layoutInfo{};
+    layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    layoutInfo.bindingCount = 1;
+    layoutInfo.pBindings = &samplerBinding;
+    CheckVk(
+        vkCreateDescriptorSetLayout(m_device, &layoutInfo, nullptr, &m_postDescriptorSetLayout),
+        "vkCreateDescriptorSetLayout(post)"
+    );
+
+    VkDescriptorPoolSize poolSize{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1};
+    VkDescriptorPoolCreateInfo poolInfo{};
+    poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    poolInfo.maxSets = 1;
+    poolInfo.poolSizeCount = 1;
+    poolInfo.pPoolSizes = &poolSize;
+    CheckVk(
+        vkCreateDescriptorPool(m_device, &poolInfo, nullptr, &m_postDescriptorPool),
+        "vkCreateDescriptorPool(post)"
+    );
+
+    VkDescriptorSetAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    allocInfo.descriptorPool = m_postDescriptorPool;
+    allocInfo.descriptorSetCount = 1;
+    allocInfo.pSetLayouts = &m_postDescriptorSetLayout;
+    CheckVk(
+        vkAllocateDescriptorSets(m_device, &allocInfo, &m_postDescriptorSet),
+        "vkAllocateDescriptorSets(post)"
     );
 }

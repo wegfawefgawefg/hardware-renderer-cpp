@@ -26,8 +26,8 @@ void VulkanRenderer::RecordCommandBuffer(std::uint32_t imageIndex)
 
     VkRenderPassBeginInfo renderPassInfo{};
     renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    renderPassInfo.renderPass = m_renderPass;
-    renderPassInfo.framebuffer = m_framebuffers[imageIndex];
+    renderPassInfo.renderPass = m_sceneRenderPass;
+    renderPassInfo.framebuffer = m_sceneFramebuffer;
     renderPassInfo.renderArea.extent = m_swapchainExtent;
     renderPassInfo.clearValueCount = static_cast<std::uint32_t>(clearValues.size());
     renderPassInfo.pClearValues = clearValues.data();
@@ -263,10 +263,53 @@ void VulkanRenderer::RecordCommandBuffer(std::uint32_t imageIndex)
     vkCmdDraw(commandBuffer, kLightMarkerCount, 1, 0, 0);
     vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, m_timestampQueryPool, 4);
 
+    vkCmdEndRenderPass(commandBuffer);
+    vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, m_timestampQueryPool, 4);
+
+    renderPassInfo.renderPass = m_renderPass;
+    renderPassInfo.framebuffer = m_framebuffers[imageIndex];
+    vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+    vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+    vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+
+    std::array<OverlayVertex, 6> fullscreenQuad =
+        {
+            OverlayVertex{Vec2Make(-1.0f, -1.0f), Vec2Make(0.0f, 1.0f)},
+            OverlayVertex{Vec2Make(-1.0f, 1.0f), Vec2Make(0.0f, 0.0f)},
+            OverlayVertex{Vec2Make(1.0f, 1.0f), Vec2Make(1.0f, 0.0f)},
+            OverlayVertex{Vec2Make(-1.0f, -1.0f), Vec2Make(0.0f, 1.0f)},
+            OverlayVertex{Vec2Make(1.0f, 1.0f), Vec2Make(1.0f, 0.0f)},
+            OverlayVertex{Vec2Make(1.0f, -1.0f), Vec2Make(1.0f, 1.0f)},
+        };
+    std::memcpy(m_postVertexBuffer.mapped, fullscreenQuad.data(), sizeof(fullscreenQuad));
+
+    VkBuffer postBuffers[] = {m_postVertexBuffer.buffer};
+    VkDeviceSize overlayOffsets[] = {0};
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_postPipeline);
+    vkCmdBindVertexBuffers(commandBuffer, 0, 1, postBuffers, overlayOffsets);
+    vkCmdBindDescriptorSets(
+        commandBuffer,
+        VK_PIPELINE_BIND_POINT_GRAPHICS,
+        m_postPipelineLayout,
+        0,
+        1,
+        &m_postDescriptorSet,
+        0,
+        nullptr
+    );
+    vkCmdDraw(commandBuffer, 6, 1, 0, 0);
+
     if (m_overlayWidth > 0 && m_overlayHeight > 0)
     {
+        std::array<OverlayVertex, 6> quad = BuildOverlayQuad(
+            m_swapchainExtent.width,
+            m_swapchainExtent.height,
+            m_overlayWidth,
+            m_overlayHeight
+        );
+        std::memcpy(m_overlayVertexBuffer.mapped, quad.data(), sizeof(quad));
+
         VkBuffer overlayBuffers[] = {m_overlayVertexBuffer.buffer};
-        VkDeviceSize overlayOffsets[] = {0};
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_overlayPipeline);
         vkCmdBindVertexBuffers(commandBuffer, 0, 1, overlayBuffers, overlayOffsets);
         vkCmdBindDescriptorSets(

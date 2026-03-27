@@ -51,12 +51,22 @@ void App::BuildLightingWindow(bool& debugSettingsChanged)
         debugSettingsChanged |= ImGui::SliderFloat("Cycle speed", &lighting.dayNightSpeed, 0.0f, 0.20f, "%.3f");
         debugSettingsChanged |= ImGui::Checkbox("Animate azimuth", &lighting.animateSunAzimuth);
         debugSettingsChanged |= ImGui::SliderFloat("Sun azimuth", &lighting.sunAzimuthDegrees, -180.0f, 180.0f, "%.1f deg");
-        debugSettingsChanged |= ImGui::Checkbox("Visualize UVs", &lighting.debugVisualizeUv);
+        static const char* materialViewNames[] = {"Lit", "Albedo", "UV"};
+        int materialView = static_cast<int>(lighting.materialDebugMode);
+        debugSettingsChanged |= ImGui::Combo("Material view", &materialView, materialViewNames, 3);
+        lighting.materialDebugMode = static_cast<std::uint32_t>(materialView);
+        lighting.debugVisualizeUv = lighting.materialDebugMode == 2;
         static const char* uvModeNames[] = {"Checker", "U", "V", "UV Color", "Gradient U", "Gradient V", "Out of 0..1"};
         int uvMode = static_cast<int>(lighting.uvDebugMode);
-        debugSettingsChanged |= ImGui::Combo("UV mode", &uvMode, uvModeNames, 7);
+        if (lighting.materialDebugMode == 2)
+        {
+            debugSettingsChanged |= ImGui::Combo("UV mode", &uvMode, uvModeNames, 7);
+        }
         lighting.uvDebugMode = static_cast<std::uint32_t>(uvMode);
-        debugSettingsChanged |= ImGui::SliderFloat("UV scale", &lighting.uvDebugScale, 1.0f, 32.0f, "%.1f");
+        if (lighting.materialDebugMode == 2)
+        {
+            debugSettingsChanged |= ImGui::SliderFloat("UV scale", &lighting.uvDebugScale, 1.0f, 32.0f, "%.1f");
+        }
         debugSettingsChanged |= ImGui::SliderFloat("Orbit distance", &lighting.orbitDistanceScale, 0.5f, 3.0f, "%.2f");
         debugSettingsChanged |= ImGui::SliderFloat("Sun intensity", &lighting.sunIntensity, 0.0f, 3.0f, "%.2f");
         debugSettingsChanged |= ImGui::SliderFloat("Moon intensity", &lighting.moonIntensity, 0.0f, 1.0f, "%.2f");
