@@ -52,7 +52,7 @@ void App::BuildLightingWindow(bool& debugSettingsChanged)
         debugSettingsChanged |= ImGui::Checkbox("Animate azimuth", &lighting.animateSunAzimuth);
         debugSettingsChanged |= ImGui::SliderFloat("Sun azimuth", &lighting.sunAzimuthDegrees, -180.0f, 180.0f, "%.1f deg");
         debugSettingsChanged |= ImGui::Checkbox("Visualize UVs", &lighting.debugVisualizeUv);
-        static const char* uvModeNames[] = {"Checker", "U", "V", "UV Color", "Raw U", "Raw V", "Out of 0..1"};
+        static const char* uvModeNames[] = {"Checker", "U", "V", "UV Color", "Gradient U", "Gradient V", "Out of 0..1"};
         int uvMode = static_cast<int>(lighting.uvDebugMode);
         debugSettingsChanged |= ImGui::Combo("UV mode", &uvMode, uvModeNames, 7);
         lighting.uvDebugMode = static_cast<std::uint32_t>(uvMode);
@@ -278,8 +278,26 @@ void App::BuildPaintBallsWindow(bool& debugSettingsChanged)
         debugSettingsChanged |= ImGui::SliderFloat("Restitution", &paint.ballSettings.restitution, 0.0f, 0.95f, "%.2f");
         debugSettingsChanged |= ImGui::SliderFloat("Ball radius", &paint.ballSettings.radius, 0.04f, 0.30f, "%.2f");
         debugSettingsChanged |= ImGui::SliderFloat("Blob radius", &paint.ballSettings.blobRadius, 0.08f, 1.20f, "%.2f");
+        static const char* maskChannelNames[] = {"Grime", "Glow", "Wetness", "Vanish"};
+        int maskChannel = static_cast<int>(paint.ballSettings.maskChannel);
+        debugSettingsChanged |= ImGui::Combo("Mask brush", &maskChannel, maskChannelNames, 4);
+        paint.ballSettings.maskChannel = static_cast<SurfaceMaskChannel>(maskChannel);
+        debugSettingsChanged |= ImGui::SliderFloat("Mask strength", &paint.ballSettings.maskStrength, 0.05f, 1.0f, "%.2f");
         debugSettingsChanged |= ImGui::ColorEdit3("Paint color", &paint.ballSettings.baseColor.x);
         debugSettingsChanged |= ImGui::Checkbox("Cycle color on shoot", &paint.ballSettings.cycleColorOnShoot);
+        ImGui::Separator();
+        if (m_state.lighting.sceneKind == SceneKind::PlayerMaskTest)
+        {
+            ImGui::TextUnformatted("Persistent surface masks:");
+            ImGui::BulletText("R grime");
+            ImGui::BulletText("G glow");
+            ImGui::BulletText("B wetness");
+            ImGui::BulletText("A vanish");
+        }
+        else
+        {
+            ImGui::TextUnformatted("Persistent masks are only active in Player Mask Test.");
+        }
         ImGui::Separator();
         ImGui::TextUnformatted("Play mode: hold left click to rapid fire");
         ImGui::TextUnformatted("Mouse mode: Shift + Left click places test-scene tools");

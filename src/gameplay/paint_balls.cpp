@@ -177,6 +177,8 @@ void PaintBallSystem::Update(
                 .primitiveIndex = impactPrimitive,
                 .uv = impactUv,
                 .uvWorldScale = impactUvWorldScale,
+                .maskChannel = static_cast<std::uint32_t>(settings.maskChannel),
+                .maskStrength = settings.maskStrength,
             });
 
             if (ball.remainingBounces == 0)

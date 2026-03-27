@@ -56,6 +56,14 @@ layout(push_constant) uniform DrawPushConstants
 
 layout(location = 0) out vec4 outColor;
 
+struct SurfaceMaskEffects
+{
+    vec3 albedo;
+    vec3 emissive;
+    float wetness;
+    float visibility;
+};
+
 bool shadowPositionCovered(vec4 shadowPosition, int cascadeIndex)
 {
     vec3 projected = shadowPosition.xyz / max(shadowPosition.w, 0.0001);
@@ -138,10 +146,31 @@ vec3 applyPaintSplats(vec3 baseAlbedo, vec3 worldPosition, vec3 normal)
     return painted;
 }
 
-vec3 applyPersistentPaint(vec3 baseAlbedo, vec2 uv)
+SurfaceMaskEffects applySurfaceMasks(vec3 baseAlbedo, vec2 uv, vec3 localPosition)
 {
-    vec4 paint = texture(paintTexture, uv);
-    return mix(baseAlbedo, paint.rgb, clamp(paint.a, 0.0, 1.0));
+    vec4 masks = texture(paintTexture, uv);
+    float grime = clamp(masks.r, 0.0, 1.0);
+    float glow = clamp(masks.g, 0.0, 1.0);
+    float wetness = clamp(masks.b, 0.0, 1.0);
+    float vanish = clamp(masks.a, 0.0, 1.0);
+
+    vec3 albedo = baseAlbedo;
+    float luma = dot(albedo, vec3(0.299, 0.587, 0.114));
+    vec3 desaturated = mix(albedo, vec3(luma), 0.60);
+    vec3 grimeTint = vec3(0.44, 0.33, 0.18);
+    albedo = mix(albedo, desaturated * grimeTint * 1.55, grime * 0.82);
+    albedo = mix(albedo, albedo * 0.72, wetness * 0.45);
+
+    float breakup = 0.5 + 0.5 * sin(dot(localPosition, vec3(7.3, 5.1, 6.7)) + uv.x * 13.0 + uv.y * 17.0);
+    float visibility = clamp(1.0 - smoothstep(0.18, 0.92, vanish * (0.55 + 0.45 * breakup)), 0.0, 1.0);
+    albedo = mix(uniforms.clearColor.rgb, albedo, visibility);
+
+    SurfaceMaskEffects effects;
+    effects.albedo = albedo;
+    effects.emissive = vec3(0.25, 1.15, 1.35) * (glow * glow * 1.8);
+    effects.wetness = wetness;
+    effects.visibility = visibility;
+    return effects;
 }
 
 vec3 visualizeUv(vec2 uv)
@@ -164,13 +193,11 @@ vec3 visualizeUv(vec2 uv)
     }
     if (mode == 4)
     {
-        float u = clamp(uv.x * 0.25 + 0.5, 0.0, 1.0);
-        return vec3(u);
+        return vec3(clamp(uv.x, 0.0, 1.0));
     }
     if (mode == 5)
     {
-        float v = clamp(uv.y * 0.25 + 0.5, 0.0, 1.0);
-        return vec3(v);
+        return vec3(clamp(uv.y, 0.0, 1.0));
     }
     if (mode == 6)
     {
@@ -195,12 +222,14 @@ void main()
         outColor = vec4(visualizeUv(fragUv), 1.0);
         return;
     }
-    albedo = applyPersistentPaint(albedo, fragUv);
+    SurfaceMaskEffects maskEffects = applySurfaceMasks(albedo, fragUv, fragLocalPosition);
+    albedo = maskEffects.albedo;
     albedo = applyPaintSplats(albedo, fragWorldPosition, normal);
     vec3 ambient = albedo * uniforms.ambientColor.rgb;
 
     vec3 lighting = ambient;
     vec3 sunDir = normalize(-uniforms.sunDirection.xyz);
+    vec3 viewDir = normalize(uniforms.cameraPosition.xyz - fragWorldPosition);
     float sunNdotL = max(dot(normal, sunDir), 0.0);
     bool covered0 = shadowPositionCovered(fragShadowPosition0, 0);
     bool covered1 = shadowPositionCovered(fragShadowPosition1, 1);
@@ -223,6 +252,9 @@ void main()
         sunShadow = sampleShadow(1, fragShadowPosition1, normal, sunDir);
     }
     lighting += albedo * uniforms.sunColor.rgb * sunNdotL * sunShadow;
+    vec3 sunHalfDir = normalize(sunDir + viewDir);
+    float sunSpec = pow(max(dot(normal, sunHalfDir), 0.0), mix(48.0, 10.0, maskEffects.wetness));
+    lighting += uniforms.sunColor.rgb * sunShadow * sunSpec * maskEffects.wetness * 0.35;
 
     for (int i = 0; i < 4; ++i)
     {
@@ -243,6 +275,9 @@ void main()
         attenuation *= attenuation;
         float ndotl = max(dot(normal, lightDir), 0.0);
         lighting += albedo * uniforms.lightColors[i].rgb * ndotl * attenuation;
+        vec3 halfDir = normalize(lightDir + viewDir);
+        float spec = pow(max(dot(normal, halfDir), 0.0), mix(56.0, 12.0, maskEffects.wetness));
+        lighting += uniforms.lightColors[i].rgb * spec * attenuation * maskEffects.wetness * 0.20;
     }
 
     int shadowedSpotLightCount = int(uniforms.sceneLightCounts.y);
@@ -285,6 +320,15 @@ void main()
             rangeAttenuation *
             coneAttenuation *
             spotShadow;
+        vec3 halfDir = normalize(lightDir + viewDir);
+        float spec = pow(max(dot(normal, halfDir), 0.0), mix(56.0, 12.0, maskEffects.wetness));
+        lighting += uniforms.shadowedSpotLightColors[i].rgb *
+            uniforms.shadowedSpotLightColors[i].w *
+            spec *
+            rangeAttenuation *
+            coneAttenuation *
+            spotShadow *
+            maskEffects.wetness * 0.25;
     }
 
     int sceneLightCount = int(uniforms.sceneLightCounts.x);
@@ -322,9 +366,17 @@ void main()
             ndotl *
             rangeAttenuation *
             coneAttenuation;
+        vec3 halfDir = normalize(lightDir + viewDir);
+        float spec = pow(max(dot(normal, halfDir), 0.0), mix(56.0, 12.0, maskEffects.wetness));
+        lighting += uniforms.spotLightColors[i].rgb *
+            uniforms.spotLightColors[i].w *
+            spec *
+            rangeAttenuation *
+            coneAttenuation *
+            maskEffects.wetness * 0.20;
     }
 
-    vec3 color = lighting;
+    vec3 color = mix(uniforms.clearColor.rgb, lighting + maskEffects.emissive, maskEffects.visibility);
     color = color / (color + vec3(1.0));
 
     outColor = vec4(color, 1.0);

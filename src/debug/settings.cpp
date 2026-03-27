@@ -127,6 +127,12 @@ void App::LoadDebugSettings()
     ExtractFloat(text, "\"paint_ball_restitution\"", paint.ballSettings.restitution);
     ExtractFloat(text, "\"paint_ball_radius\"", paint.ballSettings.radius);
     ExtractFloat(text, "\"paint_blob_radius\"", paint.ballSettings.blobRadius);
+    std::uint32_t maskChannel = static_cast<std::uint32_t>(paint.ballSettings.maskChannel);
+    if (ExtractUInt(text, "\"paint_mask_channel\"", maskChannel) && maskChannel <= 3u)
+    {
+        paint.ballSettings.maskChannel = static_cast<SurfaceMaskChannel>(maskChannel);
+    }
+    ExtractFloat(text, "\"paint_mask_strength\"", paint.ballSettings.maskStrength);
     ExtractFloat(text, "\"paint_ball_color_r\"", paint.ballSettings.baseColor.x);
     ExtractFloat(text, "\"paint_ball_color_g\"", paint.ballSettings.baseColor.y);
     ExtractFloat(text, "\"paint_ball_color_b\"", paint.ballSettings.baseColor.z);
@@ -195,6 +201,8 @@ void App::SaveDebugSettings() const
         "  \"paint_ball_restitution\": %.6f,\n"
         "  \"paint_ball_radius\": %.6f,\n"
         "  \"paint_blob_radius\": %.6f,\n"
+        "  \"paint_mask_channel\": %u,\n"
+        "  \"paint_mask_strength\": %.6f,\n"
         "  \"paint_ball_color_r\": %.6f,\n"
         "  \"paint_ball_color_g\": %.6f,\n"
         "  \"paint_ball_color_b\": %.6f,\n"
@@ -247,6 +255,8 @@ void App::SaveDebugSettings() const
         paint.ballSettings.restitution,
         paint.ballSettings.radius,
         paint.ballSettings.blobRadius,
+        static_cast<std::uint32_t>(paint.ballSettings.maskChannel),
+        paint.ballSettings.maskStrength,
         paint.ballSettings.baseColor.x,
         paint.ballSettings.baseColor.y,
         paint.ballSettings.baseColor.z,

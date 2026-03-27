@@ -72,6 +72,8 @@ void VulkanRenderer::AppendPersistentPaint(const PaintSplatSpawn& splat)
 
     float uvScale = std::max(splat.uvWorldScale, 0.001f);
     float uvRadius = std::clamp(splat.radius / uvScale, 0.0025f, 0.45f);
+    std::uint32_t channel = std::min(splat.maskChannel, 3u);
+    float strength = std::clamp(splat.maskStrength, 0.0f, 1.0f);
     float centerX = splat.uv.x * static_cast<float>(kPaintTextureSize - 1);
     float centerY = (1.0f - splat.uv.y) * static_cast<float>(kPaintTextureSize - 1);
     int minX = std::max(0, static_cast<int>(std::floor(centerX - uvRadius * kPaintTextureSize)));
@@ -107,30 +109,10 @@ void VulkanRenderer::AppendPersistentPaint(const PaintSplatSpawn& splat)
             }
 
             std::size_t pixelIndex = static_cast<std::size_t>(y) * kPaintTextureSize * 4u + static_cast<std::size_t>(x) * 4u;
-            float srcA = mask;
-            float dstA = static_cast<float>(layer.pixels[pixelIndex + 3]) / 255.0f;
-            float outA = srcA + dstA * (1.0f - srcA);
-            Vec3 dstColor = Vec3Make(
-                static_cast<float>(layer.pixels[pixelIndex + 0]) / 255.0f,
-                static_cast<float>(layer.pixels[pixelIndex + 1]) / 255.0f,
-                static_cast<float>(layer.pixels[pixelIndex + 2]) / 255.0f
-            );
-            Vec3 outColor = dstColor;
-            if (outA > 1e-5f)
-            {
-                outColor = Vec3Scale(
-                    Vec3Add(
-                        Vec3Scale(splat.color, srcA),
-                        Vec3Scale(dstColor, dstA * (1.0f - srcA))
-                    ),
-                    1.0f / outA
-                );
-            }
-
-            layer.pixels[pixelIndex + 0] = static_cast<std::uint8_t>(std::clamp(outColor.x, 0.0f, 1.0f) * 255.0f);
-            layer.pixels[pixelIndex + 1] = static_cast<std::uint8_t>(std::clamp(outColor.y, 0.0f, 1.0f) * 255.0f);
-            layer.pixels[pixelIndex + 2] = static_cast<std::uint8_t>(std::clamp(outColor.z, 0.0f, 1.0f) * 255.0f);
-            layer.pixels[pixelIndex + 3] = static_cast<std::uint8_t>(std::clamp(outA, 0.0f, 1.0f) * 255.0f);
+            float dst = static_cast<float>(layer.pixels[pixelIndex + channel]) / 255.0f;
+            float src = std::clamp(mask * strength, 0.0f, 1.0f);
+            float out = std::clamp(std::max(dst, src), 0.0f, 1.0f);
+            layer.pixels[pixelIndex + channel] = static_cast<std::uint8_t>(out * 255.0f);
         }
     }
 
