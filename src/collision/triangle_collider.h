@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstdint>
-#include <unordered_map>
 #include <vector>
 
 #include "math_types.h"
@@ -51,10 +50,9 @@ struct TriangleMeshCollider
         Vec3 b;
         Vec3 c;
         Vec3 n;
-        float minx = 0.0f;
-        float maxx = 0.0f;
-        float minz = 0.0f;
-        float maxz = 0.0f;
+        Vec3 boundsMin = {};
+        Vec3 boundsMax = {};
+        Vec3 centroid = {};
         std::uint32_t entityIndex = UINT32_MAX;
         std::uint32_t primitiveIndex = UINT32_MAX;
         Vec2 uvA = {};
@@ -63,33 +61,22 @@ struct TriangleMeshCollider
         float uvWorldScale = 1.0f;
     };
 
-    struct CellKey
+    struct BvhNode
     {
-        int x = 0;
-        int z = 0;
-
-        bool operator==(const CellKey& other) const
-        {
-            return x == other.x && z == other.z;
-        }
+        Vec3 boundsMin = {};
+        Vec3 boundsMax = {};
+        std::uint32_t firstIndex = 0;
+        std::uint32_t indexCount = 0;
+        std::uint32_t leftChild = UINT32_MAX;
+        std::uint32_t rightChild = UINT32_MAX;
     };
 
-    struct CellKeyHasher
-    {
-        std::size_t operator()(const CellKey& key) const
-        {
-            std::size_t h0 = std::hash<int>{}(key.x);
-            std::size_t h1 = std::hash<int>{}(key.z);
-            return h0 ^ (h1 << 1);
-        }
-    };
-
-    CellKey CellFor(float x, float z) const;
-    void GatherCandidates(float x, float z, float radius, std::vector<std::uint32_t>& out, std::uint32_t stamp) const;
+    std::uint32_t BuildBvhNode(std::uint32_t firstIndex, std::uint32_t indexCount);
 
     float m_cellSize = 1.5f;
     bool m_twoSided = false;
     std::vector<Tri> m_tris;
-    mutable std::vector<std::uint32_t> m_seenStamp;
-    std::unordered_map<CellKey, std::vector<std::uint32_t>, CellKeyHasher> m_grid;
+    std::vector<std::uint32_t> m_triIndices;
+    std::vector<BvhNode> m_bvhNodes;
+    std::uint32_t m_rootNode = UINT32_MAX;
 };

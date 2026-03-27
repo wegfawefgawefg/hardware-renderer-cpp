@@ -247,10 +247,10 @@ SurfaceMaskEffects applySurfaceMasks(vec3 baseAlbedo, vec2 uv, vec3 localPositio
     float grimeStreaks = smoothstep(0.38, 0.86, fbm3(localPosition * vec3(1.8, 6.8, 1.8) + vec3(0.0, uv.y * 17.0, uv.x * 8.0)));
     float grimeCrust = smoothstep(0.46, 0.90, fbm3(localPosition * 8.4 + vec3(uv * 21.0, 7.0)));
     float grimeSpeckle = smoothstep(0.55, 0.93, fbm3(localPosition * 14.0 + vec3(uv * 37.0, 5.0)));
-    float grimeMask = clamp(grime * mix(grimeBlobs, grimeStreaks, 0.25) * mix(0.85, 1.45, grimeCrust) * mix(0.95, 1.25, grimeSpeckle), 0.0, 1.0);
-    vec3 grimeTint = mix(vec3(0.05, 0.04, 0.03), vec3(0.20, 0.15, 0.08), grimeCrust);
-    vec3 grimeLayer = mix(desaturated * 0.10, grimeTint, 0.72);
-    albedo = mix(albedo, grimeLayer, clamp(grimeMask * 1.18, 0.0, 1.0));
+    float grimeMask = clamp(grime * mix(grimeBlobs, grimeStreaks, 0.25) * mix(0.95, 1.65, grimeCrust) * mix(1.00, 1.35, grimeSpeckle), 0.0, 1.0);
+    vec3 grimeTint = mix(vec3(0.020, 0.016, 0.012), vec3(0.115, 0.082, 0.042), grimeCrust);
+    vec3 grimeLayer = mix(desaturated * 0.035, grimeTint, 0.84);
+    albedo = mix(albedo, grimeLayer, clamp(grimeMask * 1.38, 0.0, 1.0));
 
     float wetNoise = smoothstep(0.26, 0.90, fbm3(localPosition * 5.7 + vec3(uv * 19.0, 4.0 + time * 0.18)));
     vec2 dripUvA = uv * vec2(2.8, 4.8) + vec2(localPosition.x * 0.15, -time * 0.08 + localPosition.y * 0.08);
