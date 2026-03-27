@@ -322,20 +322,36 @@ void App::BuildSurfaceMasksWindow(bool& debugSettingsChanged)
         debugSettingsChanged |= ImGui::SliderFloat("Brush radius", &paint.surfaceMaskBrush.radius, 0.05f, 1.20f, "%.2f");
         debugSettingsChanged |= ImGui::SliderFloat("Brush strength", &paint.surfaceMaskBrush.strength, 0.05f, 1.0f, "%.2f");
         debugSettingsChanged |= ImGui::SliderFloat("Brush rate", &paint.surfaceMaskBrush.flowRate, 1.0f, 48.0f, "%.1f /s");
+        if (paint.surfaceMaskBrush.channel == SurfaceMaskChannel::Vanish)
+        {
+            ImGui::Separator();
+            debugSettingsChanged |= ImGui::SliderFloat("Split strength", &paint.vanishSplitStrength, 0.0f, 4.0f, "%.2f");
+            debugSettingsChanged |= ImGui::SliderFloat("Jitter strength", &paint.vanishJitterStrength, 0.0f, 4.0f, "%.2f");
+            debugSettingsChanged |= ImGui::SliderFloat("Static strength", &paint.vanishStaticStrength, 0.0f, 4.0f, "%.2f");
+            debugSettingsChanged |= ImGui::SliderFloat("Edge glow", &paint.vanishEdgeGlowStrength, 0.0f, 4.0f, "%.2f");
+        }
         ImGui::Separator();
-        ImGui::TextUnformatted("Layer meanings in Player Mask Test:");
+        ImGui::TextUnformatted("Layer meanings in mask demo:");
         ImGui::BulletText("R grime");
         ImGui::BulletText("G glow");
         ImGui::BulletText("B wetness");
         ImGui::BulletText("A vanish");
         ImGui::Separator();
-        if (lighting.sceneKind == SceneKind::PlayerMaskTest)
+        if (lighting.sceneKind == SceneKind::PlayerMaskTest ||
+            lighting.sceneKind == SceneKind::City)
         {
-            ImGui::TextUnformatted("Surface Brush uses a direct camera ray and does not spawn paint splats.");
+            if (lighting.sceneKind == SceneKind::City)
+            {
+                ImGui::TextUnformatted("City masks are experimental and depend on each asset's UV layout.");
+            }
+            else
+            {
+                ImGui::TextUnformatted("Surface Brush uses a direct camera ray and does not spawn paint splats.");
+            }
         }
         else
         {
-            ImGui::TextUnformatted("Persistent surface masks are only active in Player Mask Test.");
+            ImGui::TextUnformatted("Persistent surface masks are only active in Player Mask Test and City.");
         }
     }
     ImGui::End();

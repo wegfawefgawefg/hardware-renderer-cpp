@@ -53,6 +53,7 @@ struct alignas(16) SceneUniforms
     Vec4 paintSplatPositions[kMaxPaintSplats];
     Vec4 paintSplatNormals[kMaxPaintSplats];
     Vec4 paintSplatColors[kMaxPaintSplats];
+    Vec4 surfaceMaskParamsA;
     Vec4 paintSplatCounts;
 };
 

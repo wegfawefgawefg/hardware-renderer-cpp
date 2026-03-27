@@ -36,7 +36,8 @@ void App::AppendPaintSplat(const PaintSplatSpawn& splat)
 
 void App::AppendPersistentPaint(const PaintSplatSpawn& splat)
 {
-    if (m_state.lighting.sceneKind != SceneKind::PlayerMaskTest)
+    SceneKind sceneKind = m_state.lighting.sceneKind;
+    if (sceneKind != SceneKind::PlayerMaskTest && sceneKind != SceneKind::City)
     {
         return;
     }
@@ -142,16 +143,27 @@ bool App::TryApplySurfaceMaskBrush()
     auto& core = m_state.core;
     auto& lighting = m_state.lighting;
     auto& paint = m_state.paint;
-    paint.surfaceBrushHitValid = false;
-    if (lighting.sceneKind != SceneKind::PlayerMaskTest)
+    if (lighting.sceneKind != SceneKind::PlayerMaskTest &&
+        lighting.sceneKind != SceneKind::City)
     {
         return false;
     }
 
-    Vec3 forward = CameraRayDirection(core.camera);
-    TriangleMeshCollider::RayHit hit = core.worldCollider.Raycast(core.camera.position, forward, 200.0f);
+    TriangleMeshCollider::RayHit hit{};
+    if (paint.surfaceBrushHitValid)
+    {
+        hit.hit = true;
+        hit.position = paint.surfaceBrushHitPosition;
+        hit.normal = paint.surfaceBrushHitNormal;
+    }
+    else
+    {
+        Vec3 forward = CameraRayDirection(core.camera);
+        hit = core.worldCollider.Raycast(core.camera.position, forward, 200.0f);
+    }
     if (!hit.hit)
     {
+        paint.surfaceBrushHitValid = false;
         return false;
     }
 
@@ -212,21 +224,25 @@ void App::UpdateSurfaceMaskBrush(float dtSeconds)
     auto& lighting = m_state.lighting;
     auto& paint = m_state.paint;
     paint.surfaceBrushCooldown = std::max(0.0f, paint.surfaceBrushCooldown - dtSeconds);
-    paint.surfaceBrushHitValid = false;
 
-    if (lighting.sceneKind != SceneKind::PlayerMaskTest ||
+    if ((lighting.sceneKind != SceneKind::PlayerMaskTest &&
+         lighting.sceneKind != SceneKind::City) ||
         paint.interactionMode != PaintInteractionMode::SurfaceBrush)
     {
+        paint.surfaceBrushHitValid = false;
         return;
     }
 
-    Vec3 forward = CameraRayDirection(core.camera);
-    TriangleMeshCollider::RayHit hit = core.worldCollider.Raycast(core.camera.position, forward, 200.0f);
-    if (hit.hit)
+    if (runtime.mouseCaptured)
     {
-        paint.surfaceBrushHitValid = true;
-        paint.surfaceBrushHitPosition = hit.position;
-        paint.surfaceBrushHitNormal = hit.normal;
+        Vec3 forward = CameraRayDirection(core.camera);
+        TriangleMeshCollider::RayHit hit = core.worldCollider.Raycast(core.camera.position, forward, 200.0f);
+        paint.surfaceBrushHitValid = hit.hit;
+        if (hit.hit)
+        {
+            paint.surfaceBrushHitPosition = hit.position;
+            paint.surfaceBrushHitNormal = hit.normal;
+        }
     }
 
     if (paint.surfaceBrushHeld &&

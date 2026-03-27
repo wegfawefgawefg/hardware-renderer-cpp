@@ -142,6 +142,10 @@ void App::LoadDebugSettings()
     ExtractFloat(text, "\"paint_mask_strength\"", paint.surfaceMaskBrush.strength);
     ExtractFloat(text, "\"paint_mask_radius\"", paint.surfaceMaskBrush.radius);
     ExtractFloat(text, "\"paint_mask_flow_rate\"", paint.surfaceMaskBrush.flowRate);
+    ExtractFloat(text, "\"paint_vanish_split_strength\"", paint.vanishSplitStrength);
+    ExtractFloat(text, "\"paint_vanish_jitter_strength\"", paint.vanishJitterStrength);
+    ExtractFloat(text, "\"paint_vanish_static_strength\"", paint.vanishStaticStrength);
+    ExtractFloat(text, "\"paint_vanish_edge_glow_strength\"", paint.vanishEdgeGlowStrength);
     ExtractFloat(text, "\"paint_ball_color_r\"", paint.ballSettings.baseColor.x);
     ExtractFloat(text, "\"paint_ball_color_g\"", paint.ballSettings.baseColor.y);
     ExtractFloat(text, "\"paint_ball_color_b\"", paint.ballSettings.baseColor.z);
@@ -216,6 +220,10 @@ void App::SaveDebugSettings() const
         "  \"paint_mask_strength\": %.6f,\n"
         "  \"paint_mask_radius\": %.6f,\n"
         "  \"paint_mask_flow_rate\": %.6f,\n"
+        "  \"paint_vanish_split_strength\": %.6f,\n"
+        "  \"paint_vanish_jitter_strength\": %.6f,\n"
+        "  \"paint_vanish_static_strength\": %.6f,\n"
+        "  \"paint_vanish_edge_glow_strength\": %.6f,\n"
         "  \"paint_ball_color_r\": %.6f,\n"
         "  \"paint_ball_color_g\": %.6f,\n"
         "  \"paint_ball_color_b\": %.6f,\n"
@@ -274,6 +282,10 @@ void App::SaveDebugSettings() const
         paint.surfaceMaskBrush.strength,
         paint.surfaceMaskBrush.radius,
         paint.surfaceMaskBrush.flowRate,
+        paint.vanishSplitStrength,
+        paint.vanishJitterStrength,
+        paint.vanishStaticStrength,
+        paint.vanishEdgeGlowStrength,
         paint.ballSettings.baseColor.x,
         paint.ballSettings.baseColor.y,
         paint.ballSettings.baseColor.z,

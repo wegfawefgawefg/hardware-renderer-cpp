@@ -200,6 +200,12 @@ void App::Update(float dtSeconds)
         m_state.lighting.uvDebugScale,
         static_cast<float>(m_state.lighting.uvDebugMode)
     );
+    uniforms.surfaceMaskParamsA = Vec4Make(
+        paint.vanishSplitStrength,
+        paint.vanishJitterStrength,
+        paint.vanishStaticStrength,
+        paint.vanishEdgeGlowStrength
+    );
     for (std::uint32_t i = 0; i < paint.splatCount && i < kMaxPaintSplats; ++i)
     {
         const PaintSplat& splat = paint.splats[i];
@@ -329,18 +335,15 @@ void App::Update(float dtSeconds)
             debugOptions.selectionSphereColors[sphereIndex] = Vec4Make(color.x, color.y, color.z, 1.0f);
         }
 
-        Vec3 beamStart = Vec3Add(core.camera.position, Vec3Scale(CameraForward(core.camera), 0.35f));
         Vec3 beamEnd = paint.surfaceBrushHitPosition;
         Vec3 beamColor = Vec3Make(0.25f, 1.0f, 0.95f);
         if (paint.surfaceMaskBrush.channel == SurfaceMaskChannel::Grime) beamColor = Vec3Make(0.60f, 0.42f, 0.20f);
         if (paint.surfaceMaskBrush.channel == SurfaceMaskChannel::Glow) beamColor = Vec3Make(0.20f, 1.0f, 1.0f);
         if (paint.surfaceMaskBrush.channel == SurfaceMaskChannel::Wetness) beamColor = Vec3Make(0.20f, 0.55f, 1.0f);
         if (paint.surfaceMaskBrush.channel == SurfaceMaskChannel::Vanish) beamColor = Vec3Make(1.0f, 0.25f, 1.0f);
-        for (int i = 0; i < 12 && cubeIndex < DebugRenderOptions::kMaxCustomCubes; ++i)
+        if (cubeIndex < DebugRenderOptions::kMaxCustomCubes)
         {
-            float t = static_cast<float>(i) / 11.0f;
-            Vec3 p = Vec3Add(beamStart, Vec3Scale(Vec3Sub(beamEnd, beamStart), t));
-            debugOptions.customCubes[cubeIndex] = Vec4Make(p.x, p.y, p.z, 0.018f);
+            debugOptions.customCubes[cubeIndex] = Vec4Make(beamEnd.x, beamEnd.y, beamEnd.z, 0.045f);
             debugOptions.customCubeColors[cubeIndex] = Vec4Make(beamColor.x, beamColor.y, beamColor.z, 1.0f);
             ++cubeIndex;
         }

@@ -28,6 +28,7 @@ layout(binding = 0) uniform SceneUniforms
     vec4 paintSplatPositions[128];
     vec4 paintSplatNormals[128];
     vec4 paintSplatColors[128];
+    vec4 surfaceMaskParamsA;
     vec4 paintSplatCounts;
 } uniforms;
 
@@ -191,6 +192,42 @@ vec3 applyPaintSplats(vec3 baseAlbedo, vec3 worldPosition, vec3 normal)
     return painted;
 }
 
+vec3 sampleVanishRippedAlbedo(vec2 uv, vec3 localPosition)
+{
+    float time = uniforms.cameraPosition.w;
+    float vanish = clamp(texture(paintTexture, uv).a, 0.0, 1.0);
+    if (vanish <= 0.001)
+    {
+        return texture(albedoTexture, uv).rgb;
+    }
+
+    float staticNoise = fbm3(localPosition * 8.0 + vec3(uv * 31.0, time * 9.0));
+    float scan = sin(uv.y * 180.0 + time * 18.0 + localPosition.x * 11.0);
+    float wobble = sin(time * 7.5 + uv.y * 26.0 + localPosition.y * 5.0) * 0.5 +
+                   sin(time * 12.0 - uv.x * 19.0 + localPosition.z * 4.0) * 0.5;
+    float splitStrength = max(uniforms.surfaceMaskParamsA.x, 0.0);
+    float jitterStrength = max(uniforms.surfaceMaskParamsA.y, 0.0);
+    float staticStrength = max(uniforms.surfaceMaskParamsA.z, 0.0);
+    float split = vanish * vanish * (0.0015 + staticNoise * 0.0065) * splitStrength;
+    vec2 jitter = vec2((scan * 0.5 + wobble * 0.5) * split * 3.2, sin(time * 15.0 + uv.x * 60.0) * split * 0.9);
+    jitter *= jitterStrength;
+    vec2 rgbAxis = normalize(vec2(0.9, 0.35) + vec2(staticNoise - 0.5, wobble * 0.35));
+    vec2 rgbOffset = rgbAxis * split;
+
+    vec2 uvR = uv + jitter + rgbOffset;
+    vec2 uvG = uv + jitter * 0.6;
+    vec2 uvB = uv + jitter - rgbOffset;
+
+    vec3 ripped;
+    ripped.r = texture(albedoTexture, uvR).r;
+    ripped.g = texture(albedoTexture, uvG).g;
+    ripped.b = texture(albedoTexture, uvB).b;
+
+    float whiteStatic = smoothstep(0.78, 0.97, staticNoise) * vanish * 0.55 * staticStrength;
+    ripped = mix(ripped, vec3(0.92, 0.96, 1.0), whiteStatic);
+    return ripped;
+}
+
 SurfaceMaskEffects applySurfaceMasks(vec3 baseAlbedo, vec2 uv, vec3 localPosition)
 {
     float time = uniforms.cameraPosition.w;
@@ -232,6 +269,7 @@ SurfaceMaskEffects applySurfaceMasks(vec3 baseAlbedo, vec2 uv, vec3 localPositio
     float dissolveThreshold = 1.0 - vanish;
     float visibility = 1.0 - smoothstep(dissolveThreshold - 0.09, dissolveThreshold + 0.05, dissolveNoise);
     float dissolveEdge = smoothstep(0.02, 0.18, visibility) * (1.0 - smoothstep(0.18, 0.34, visibility));
+    float edgeGlowStrength = max(uniforms.surfaceMaskParamsA.w, 0.0);
 
     SurfaceMaskEffects effects;
     effects.albedo = albedo;
@@ -239,7 +277,7 @@ SurfaceMaskEffects applySurfaceMasks(vec3 baseAlbedo, vec2 uv, vec3 localPositio
     float glowMask = clamp(glow * mix(0.75, 1.30, glowPulse), 0.0, 1.0);
     vec3 glowColor = mix(vec3(0.18, 1.75, 0.48), vec3(0.62, 2.60, 0.78), glowPulse);
     effects.emissive = glowColor * (glowMask * glowMask * 8.5);
-    effects.emissive += vec3(3.6, 1.4, 0.35) * vanish * dissolveEdge * 1.6;
+    effects.emissive += vec3(3.6, 1.4, 0.35) * vanish * dissolveEdge * 1.6 * edgeGlowStrength;
     effects.emissive += vec3(0.16, 0.28, 0.55) * wetMask * dripMask * 0.65;
     effects.wetness = wetMask;
     effects.visibility = visibility;
@@ -301,6 +339,7 @@ void main()
         outColor = vec4(albedo, 1.0);
         return;
     }
+    albedo = sampleVanishRippedAlbedo(fragUv, fragLocalPosition);
     SurfaceMaskEffects maskEffects = applySurfaceMasks(albedo, fragUv, fragLocalPosition);
     if (maskEffects.visibility <= 0.01)
     {

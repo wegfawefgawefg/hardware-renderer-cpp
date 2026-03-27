@@ -119,6 +119,10 @@ struct PaintState
 {
     PaintBallSettings ballSettings = {};
     SurfaceMaskBrushSettings surfaceMaskBrush = {};
+    float vanishSplitStrength = 1.0f;
+    float vanishJitterStrength = 1.0f;
+    float vanishStaticStrength = 1.0f;
+    float vanishEdgeGlowStrength = 1.0f;
     PaintInteractionMode interactionMode = PaintInteractionMode::PaintBalls;
     bool fireHeld = false;
     bool surfaceBrushHeld = false;
