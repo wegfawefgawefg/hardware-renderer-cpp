@@ -1,9 +1,100 @@
 #include "scene_city_internal.h"
 
+#include <algorithm>
+#include <array>
 #include <cmath>
+#include <cstdio>
+
+#include "generated_prism.h"
 
 namespace city_internal
 {
+namespace
+{
+struct GeneratedBuildingSpec
+{
+    Vec3 halfExtents = {};
+    float yawDegrees = 0.0f;
+};
+
+constexpr std::array<float, 3> kBaseBuildingWidths = {3.75f, 4.375f, 5.0f};
+constexpr std::array<float, 3> kBaseBuildingDepths = {3.75f, 4.375f, 5.0f};
+constexpr std::array<float, 11> kBaseBuildingHeights = {
+    5.0f, 5.625f, 6.25f, 6.875f, 7.5f, 8.125f, 8.75f, 9.375f, 10.0f, 10.625f, 11.25f,
+};
+
+std::uint32_t HashBuildingSeed(int blockX, int blockZ, int edgeIndex)
+{
+    std::uint32_t x = static_cast<std::uint32_t>(blockX * 73856093);
+    std::uint32_t z = static_cast<std::uint32_t>(blockZ * 19349663);
+    std::uint32_t e = static_cast<std::uint32_t>(edgeIndex * 83492791);
+    return x ^ z ^ e;
+}
+
+float QuantizeDimension(float value, float step)
+{
+    float clampedStep = std::max(step, 0.05f);
+    return std::max(clampedStep, std::round(value / clampedStep) * clampedStep);
+}
+
+GeneratedBuildingSpec ChooseGeneratedBuildingSpec(
+    int blockX,
+    int blockZ,
+    int edgeIndex,
+    float yawDegrees,
+    float quadSize)
+{
+    std::uint32_t seed = HashBuildingSeed(blockX, blockZ, edgeIndex);
+    float fullWidth = kBaseBuildingWidths[seed % kBaseBuildingWidths.size()];
+    float fullDepth = kBaseBuildingDepths[(seed / 3u) % kBaseBuildingDepths.size()];
+    float fullHeight = kBaseBuildingHeights[(seed / 9u) % kBaseBuildingHeights.size()];
+
+    GeneratedBuildingSpec spec{};
+    spec.halfExtents.x = 0.5f * QuantizeDimension(fullWidth, quadSize);
+    spec.halfExtents.y = 0.5f * QuantizeDimension(fullHeight, quadSize);
+    spec.halfExtents.z = 0.5f * QuantizeDimension(fullDepth, quadSize);
+    spec.yawDegrees = yawDegrees;
+    return spec;
+}
+
+void AddGeneratedBuildingInstance(
+    SceneData& scene,
+    const AssetRegistry& assetRegistry,
+    ModelCache& cache,
+    int blockX,
+    int blockZ,
+    int edgeIndex,
+    Vec3 position,
+    float yawDegrees,
+    float quadSize
+)
+{
+    float clampedQuadSize = std::max(quadSize, 0.05f);
+    GeneratedBuildingSpec spec = ChooseGeneratedBuildingSpec(blockX, blockZ, edgeIndex, yawDegrees, clampedQuadSize);
+    int widthSteps = static_cast<int>(std::round((spec.halfExtents.x * 2.0f) / clampedQuadSize));
+    int heightSteps = static_cast<int>(std::round((spec.halfExtents.y * 2.0f) / clampedQuadSize));
+    int depthSteps = static_cast<int>(std::round((spec.halfExtents.z * 2.0f) / clampedQuadSize));
+
+    char key[128];
+    std::snprintf(
+        key,
+        sizeof(key),
+        "generated/city_building_w%d_h%d_d%d_q%03d",
+        widthSteps,
+        heightSteps,
+        depthSteps,
+        static_cast<int>(std::round(clampedQuadSize * 100.0f)));
+
+    AddGeneratedModelInstance(
+        scene,
+        cache,
+        key,
+        MakeGeneratedPrismModel(assetRegistry, spec.halfExtents, clampedQuadSize),
+        Vec3Make(position.x, spec.halfExtents.y, position.z),
+        spec.yawDegrees);
+}
+}
+
 void AddGroundTile(
     SceneData& scene,
     const AssetRegistry& assetRegistry,
@@ -135,7 +226,8 @@ void AddBlockPerimeterBuildings(
     const AssetRegistry& assetRegistry,
     ModelCache& cache,
     int blockX,
-    int blockZ
+    int blockZ,
+    float buildingQuadSize
 )
 {
     const int baseTileX = blockX * kRoadStrideTiles;
@@ -145,22 +237,58 @@ void AddBlockPerimeterBuildings(
     {
         const int txNorth = baseTileX + localX;
         const int tzNorth = baseTileZ + 1;
-        AddModelInstanceWithFootprint(scene, assetRegistry, cache, ChooseBuildingAsset(blockX, blockZ, localX), Vec3Make(TileCenter(txNorth), 0.0f, TileCenter(tzNorth)), 180.0f, kBuildingFootprint);
+        AddGeneratedBuildingInstance(
+            scene,
+            assetRegistry,
+            cache,
+            blockX,
+            blockZ,
+            localX,
+            Vec3Make(TileCenter(txNorth), 0.0f, TileCenter(tzNorth)),
+            180.0f,
+            buildingQuadSize);
 
         const int txSouth = baseTileX + localX;
         const int tzSouth = baseTileZ + kLotsPerBlockSide;
-        AddModelInstanceWithFootprint(scene, assetRegistry, cache, ChooseBuildingAsset(blockX, blockZ, 10 + localX), Vec3Make(TileCenter(txSouth), 0.0f, TileCenter(tzSouth)), 0.0f, kBuildingFootprint);
+        AddGeneratedBuildingInstance(
+            scene,
+            assetRegistry,
+            cache,
+            blockX,
+            blockZ,
+            10 + localX,
+            Vec3Make(TileCenter(txSouth), 0.0f, TileCenter(tzSouth)),
+            0.0f,
+            buildingQuadSize);
     }
 
     for (int localZ = 2; localZ <= kLotsPerBlockSide - 1; ++localZ)
     {
         const int txWest = baseTileX + 1;
         const int tzWest = baseTileZ + localZ;
-        AddModelInstanceWithFootprint(scene, assetRegistry, cache, ChooseBuildingAsset(blockX, blockZ, 20 + localZ), Vec3Make(TileCenter(txWest), 0.0f, TileCenter(tzWest)), 90.0f, kBuildingFootprint);
+        AddGeneratedBuildingInstance(
+            scene,
+            assetRegistry,
+            cache,
+            blockX,
+            blockZ,
+            20 + localZ,
+            Vec3Make(TileCenter(txWest), 0.0f, TileCenter(tzWest)),
+            90.0f,
+            buildingQuadSize);
 
         const int txEast = baseTileX + kLotsPerBlockSide;
         const int tzEast = baseTileZ + localZ;
-        AddModelInstanceWithFootprint(scene, assetRegistry, cache, ChooseBuildingAsset(blockX, blockZ, 30 + localZ), Vec3Make(TileCenter(txEast), 0.0f, TileCenter(tzEast)), -90.0f, kBuildingFootprint);
+        AddGeneratedBuildingInstance(
+            scene,
+            assetRegistry,
+            cache,
+            blockX,
+            blockZ,
+            30 + localZ,
+            Vec3Make(TileCenter(txEast), 0.0f, TileCenter(tzEast)),
+            -90.0f,
+            buildingQuadSize);
     }
 }
 
@@ -230,7 +358,7 @@ void AddStreetProps(SceneData& scene, const AssetRegistry& assetRegistry, ModelC
     }
 }
 
-void AddStreetWorld(SceneData& scene, const AssetRegistry& assetRegistry)
+void AddStreetWorld(SceneData& scene, const AssetRegistry& assetRegistry, float buildingQuadSize)
 {
     ModelCache cache{};
     const int minTile = -kHalfCityTiles;
@@ -251,7 +379,7 @@ void AddStreetWorld(SceneData& scene, const AssetRegistry& assetRegistry)
     {
         for (int bx = minBlock; bx < maxBlockExclusive; ++bx)
         {
-            AddBlockPerimeterBuildings(scene, assetRegistry, cache, bx, bz);
+            AddBlockPerimeterBuildings(scene, assetRegistry, cache, bx, bz, buildingQuadSize);
         }
     }
 

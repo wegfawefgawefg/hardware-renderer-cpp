@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdint>
 #include <vector>
 
 #include "lighting/runtime_internal.h"
@@ -81,8 +82,12 @@ void ApplyRuntimeLighting(State& state, SceneUniforms& uniforms, float dtSeconds
 
     std::array<LightCandidate, kMaxSceneSpotLights> selectedLights{};
     std::array<LightCandidate, kMaxShadowedSpotLights> shadowedLights{};
-    std::uint32_t activeBudget = std::min(lighting.spotLightMaxActive, kMaxSceneSpotLights);
-    std::uint32_t shadowedBudget = std::min(lighting.shadowedSpotLightMaxActive, kMaxShadowedSpotLights);
+    std::uint32_t activeBudget = lighting.enableLocalLights
+        ? std::min(lighting.spotLightMaxActive, kMaxSceneSpotLights)
+        : 0u;
+    std::uint32_t shadowedBudget = lighting.enableLocalLightShadows
+        ? std::min(lighting.shadowedSpotLightMaxActive, kMaxShadowedSpotLights)
+        : 0u;
     float activationDistance2 = lighting.spotLightActivationDistance * lighting.spotLightActivationDistance;
     float shadowedActivationDistance2 =
         lighting.shadowedSpotLightActivationDistance * lighting.shadowedSpotLightActivationDistance;
@@ -312,7 +317,18 @@ void ApplyRuntimeLighting(State& state, SceneUniforms& uniforms, float dtSeconds
     float farExtent = std::max(sceneRadius * 1.15f, splitDistance * 1.75f);
     uniforms.shadowViewProj[1] = MakeShadowViewProj(center, keyDirToLight, farExtent, farExtent, 0.1f, farExtent * 3.0f);
     float cascadeBlendWidth = std::max(splitDistance * 0.12f, 2.0f);
-    uniforms.shadowParams = Vec4Make(lighting.shadowBlur ? 1.0f : 0.0f, splitDistance, cascadeBlendWidth, 0.0f);
+    std::uint32_t shaderFeatureMask = 0;
+    if (lighting.enableMaterialEffects) shaderFeatureMask |= 1u << 0;
+    if (lighting.enablePaintSplats) shaderFeatureMask |= 1u << 1;
+    if (lighting.enableSunLighting) shaderFeatureMask |= 1u << 2;
+    if (lighting.enableSunShadows) shaderFeatureMask |= 1u << 3;
+    if (lighting.enableLocalLights) shaderFeatureMask |= 1u << 4;
+    if (lighting.enableLocalLightShadows) shaderFeatureMask |= 1u << 5;
+    uniforms.shadowParams = Vec4Make(
+        lighting.shadowBlur ? 1.0f : 0.0f,
+        splitDistance,
+        cascadeBlendWidth,
+        static_cast<float>(shaderFeatureMask));
 
     if (PopulateVehicleLightTestLighting(state, uniforms))
     {

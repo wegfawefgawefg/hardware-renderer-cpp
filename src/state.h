@@ -59,6 +59,7 @@ struct RuntimeState
     float smoothedFps = 0.0f;
     float titleRefreshSeconds = 0.0f;
     float overlayRefreshSeconds = 0.0f;
+    float gameplayAccumulatorSeconds = 0.0f;
     float characterAnimTime = 0.0f;
     float characterModelYaw = 0.0f;
     int activeCharacterAnim = 0;
@@ -102,6 +103,12 @@ struct LightingState
     float shadowedSpotLightActivationDistance = 16.0f;
     float shadowedSpotLightActivationForwardOffset = 6.0f;
     float normalMapStrength = 1.0f;
+    bool enableMaterialEffects = true;
+    bool enablePaintSplats = true;
+    bool enableSunLighting = true;
+    bool enableSunShadows = true;
+    bool enableLocalLights = true;
+    bool enableLocalLightShadows = true;
     float uvDebugScale = 8.0f;
     std::uint32_t uvDebugMode = 0;
     std::uint32_t materialDebugMode = 0;
@@ -141,6 +148,11 @@ struct PaintState
     std::uint32_t nextSplatIndex = 0;
 };
 
+struct CityGenerationState
+{
+    float buildingQuadSize = 0.625f;
+};
+
 struct State
 {
     CoreState core;
@@ -149,5 +161,6 @@ struct State
     VehicleLightEditorState vehicleLights;
     FractureSandboxState fracture;
     PaintState paint;
+    CityGenerationState city;
     text::System text;
 };

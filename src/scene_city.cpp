@@ -2,9 +2,9 @@
 
 #include "scene_city_internal.h"
 
-SceneData BuildSampleCity(const AssetRegistry& assetRegistry)
+SceneData BuildSampleCity(const AssetRegistry& assetRegistry, const CitySceneConfig& config)
 {
     SceneData scene{};
-    city_internal::AddStreetWorld(scene, assetRegistry);
+    city_internal::AddStreetWorld(scene, assetRegistry, config.buildingQuadSize);
     return scene;
 }

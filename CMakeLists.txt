@@ -203,6 +203,7 @@ add_executable(hardware-renderer-cpp
   src/gameplay/paint_balls.cpp
   src/gameplay/player_controller.cpp
   src/gameplay/traffic.cpp
+  src/generated_prism.cpp
   src/main.cpp
   src/math_types.cpp
   src/scene.cpp

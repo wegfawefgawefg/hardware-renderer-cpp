@@ -50,6 +50,7 @@ struct App
     void BuildPaintBallsWindow(bool& debugSettingsChanged);
     void BuildSurfaceMasksWindow(bool& debugSettingsChanged);
     void BuildFractureWindow(bool& debugSettingsChanged);
+    void BuildCityWindow(bool& debugSettingsChanged);
     void BuildVehicleLightsWindow(bool& debugSettingsChanged);
 
     SDL_Window* m_window = nullptr;

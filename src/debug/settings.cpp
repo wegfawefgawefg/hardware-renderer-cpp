@@ -64,6 +64,7 @@ void App::LoadDebugSettings()
     auto& vehicle = m_state.vehicleLights;
     auto& paint = m_state.paint;
     auto& fracture = m_state.fracture;
+    auto& city = m_state.city;
     std::ifstream in(DebugSettingsPath());
     if (!in)
     {
@@ -122,6 +123,12 @@ void App::LoadDebugSettings()
     if (ExtractFloat(text, "\"debug_draw_light_directions\"", boolValue)) lighting.debugDrawLightDirections = boolValue != 0.0f;
     if (ExtractFloat(text, "\"debug_draw_light_volumes\"", boolValue)) lighting.debugDrawLightVolumes = boolValue != 0.0f;
     if (ExtractFloat(text, "\"debug_draw_light_labels\"", boolValue)) lighting.debugDrawLightLabels = boolValue != 0.0f;
+    if (ExtractFloat(text, "\"enable_material_effects\"", boolValue)) lighting.enableMaterialEffects = boolValue != 0.0f;
+    if (ExtractFloat(text, "\"enable_paint_splats\"", boolValue)) lighting.enablePaintSplats = boolValue != 0.0f;
+    if (ExtractFloat(text, "\"enable_sun_lighting\"", boolValue)) lighting.enableSunLighting = boolValue != 0.0f;
+    if (ExtractFloat(text, "\"enable_sun_shadows\"", boolValue)) lighting.enableSunShadows = boolValue != 0.0f;
+    if (ExtractFloat(text, "\"enable_local_lights\"", boolValue)) lighting.enableLocalLights = boolValue != 0.0f;
+    if (ExtractFloat(text, "\"enable_local_light_shadows\"", boolValue)) lighting.enableLocalLightShadows = boolValue != 0.0f;
     if (ExtractFloat(text, "\"debug_draw_vehicle_volumes\"", boolValue)) vehicle.debugDrawVehicleVolumes = boolValue != 0.0f;
     if (ExtractFloat(text, "\"debug_draw_vehicle_light_ranges\"", boolValue)) vehicle.debugDrawVehicleLightRanges = boolValue != 0.0f;
     ExtractUInt(text, "\"paint_ball_bounce_limit\"", paint.ballSettings.bounceLimit);
@@ -132,7 +139,7 @@ void App::LoadDebugSettings()
     ExtractFloat(text, "\"paint_ball_radius\"", paint.ballSettings.radius);
     ExtractFloat(text, "\"paint_blob_radius\"", paint.ballSettings.blobRadius);
     std::uint32_t interactionMode = static_cast<std::uint32_t>(paint.interactionMode);
-    if (ExtractUInt(text, "\"paint_interaction_mode\"", interactionMode) && interactionMode <= 1u)
+    if (ExtractUInt(text, "\"paint_interaction_mode\"", interactionMode) && interactionMode <= 2u)
     {
         paint.interactionMode = static_cast<PaintInteractionMode>(interactionMode);
     }
@@ -159,6 +166,8 @@ void App::LoadDebugSettings()
     ExtractFloat(text, "\"fracture_decal_spread_degrees\"", fracture.settings.mesh.decalSpreadDegrees);
     ExtractUInt(text, "\"fracture_decal_burst_count\"", fracture.settings.mesh.decalBurstCount);
     ExtractFloat(text, "\"fracture_fire_rate\"", fracture.settings.fireRate);
+    ExtractFloat(text, "\"fracture_prism_quad_size\"", fracture.prism.quadSize);
+    ExtractFloat(text, "\"city_building_quad_size\"", city.buildingQuadSize);
 }
 
 void App::SaveDebugSettings() const
@@ -167,6 +176,7 @@ void App::SaveDebugSettings() const
     const auto& vehicle = m_state.vehicleLights;
     const auto& paint = m_state.paint;
     const auto& fracture = m_state.fracture;
+    const auto& city = m_state.city;
     std::filesystem::create_directories(DebugSettingsPath().parent_path());
     std::FILE* file = std::fopen(DebugSettingsPath().string().c_str(), "wb");
     if (file == nullptr)
@@ -217,6 +227,12 @@ void App::SaveDebugSettings() const
         "  \"debug_draw_light_directions\": %d,\n"
         "  \"debug_draw_light_volumes\": %d,\n"
         "  \"debug_draw_light_labels\": %d,\n"
+        "  \"enable_material_effects\": %d,\n"
+        "  \"enable_paint_splats\": %d,\n"
+        "  \"enable_sun_lighting\": %d,\n"
+        "  \"enable_sun_shadows\": %d,\n"
+        "  \"enable_local_lights\": %d,\n"
+        "  \"enable_local_light_shadows\": %d,\n"
         "  \"debug_draw_vehicle_volumes\": %d,\n"
         "  \"debug_draw_vehicle_light_ranges\": %d,\n"
         "  \"paint_ball_bounce_limit\": %u,\n"
@@ -245,7 +261,9 @@ void App::SaveDebugSettings() const
         "  \"fracture_decal_roll_variance_degrees\": %.6f,\n"
         "  \"fracture_decal_spread_degrees\": %.6f,\n"
         "  \"fracture_decal_burst_count\": %u,\n"
-        "  \"fracture_fire_rate\": %.6f\n"
+        "  \"fracture_fire_rate\": %.6f,\n"
+        "  \"fracture_prism_quad_size\": %.6f,\n"
+        "  \"city_building_quad_size\": %.6f\n"
         "}\n",
         static_cast<std::uint32_t>(lighting.sceneKind),
         lighting.cycleDayNight ? 1 : 0,
@@ -287,6 +305,12 @@ void App::SaveDebugSettings() const
         lighting.debugDrawLightDirections ? 1 : 0,
         lighting.debugDrawLightVolumes ? 1 : 0,
         lighting.debugDrawLightLabels ? 1 : 0,
+        lighting.enableMaterialEffects ? 1 : 0,
+        lighting.enablePaintSplats ? 1 : 0,
+        lighting.enableSunLighting ? 1 : 0,
+        lighting.enableSunShadows ? 1 : 0,
+        lighting.enableLocalLights ? 1 : 0,
+        lighting.enableLocalLightShadows ? 1 : 0,
         vehicle.debugDrawVehicleVolumes ? 1 : 0,
         vehicle.debugDrawVehicleLightRanges ? 1 : 0,
         paint.ballSettings.bounceLimit,
@@ -315,7 +339,9 @@ void App::SaveDebugSettings() const
         fracture.settings.mesh.decalRollVarianceDegrees,
         fracture.settings.mesh.decalSpreadDegrees,
         fracture.settings.mesh.decalBurstCount,
-        fracture.settings.fireRate
+        fracture.settings.fireRate,
+        fracture.prism.quadSize,
+        city.buildingQuadSize
     );
 
     std::fclose(file);

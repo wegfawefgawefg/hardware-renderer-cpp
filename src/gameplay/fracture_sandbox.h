@@ -20,9 +20,7 @@ struct FractureSandboxState
     struct PrismSettings
     {
         Vec3 halfExtents = {3.5f, 5.5f, 3.0f};
-        std::uint32_t segX = 14;
-        std::uint32_t segY = 20;
-        std::uint32_t segZ = 12;
+        float quadSize = 0.5f;
     };
 
     FractureSettings settings = {};

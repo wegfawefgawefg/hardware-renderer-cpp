@@ -45,6 +45,10 @@ void App::BuildLightingWindow(bool& debugSettingsChanged)
         float ms = runtime.smoothedFps > 0.0f ? 1000.0f / runtime.smoothedFps : 0.0f;
         ImGui::Text("%.2f ms  %.0f fps", ms, runtime.smoothedFps);
         ImGui::Text("%u ents  %u tris", static_cast<std::uint32_t>(core.scene.entities.size()), runtime.sceneTriangleCount);
+        ImGui::Text(
+            "%u / %u visible draws",
+            core.renderer.GetVisibleDrawItemCount(),
+            core.renderer.GetDrawItemCount());
         ImGui::Separator();
         debugSettingsChanged |= ImGui::Checkbox("Cycle day/night", &lighting.cycleDayNight);
         debugSettingsChanged |= ImGui::SliderFloat("Time of day", &lighting.timeOfDay, 0.0f, 1.0f, "%.3f");
@@ -72,7 +76,24 @@ void App::BuildLightingWindow(bool& debugSettingsChanged)
         debugSettingsChanged |= ImGui::SliderFloat("Moon intensity", &lighting.moonIntensity, 0.0f, 1.0f, "%.2f");
         debugSettingsChanged |= ImGui::SliderFloat("Ambient intensity", &lighting.ambientIntensity, 0.0f, 1.0f, "%.2f");
         debugSettingsChanged |= ImGui::SliderFloat("Point lights", &lighting.pointLightIntensity, 0.0f, 3.0f, "%.2f");
-        debugSettingsChanged |= ImGui::SliderFloat("Normal strength", &lighting.normalMapStrength, 0.0f, 3.0f, "%.2f");
+        bool normalMapsEnabled = lighting.normalMapStrength > 0.001f;
+        if (ImGui::Checkbox("Enable normal maps", &normalMapsEnabled))
+        {
+            lighting.normalMapStrength = normalMapsEnabled
+                ? std::max(lighting.normalMapStrength, 1.0f)
+                : 0.0f;
+            debugSettingsChanged = true;
+        }
+        if (normalMapsEnabled)
+        {
+            debugSettingsChanged |= ImGui::SliderFloat("Normal strength", &lighting.normalMapStrength, 0.0f, 3.0f, "%.2f");
+        }
+        debugSettingsChanged |= ImGui::Checkbox("Material effects", &lighting.enableMaterialEffects);
+        debugSettingsChanged |= ImGui::Checkbox("Paint splats", &lighting.enablePaintSplats);
+        debugSettingsChanged |= ImGui::Checkbox("Sun lighting", &lighting.enableSunLighting);
+        debugSettingsChanged |= ImGui::Checkbox("Sun shadows", &lighting.enableSunShadows);
+        debugSettingsChanged |= ImGui::Checkbox("Local lights", &lighting.enableLocalLights);
+        debugSettingsChanged |= ImGui::Checkbox("Local shadows", &lighting.enableLocalLightShadows);
         debugSettingsChanged |= ImGui::SliderFloat("Cascade split", &lighting.shadowCascadeSplit, 8.0f, 96.0f, "%.1f");
         ImGui::Separator();
         ImGui::Text("%s", runtime.mouseCaptured ? "Play mode: F1 or Esc to release mouse" : "Mouse mode: F1 to enter play mode");
@@ -311,9 +332,9 @@ void App::BuildSurfaceMasksWindow(bool& debugSettingsChanged)
     ImGui::SetNextWindowSize(ImVec2(300.0f, 220.0f), ImGuiCond_FirstUseEver);
     if (ImGui::Begin("Surface Masks"))
     {
-        static const char* interactionNames[] = {"Paint Balls", "Surface Brush"};
+        static const char* interactionNames[] = {"Paint Balls", "Surface Brush", "Damage"};
         int interactionMode = static_cast<int>(paint.interactionMode);
-        debugSettingsChanged |= ImGui::Combo("Interaction", &interactionMode, interactionNames, 2);
+        debugSettingsChanged |= ImGui::Combo("Interaction", &interactionMode, interactionNames, 3);
         paint.interactionMode = static_cast<PaintInteractionMode>(interactionMode);
 
         static const char* maskChannelNames[] = {"Grime", "Glow", "Wetness", "Vanish"};
@@ -353,6 +374,37 @@ void App::BuildSurfaceMasksWindow(bool& debugSettingsChanged)
         else
         {
             ImGui::TextUnformatted("Persistent surface masks are only active in Player Mask Test and City.");
+        }
+    }
+    ImGui::End();
+}
+
+void App::BuildCityWindow(bool& debugSettingsChanged)
+{
+    auto& lighting = m_state.lighting;
+    auto& city = m_state.city;
+    auto& runtime = m_state.runtime;
+    if (lighting.sceneKind != SceneKind::City)
+    {
+        return;
+    }
+
+    ImGuiViewport* viewport = ImGui::GetMainViewport();
+    ImVec2 pos(
+        viewport->WorkPos.x + viewport->WorkSize.x - kRightColumnWindowSize.x - kWindowPad,
+        viewport->WorkPos.y + viewport->WorkSize.y - 148.0f - kWindowPad
+    );
+    ImGui::SetNextWindowPos(pos, ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(300.0f, 148.0f), ImGuiCond_FirstUseEver);
+    if (ImGui::Begin("City Buildings"))
+    {
+        debugSettingsChanged |= ImGui::SliderFloat("Quad size", &city.buildingQuadSize, 0.25f, 4.0f, "%.3f");
+        city.buildingQuadSize = std::max(city.buildingQuadSize, 0.05f);
+        ImGui::TextUnformatted("Smaller quads increase density and damage fidelity.");
+        ImGui::TextUnformatted("Building sizes stay stable; only subdivision density changes.");
+        if (ImGui::Button("Regenerate city buildings"))
+        {
+            runtime.reloadSceneRequested = true;
         }
     }
     ImGui::End();

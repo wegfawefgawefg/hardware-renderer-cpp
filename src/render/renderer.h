@@ -331,6 +331,7 @@ struct VulkanRenderer
         std::uint32_t skinned = 0;
         std::uint32_t entityIndex = 0;
         std::uint32_t primitiveIndex = 0;
+        std::uint32_t materialFlags = 0;
         bool castsShadows = true;
         bool flipNormalY = true;
     };
@@ -385,11 +386,14 @@ struct VulkanRenderer
     std::uint32_t m_overlayBatchCount = 0;
     std::uint32_t m_shadowMapSize = 2048;
     std::uint32_t m_activeShadowMapCount = kSunShadowCascadeCount;
+    std::uint32_t m_activeShadowedSpotCount = 0;
     std::uint32_t m_accumulatedPaintHitCount = 0;
     std::uint32_t m_lightLineVertexCount = 0;
     std::uint32_t m_lightSolidVertexCount = 0;
     Vec4 m_clearColor = {0.09f, 0.10f, 0.12f, 1.0f};
     RenderProfilingStats m_profilingStats = {};
+    bool m_sunShadowsEnabled = true;
+    bool m_localLightShadowsEnabled = true;
     bool m_imguiInitialized = false;
     bool m_initialized = false;
 };

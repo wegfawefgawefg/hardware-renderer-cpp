@@ -32,15 +32,20 @@ void VulkanRenderer::RecordCommandBuffer(std::uint32_t imageIndex)
     renderPassInfo.clearValueCount = static_cast<std::uint32_t>(clearValues.size());
     renderPassInfo.pClearValues = clearValues.data();
 
-    std::uint32_t sunShadowCount = std::min<std::uint32_t>(m_activeShadowMapCount, kSunShadowCascadeCount);
-    for (std::uint32_t shadowIndex = 0; shadowIndex < sunShadowCount; ++shadowIndex)
+    if (m_sunShadowsEnabled)
     {
-        RecordShadowPass(commandBuffer, shadowIndex);
+        for (std::uint32_t shadowIndex = 0; shadowIndex < kSunShadowCascadeCount; ++shadowIndex)
+        {
+            RecordShadowPass(commandBuffer, shadowIndex);
+        }
     }
     vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, m_timestampQueryPool, 1);
-    for (std::uint32_t shadowIndex = sunShadowCount; shadowIndex < m_activeShadowMapCount; ++shadowIndex)
+    if (m_localLightShadowsEnabled)
     {
-        RecordShadowPass(commandBuffer, shadowIndex);
+        for (std::uint32_t shadowIndex = 0; shadowIndex < m_activeShadowedSpotCount; ++shadowIndex)
+        {
+            RecordShadowPass(commandBuffer, kSunShadowCascadeCount + shadowIndex);
+        }
     }
     vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, m_timestampQueryPool, 2);
 
@@ -71,6 +76,7 @@ void VulkanRenderer::RecordCommandBuffer(std::uint32_t imageIndex)
         pushConstants.pointLightMask = drawItem.pointLightMask;
         pushConstants.spotLightMask = drawItem.spotLightMask;
         pushConstants.shadowedSpotLightMask = drawItem.shadowedSpotLightMask;
+        pushConstants.materialFlags = drawItem.materialFlags;
         if (drawItem.flipNormalY)
         {
             pushConstants.materialFlags |= 1u;

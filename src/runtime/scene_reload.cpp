@@ -5,6 +5,7 @@
 #include <stdexcept>
 
 #include "decals/flat_decal_system.h"
+#include "scene_city.h"
 
 namespace
 {
@@ -93,6 +94,7 @@ void App::ReloadScene()
     auto& runtime = m_state.runtime;
     auto& lighting = m_state.lighting;
     auto& fracture = m_state.fracture;
+    auto& city = m_state.city;
     ShutdownImGui();
     core.renderer.Shutdown();
     decals::ClearFlatDecals(core.flatDecals);
@@ -107,9 +109,7 @@ void App::ReloadScene()
     {
         FractureSceneConfig config{};
         config.prismHalfExtents = fracture.prism.halfExtents;
-        config.prismSegX = fracture.prism.segX;
-        config.prismSegY = fracture.prism.segY;
-        config.prismSegZ = fracture.prism.segZ;
+        config.prismQuadSize = fracture.prism.quadSize;
         core.scene = BuildFractureTestScene(core.assetRegistry, config);
         for (const FractureDecalTemplateSpec& decalSpec : kFractureDecalTemplates)
         {
@@ -135,6 +135,12 @@ void App::ReloadScene()
             fracture.damageDecalTemplates[slot] = templateId;
             fracture.damageDecalTemplateNames[slot] = decalSpec.name;
         }
+    }
+    else if (lighting.sceneKind == SceneKind::City)
+    {
+        CitySceneConfig config{};
+        config.buildingQuadSize = city.buildingQuadSize;
+        core.scene = BuildSampleCity(core.assetRegistry, config);
     }
     else
     {

@@ -423,5 +423,5 @@ SceneData LoadSampleScene(const AssetRegistry& assetRegistry, SceneKind kind)
     {
         return BuildVehicleLightTestScene(assetRegistry);
     }
-    return BuildSampleCity(assetRegistry);
+    return BuildSampleCity(assetRegistry, CitySceneConfig{});
 }

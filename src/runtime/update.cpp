@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <string_view>
 
 #include "imgui.h"
 
@@ -10,6 +11,8 @@ namespace
 {
 constexpr float kTitleRefreshPeriod = 0.20f;
 constexpr float kOverlayRefreshPeriod = 0.12f;
+constexpr float kGameplayFixedStepSeconds = 1.0f / 120.0f;
+constexpr float kGameplayMaxCatchupSeconds = kGameplayFixedStepSeconds * 8.0f;
 
 Vec3 TransformPoint(Mat4 m, Vec3 p)
 {
@@ -73,7 +76,9 @@ void App::HandleEvent(const SDL_Event& event)
             }
             else if (runtime.mouseCaptured)
             {
-                if (lighting.sceneKind == SceneKind::FractureTest)
+                if (lighting.sceneKind == SceneKind::FractureTest ||
+                    (lighting.sceneKind == SceneKind::City &&
+                     paint.interactionMode == PaintInteractionMode::Damage))
                 {
                     fracture.fireHeld = fracture.settings.mesh.mode == damage::Mode::DamageDecal;
                     TryFireFractureShot();
@@ -142,19 +147,31 @@ void App::Update(float dtSeconds)
 
     auto inputStart = Clock::now();
     bool imguiCapturingKeyboard = ImGui::GetCurrentContext() != nullptr && ImGui::GetIO().WantCaptureKeyboard;
-    if (lighting.sceneKind == SceneKind::PlayerMaskTest || lighting.sceneKind == SceneKind::FractureTest)
+    runtime.gameplayAccumulatorSeconds = std::min(
+        runtime.gameplayAccumulatorSeconds + dtSeconds,
+        kGameplayMaxCatchupSeconds);
+    while (runtime.gameplayAccumulatorSeconds >= kGameplayFixedStepSeconds)
     {
-        PlayerFlyUpdate(core.camera, dtSeconds, runtime.mouseCaptured && !imguiCapturingKeyboard);
+        if (lighting.sceneKind == SceneKind::PlayerMaskTest || lighting.sceneKind == SceneKind::FractureTest)
+        {
+            PlayerFlyUpdate(core.camera, kGameplayFixedStepSeconds, runtime.mouseCaptured && !imguiCapturingKeyboard);
+        }
+        else
+        {
+            PlayerUpdateFromInput(
+                core.player,
+                core.worldCollider,
+                core.camera,
+                kGameplayFixedStepSeconds,
+                runtime.mouseCaptured && !imguiCapturingKeyboard);
+            PlayerSyncCamera(core.player, core.worldCollider, core.camera);
+        }
+        UpdateFractureSandbox(kGameplayFixedStepSeconds);
+        core.traffic.Update(core.scene, kGameplayFixedStepSeconds, 64);
+        UpdatePaintBalls(kGameplayFixedStepSeconds);
+        UpdateSurfaceMaskBrush(kGameplayFixedStepSeconds);
+        runtime.gameplayAccumulatorSeconds -= kGameplayFixedStepSeconds;
     }
-    else
-    {
-        PlayerUpdateFromInput(core.player, core.worldCollider, core.camera, dtSeconds, runtime.mouseCaptured && !imguiCapturingKeyboard);
-        PlayerSyncCamera(core.player, core.worldCollider, core.camera);
-    }
-    UpdateFractureSandbox(dtSeconds);
-    core.traffic.Update(core.scene, dtSeconds, 64);
-    UpdatePaintBalls(dtSeconds);
-    UpdateSurfaceMaskBrush(dtSeconds);
     core.renderer.UpdateSceneTransforms(core.scene);
     auto inputEnd = Clock::now();
     runtime.cpuProfiling.inputMs = std::chrono::duration<float, std::milli>(inputEnd - inputStart).count();
@@ -228,7 +245,7 @@ void App::Update(float dtSeconds)
     );
     uniforms.surfaceMaskParamsB = Vec4Make(
         lighting.normalMapStrength,
-        0.0f,
+        lighting.sceneKind == SceneKind::City ? m_state.city.buildingQuadSize : fracture.prism.quadSize,
         0.0f,
         0.0f
     );
@@ -377,7 +394,7 @@ void App::Update(float dtSeconds)
         }
     }
     debugOptions.customCubeCount = cubeIndex;
-    if (lighting.sceneKind == SceneKind::FractureTest)
+    if (lighting.sceneKind == SceneKind::FractureTest || lighting.sceneKind == SceneKind::City)
     {
         if (fracture.hitValid && debugOptions.selectionSphereCount < DebugRenderOptions::kMaxSelectionSpheres)
         {
@@ -428,11 +445,26 @@ void App::Update(float dtSeconds)
         if (fracture.showWireframe)
         {
             std::uint32_t lineIndex = 0;
+            static constexpr std::string_view kCityBuildingPrefix = "generated/city_building_";
             for (const EntityData& entity : core.scene.entities)
             {
                 if (!entity.collidable || entity.modelIndex >= core.scene.models.size())
                 {
                     continue;
+                }
+
+                if (lighting.sceneKind == SceneKind::City)
+                {
+                    if (entity.assetPath.compare(0, kCityBuildingPrefix.size(), kCityBuildingPrefix) != 0)
+                    {
+                        continue;
+                    }
+
+                    Vec3 entityCenter = TransformPoint(entity.transform, Vec3Make(0.0f, 0.0f, 0.0f));
+                    if (Vec3Length(Vec3Sub(entityCenter, core.camera.position)) > 20.0f)
+                    {
+                        continue;
+                    }
                 }
 
                 const ModelData& model = core.scene.models[entity.modelIndex];

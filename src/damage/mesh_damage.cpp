@@ -23,6 +23,41 @@ LocalTransform ExtractLocalTransform(Mat4 m)
     return result;
 }
 
+void EnsureEntityOwnsModel(SceneData& scene, std::uint32_t entityIndex)
+{
+    if (entityIndex >= scene.entities.size())
+    {
+        return;
+    }
+
+    EntityData& entity = scene.entities[entityIndex];
+    if (entity.modelIndex >= scene.models.size())
+    {
+        return;
+    }
+
+    std::uint32_t sharedCount = 0;
+    for (const EntityData& candidate : scene.entities)
+    {
+        if (candidate.modelIndex == entity.modelIndex)
+        {
+            ++sharedCount;
+            if (sharedCount > 1)
+            {
+                break;
+            }
+        }
+    }
+
+    if (sharedCount <= 1)
+    {
+        return;
+    }
+
+    scene.models.push_back(scene.models[entity.modelIndex]);
+    entity.modelIndex = static_cast<std::uint32_t>(scene.models.size() - 1);
+}
+
 Vec3 LocalToWorld(const LocalTransform& transform, Vec3 p)
 {
     return Vec3Add(transform.translation, Vec3Scale(p, transform.scale));
@@ -308,6 +343,7 @@ bool ApplyMeshDamage(
         return false;
     }
 
+    EnsureEntityOwnsModel(scene, hit.entityIndex);
     ModelData& model = scene.models[entity.modelIndex];
     LocalTransform transform = ExtractLocalTransform(entity.transform);
     Vec3 shotDir = Vec3Normalize(shotDirection);

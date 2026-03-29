@@ -69,6 +69,19 @@ struct SurfaceMaskEffects
     float visibility;
 };
 
+const uint kFeatureMaterialEffects = 1u << 0;
+const uint kFeaturePaintSplats = 1u << 1;
+const uint kFeatureSunLighting = 1u << 2;
+const uint kFeatureSunShadows = 1u << 3;
+const uint kFeatureLocalLights = 1u << 4;
+const uint kFeatureLocalLightShadows = 1u << 5;
+
+bool shaderFeatureEnabled(uint featureBit)
+{
+    uint featureMask = uint(uniforms.shadowParams.w + 0.5);
+    return (featureMask & featureBit) != 0u;
+}
+
 float hash31(vec3 p)
 {
     p = fract(p * 0.1031);
@@ -227,31 +240,46 @@ vec3 sampleMappedNormal(vec3 baseNormal, vec3 worldPosition, vec2 uv)
     return normalize(mix(normal, mapped, clamp(strength, 0.0, 1.0)));
 }
 
-vec3 sampleVanishRippedAlbedo(vec2 uv, vec3 localPosition)
+vec2 generatedQuadMaterialUv(vec3 localPosition, vec3 localNormal)
+{
+    float quadSize = max(uniforms.surfaceMaskParamsB.y, 0.05);
+    vec3 n = abs(normalize(localNormal));
+    if (n.y >= n.x && n.y >= n.z)
+    {
+        return vec2(localPosition.x, -localPosition.z) / quadSize + vec2(0.5);
+    }
+    if (n.x >= n.z)
+    {
+        return vec2(localPosition.z, -localPosition.y) / quadSize + vec2(0.5);
+    }
+    return vec2(localPosition.x, -localPosition.y) / quadSize + vec2(0.5);
+}
+
+vec3 sampleVanishRippedAlbedo(vec2 materialUv, vec2 paintUv, vec3 localPosition)
 {
     float time = uniforms.cameraPosition.w;
-    float vanish = clamp(texture(paintTexture, uv).a, 0.0, 1.0);
+    float vanish = clamp(texture(paintTexture, paintUv).a, 0.0, 1.0);
     if (vanish <= 0.001)
     {
-        return texture(albedoTexture, uv).rgb;
+        return texture(albedoTexture, materialUv).rgb;
     }
 
-    float staticNoise = fbm3(localPosition * 8.0 + vec3(uv * 31.0, time * 9.0));
-    float scan = sin(uv.y * 180.0 + time * 18.0 + localPosition.x * 11.0);
-    float wobble = sin(time * 7.5 + uv.y * 26.0 + localPosition.y * 5.0) * 0.5 +
-                   sin(time * 12.0 - uv.x * 19.0 + localPosition.z * 4.0) * 0.5;
+    float staticNoise = fbm3(localPosition * 8.0 + vec3(paintUv * 31.0, time * 9.0));
+    float scan = sin(paintUv.y * 180.0 + time * 18.0 + localPosition.x * 11.0);
+    float wobble = sin(time * 7.5 + paintUv.y * 26.0 + localPosition.y * 5.0) * 0.5 +
+                   sin(time * 12.0 - paintUv.x * 19.0 + localPosition.z * 4.0) * 0.5;
     float splitStrength = max(uniforms.surfaceMaskParamsA.x, 0.0);
     float jitterStrength = max(uniforms.surfaceMaskParamsA.y, 0.0);
     float staticStrength = max(uniforms.surfaceMaskParamsA.z, 0.0);
     float split = vanish * vanish * (0.0015 + staticNoise * 0.0065) * splitStrength;
-    vec2 jitter = vec2((scan * 0.5 + wobble * 0.5) * split * 3.2, sin(time * 15.0 + uv.x * 60.0) * split * 0.9);
+    vec2 jitter = vec2((scan * 0.5 + wobble * 0.5) * split * 3.2, sin(time * 15.0 + paintUv.x * 60.0) * split * 0.9);
     jitter *= jitterStrength;
     vec2 rgbAxis = normalize(vec2(0.9, 0.35) + vec2(staticNoise - 0.5, wobble * 0.35));
     vec2 rgbOffset = rgbAxis * split;
 
-    vec2 uvR = uv + jitter + rgbOffset;
-    vec2 uvG = uv + jitter * 0.6;
-    vec2 uvB = uv + jitter - rgbOffset;
+    vec2 uvR = materialUv + jitter + rgbOffset;
+    vec2 uvG = materialUv + jitter * 0.6;
+    vec2 uvB = materialUv + jitter - rgbOffset;
 
     vec3 ripped;
     ripped.r = texture(albedoTexture, uvR).r;
@@ -361,188 +389,224 @@ vec3 visualizeUv(vec2 uv)
 
 void main()
 {
-    vec3 normal = sampleMappedNormal(fragNormal, fragWorldPosition, fragUv);
-    vec4 albedoSample = texture(albedoTexture, fragUv);
+    vec2 materialUv = fragUv;
+    if ((drawPush.materialFlags & 4u) != 0u)
+    {
+        materialUv = generatedQuadMaterialUv(fragLocalPosition, fragLocalNormal);
+    }
+
+    int materialDebugMode = int(uniforms.paintSplatCounts.y + 0.5);
+    if (materialDebugMode == 2)
+    {
+        outColor = vec4(visualizeUv(materialUv), 1.0);
+        return;
+    }
+
+    vec4 albedoSample = texture(albedoTexture, materialUv);
     bool alphaBlend = (drawPush.materialFlags & 2u) != 0u;
     if ((!alphaBlend && albedoSample.a <= 0.1) ||
         (alphaBlend && albedoSample.a <= 0.01))
     {
         discard;
     }
-    vec3 albedo = albedoSample.rgb;
-    int materialDebugMode = int(uniforms.paintSplatCounts.y + 0.5);
-    if (materialDebugMode == 2)
-    {
-        outColor = vec4(visualizeUv(fragUv), 1.0);
-        return;
-    }
     if (materialDebugMode == 1)
     {
-        outColor = vec4(albedo, 1.0);
+        outColor = vec4(albedoSample.rgb, 1.0);
         return;
     }
-    albedo = sampleVanishRippedAlbedo(fragUv, fragLocalPosition);
-    SurfaceMaskEffects maskEffects = applySurfaceMasks(albedo, fragUv, fragLocalPosition);
+
+    vec3 normal = sampleMappedNormal(fragNormal, fragWorldPosition, materialUv);
+    vec3 albedo = albedoSample.rgb;
+    SurfaceMaskEffects maskEffects;
+    if (shaderFeatureEnabled(kFeatureMaterialEffects))
+    {
+        albedo = sampleVanishRippedAlbedo(materialUv, fragUv, fragLocalPosition);
+        maskEffects = applySurfaceMasks(albedo, fragUv, fragLocalPosition);
+    }
+    else
+    {
+        maskEffects.albedo = albedo;
+        maskEffects.emissive = vec3(0.0);
+        maskEffects.wetness = 0.0;
+        maskEffects.visibility = 1.0;
+    }
     float outAlpha = alphaBlend ? albedoSample.a * maskEffects.visibility : 1.0;
     if (maskEffects.visibility <= 0.01 || outAlpha <= 0.01)
     {
         discard;
     }
     albedo = maskEffects.albedo;
-    albedo = applyPaintSplats(albedo, fragWorldPosition, normal);
+    if (shaderFeatureEnabled(kFeaturePaintSplats))
+    {
+        albedo = applyPaintSplats(albedo, fragWorldPosition, normal);
+    }
     vec3 ambient = albedo * uniforms.ambientColor.rgb;
 
     vec3 lighting = ambient;
     vec3 sunDir = normalize(-uniforms.sunDirection.xyz);
     vec3 viewDir = normalize(uniforms.cameraPosition.xyz - fragWorldPosition);
-    float sunNdotL = max(dot(normal, sunDir), 0.0);
-    bool covered0 = shadowPositionCovered(fragShadowPosition0, 0);
-    bool covered1 = shadowPositionCovered(fragShadowPosition1, 1);
     float sunShadow = 1.0;
-    if (covered0 && covered1)
+    if (shaderFeatureEnabled(kFeatureSunLighting))
     {
-        float split = uniforms.shadowParams.y;
-        float blendWidth = max(uniforms.shadowParams.z, 0.0001);
-        float nearShadow = sampleShadow(0, fragShadowPosition0, normal, sunDir);
-        float farShadow = sampleShadow(1, fragShadowPosition1, normal, sunDir);
-        float blendT = smoothstep(split - blendWidth, split + blendWidth, fragViewDepth);
-        sunShadow = mix(nearShadow, farShadow, blendT);
-    }
-    else if (covered0)
-    {
-        sunShadow = sampleShadow(0, fragShadowPosition0, normal, sunDir);
-    }
-    else if (covered1)
-    {
-        sunShadow = sampleShadow(1, fragShadowPosition1, normal, sunDir);
-    }
-    lighting += albedo * uniforms.sunColor.rgb * sunNdotL * sunShadow;
-    vec3 sunHalfDir = normalize(sunDir + viewDir);
-    float sunFresnel = pow(1.0 - max(dot(normal, viewDir), 0.0), 4.0);
-    float sunSpec = pow(max(dot(normal, sunHalfDir), 0.0), mix(72.0, 5.0, maskEffects.wetness));
-    lighting += uniforms.sunColor.rgb * sunShadow * sunSpec * maskEffects.wetness * (0.45 + sunFresnel * 1.55);
+        if (shaderFeatureEnabled(kFeatureSunShadows))
+        {
+            bool covered0 = shadowPositionCovered(fragShadowPosition0, 0);
+            bool covered1 = shadowPositionCovered(fragShadowPosition1, 1);
+            if (covered0 && covered1)
+            {
+                float split = uniforms.shadowParams.y;
+                float blendWidth = max(uniforms.shadowParams.z, 0.0001);
+                float nearShadow = sampleShadow(0, fragShadowPosition0, normal, sunDir);
+                float farShadow = sampleShadow(1, fragShadowPosition1, normal, sunDir);
+                float blendT = smoothstep(split - blendWidth, split + blendWidth, fragViewDepth);
+                sunShadow = mix(nearShadow, farShadow, blendT);
+            }
+            else if (covered0)
+            {
+                sunShadow = sampleShadow(0, fragShadowPosition0, normal, sunDir);
+            }
+            else if (covered1)
+            {
+                sunShadow = sampleShadow(1, fragShadowPosition1, normal, sunDir);
+            }
+        }
 
-    for (int i = 0; i < 4; ++i)
-    {
-        if (((drawPush.pointLightMask >> i) & 1u) == 0u)
-        {
-            continue;
-        }
-        vec3 lightOffset = uniforms.lightPositions[i].xyz - fragWorldPosition;
-        float distanceToLight = length(lightOffset);
-        float lightRange = uniforms.lightPositions[i].w;
-        if (lightRange <= 0.0001 || distanceToLight >= lightRange)
-        {
-            continue;
-        }
-        vec3 lightDir = distanceToLight > 0.0001 ? lightOffset / distanceToLight : vec3(0.0, 1.0, 0.0);
-        float attenuation = 1.0 - distanceToLight / lightRange;
-        attenuation = max(attenuation, 0.0);
-        attenuation *= attenuation;
-        float ndotl = max(dot(normal, lightDir), 0.0);
-        lighting += albedo * uniforms.lightColors[i].rgb * ndotl * attenuation;
-        vec3 halfDir = normalize(lightDir + viewDir);
-        float fresnel = pow(1.0 - max(dot(normal, viewDir), 0.0), 4.0);
-        float spec = pow(max(dot(normal, halfDir), 0.0), mix(84.0, 5.0, maskEffects.wetness));
-        lighting += uniforms.lightColors[i].rgb * spec * attenuation * maskEffects.wetness * (0.20 + fresnel * 0.95);
+        float sunNdotL = max(dot(normal, sunDir), 0.0);
+        lighting += albedo * uniforms.sunColor.rgb * sunNdotL * sunShadow;
+        vec3 sunHalfDir = normalize(sunDir + viewDir);
+        float sunFresnel = pow(1.0 - max(dot(normal, viewDir), 0.0), 4.0);
+        float sunSpec = pow(max(dot(normal, sunHalfDir), 0.0), mix(72.0, 5.0, maskEffects.wetness));
+        lighting += uniforms.sunColor.rgb * sunShadow * sunSpec * maskEffects.wetness * (0.45 + sunFresnel * 1.55);
     }
 
-    int shadowedSpotLightCount = int(uniforms.sceneLightCounts.y);
-    for (int i = 0; i < shadowedSpotLightCount; ++i)
+    if (shaderFeatureEnabled(kFeatureLocalLights))
     {
-        if (((drawPush.shadowedSpotLightMask >> i) & 1u) == 0u)
+        for (int i = 0; i < 4; ++i)
         {
-            continue;
-        }
-        vec3 lightOffset = uniforms.shadowedSpotLightPositions[i].xyz - fragWorldPosition;
-        float distanceToLight = length(lightOffset);
-        if (distanceToLight <= 0.0001 || distanceToLight >= uniforms.shadowedSpotLightPositions[i].w)
-        {
-            continue;
-        }
-
-        vec3 lightDir = lightOffset / distanceToLight;
-        vec3 spotDir = normalize(uniforms.shadowedSpotLightDirections[i].xyz);
-        float coneCos = dot(-lightDir, spotDir);
-        float innerCos = uniforms.shadowedSpotLightParams[i].x;
-        float outerCos = uniforms.shadowedSpotLightParams[i].y;
-        float coneAttenuation = clamp((coneCos - outerCos) / max(innerCos - outerCos, 0.0001), 0.0, 1.0);
-        if (coneAttenuation <= 0.0)
-        {
-            continue;
-        }
-
-        float rangeAttenuation = 1.0 - distanceToLight / uniforms.shadowedSpotLightPositions[i].w;
-        rangeAttenuation = max(rangeAttenuation, 0.0);
-        rangeAttenuation *= rangeAttenuation;
-        float ndotl = max(dot(normal, lightDir), 0.0);
-        vec4 shadowPosition = uniforms.shadowViewProj[2 + i] * vec4(fragWorldPosition, 1.0);
-        float spotShadow = shadowPositionCovered(shadowPosition, 2 + i)
-            ? sampleShadow(2 + i, shadowPosition, normal, lightDir)
-            : 1.0;
-        lighting += albedo *
-            uniforms.shadowedSpotLightColors[i].rgb *
-            uniforms.shadowedSpotLightColors[i].w *
-            ndotl *
-            rangeAttenuation *
-            coneAttenuation *
-            spotShadow;
-        vec3 halfDir = normalize(lightDir + viewDir);
-        float fresnel = pow(1.0 - max(dot(normal, viewDir), 0.0), 4.0);
-        float spec = pow(max(dot(normal, halfDir), 0.0), mix(84.0, 5.0, maskEffects.wetness));
-        lighting += uniforms.shadowedSpotLightColors[i].rgb *
-            uniforms.shadowedSpotLightColors[i].w *
-            spec *
-            rangeAttenuation *
-            coneAttenuation *
-            spotShadow *
-            maskEffects.wetness * (0.24 + fresnel * 1.05);
-    }
-
-    int sceneLightCount = int(uniforms.sceneLightCounts.x);
-    for (int i = 0; i < sceneLightCount; ++i)
-    {
-        if (((drawPush.spotLightMask >> i) & 1u) == 0u)
-        {
-            continue;
-        }
-        vec3 lightOffset = uniforms.spotLightPositions[i].xyz - fragWorldPosition;
-        float distanceToLight = length(lightOffset);
-        if (distanceToLight <= 0.0001 || distanceToLight >= uniforms.spotLightPositions[i].w)
-        {
-            continue;
+            if (((drawPush.pointLightMask >> i) & 1u) == 0u)
+            {
+                continue;
+            }
+            vec3 lightOffset = uniforms.lightPositions[i].xyz - fragWorldPosition;
+            float distanceToLight = length(lightOffset);
+            float lightRange = uniforms.lightPositions[i].w;
+            if (lightRange <= 0.0001 || distanceToLight >= lightRange)
+            {
+                continue;
+            }
+            vec3 lightDir = distanceToLight > 0.0001 ? lightOffset / distanceToLight : vec3(0.0, 1.0, 0.0);
+            float attenuation = 1.0 - distanceToLight / lightRange;
+            attenuation = max(attenuation, 0.0);
+            attenuation *= attenuation;
+            float ndotl = max(dot(normal, lightDir), 0.0);
+            lighting += albedo * uniforms.lightColors[i].rgb * ndotl * attenuation;
+            vec3 halfDir = normalize(lightDir + viewDir);
+            float fresnel = pow(1.0 - max(dot(normal, viewDir), 0.0), 4.0);
+            float spec = pow(max(dot(normal, halfDir), 0.0), mix(84.0, 5.0, maskEffects.wetness));
+            lighting += uniforms.lightColors[i].rgb * spec * attenuation * maskEffects.wetness * (0.20 + fresnel * 0.95);
         }
 
-        vec3 lightDir = lightOffset / distanceToLight;
-        vec3 spotDir = normalize(uniforms.spotLightDirections[i].xyz);
-        float coneCos = dot(-lightDir, spotDir);
-        float innerCos = uniforms.spotLightParams[i].x;
-        float outerCos = uniforms.spotLightParams[i].y;
-        float coneAttenuation = clamp((coneCos - outerCos) / max(innerCos - outerCos, 0.0001), 0.0, 1.0);
-        if (coneAttenuation <= 0.0)
+        int shadowedSpotLightCount = int(uniforms.sceneLightCounts.y);
+        for (int i = 0; i < shadowedSpotLightCount; ++i)
         {
-            continue;
+            if (((drawPush.shadowedSpotLightMask >> i) & 1u) == 0u)
+            {
+                continue;
+            }
+            vec3 lightOffset = uniforms.shadowedSpotLightPositions[i].xyz - fragWorldPosition;
+            float distanceToLight = length(lightOffset);
+            if (distanceToLight <= 0.0001 || distanceToLight >= uniforms.shadowedSpotLightPositions[i].w)
+            {
+                continue;
+            }
+
+            vec3 lightDir = lightOffset / distanceToLight;
+            vec3 spotDir = normalize(uniforms.shadowedSpotLightDirections[i].xyz);
+            float coneCos = dot(-lightDir, spotDir);
+            float innerCos = uniforms.shadowedSpotLightParams[i].x;
+            float outerCos = uniforms.shadowedSpotLightParams[i].y;
+            float coneAttenuation = clamp((coneCos - outerCos) / max(innerCos - outerCos, 0.0001), 0.0, 1.0);
+            if (coneAttenuation <= 0.0)
+            {
+                continue;
+            }
+
+            float rangeAttenuation = 1.0 - distanceToLight / uniforms.shadowedSpotLightPositions[i].w;
+            rangeAttenuation = max(rangeAttenuation, 0.0);
+            rangeAttenuation *= rangeAttenuation;
+            float ndotl = max(dot(normal, lightDir), 0.0);
+            float spotShadow = 1.0;
+            if (shaderFeatureEnabled(kFeatureLocalLightShadows))
+            {
+                vec4 shadowPosition = uniforms.shadowViewProj[2 + i] * vec4(fragWorldPosition, 1.0);
+                spotShadow = shadowPositionCovered(shadowPosition, 2 + i)
+                    ? sampleShadow(2 + i, shadowPosition, normal, lightDir)
+                    : 1.0;
+            }
+            lighting += albedo *
+                uniforms.shadowedSpotLightColors[i].rgb *
+                uniforms.shadowedSpotLightColors[i].w *
+                ndotl *
+                rangeAttenuation *
+                coneAttenuation *
+                spotShadow;
+            vec3 halfDir = normalize(lightDir + viewDir);
+            float fresnel = pow(1.0 - max(dot(normal, viewDir), 0.0), 4.0);
+            float spec = pow(max(dot(normal, halfDir), 0.0), mix(84.0, 5.0, maskEffects.wetness));
+            lighting += uniforms.shadowedSpotLightColors[i].rgb *
+                uniforms.shadowedSpotLightColors[i].w *
+                spec *
+                rangeAttenuation *
+                coneAttenuation *
+                spotShadow *
+                maskEffects.wetness * (0.24 + fresnel * 1.05);
         }
 
-        float rangeAttenuation = 1.0 - distanceToLight / uniforms.spotLightPositions[i].w;
-        rangeAttenuation = max(rangeAttenuation, 0.0);
-        rangeAttenuation *= rangeAttenuation;
-        float ndotl = max(dot(normal, lightDir), 0.0);
-        lighting += albedo *
-            uniforms.spotLightColors[i].rgb *
-            uniforms.spotLightColors[i].w *
-            ndotl *
-            rangeAttenuation *
-            coneAttenuation;
-        vec3 halfDir = normalize(lightDir + viewDir);
-        float fresnel = pow(1.0 - max(dot(normal, viewDir), 0.0), 4.0);
-        float spec = pow(max(dot(normal, halfDir), 0.0), mix(84.0, 5.0, maskEffects.wetness));
-        lighting += uniforms.spotLightColors[i].rgb *
-            uniforms.spotLightColors[i].w *
-            spec *
-            rangeAttenuation *
-            coneAttenuation *
-            maskEffects.wetness * (0.20 + fresnel * 0.95);
+        int sceneLightCount = int(uniforms.sceneLightCounts.x);
+        for (int i = 0; i < sceneLightCount; ++i)
+        {
+            if (((drawPush.spotLightMask >> i) & 1u) == 0u)
+            {
+                continue;
+            }
+            vec3 lightOffset = uniforms.spotLightPositions[i].xyz - fragWorldPosition;
+            float distanceToLight = length(lightOffset);
+            if (distanceToLight <= 0.0001 || distanceToLight >= uniforms.spotLightPositions[i].w)
+            {
+                continue;
+            }
+
+            vec3 lightDir = lightOffset / distanceToLight;
+            vec3 spotDir = normalize(uniforms.spotLightDirections[i].xyz);
+            float coneCos = dot(-lightDir, spotDir);
+            float innerCos = uniforms.spotLightParams[i].x;
+            float outerCos = uniforms.spotLightParams[i].y;
+            float coneAttenuation = clamp((coneCos - outerCos) / max(innerCos - outerCos, 0.0001), 0.0, 1.0);
+            if (coneAttenuation <= 0.0)
+            {
+                continue;
+            }
+
+            float rangeAttenuation = 1.0 - distanceToLight / uniforms.spotLightPositions[i].w;
+            rangeAttenuation = max(rangeAttenuation, 0.0);
+            rangeAttenuation *= rangeAttenuation;
+            float ndotl = max(dot(normal, lightDir), 0.0);
+            lighting += albedo *
+                uniforms.spotLightColors[i].rgb *
+                uniforms.spotLightColors[i].w *
+                ndotl *
+                rangeAttenuation *
+                coneAttenuation;
+            vec3 halfDir = normalize(lightDir + viewDir);
+            float fresnel = pow(1.0 - max(dot(normal, viewDir), 0.0), 4.0);
+            float spec = pow(max(dot(normal, halfDir), 0.0), mix(84.0, 5.0, maskEffects.wetness));
+            lighting += uniforms.spotLightColors[i].rgb *
+                uniforms.spotLightColors[i].w *
+                spec *
+                rangeAttenuation *
+                coneAttenuation *
+                maskEffects.wetness * (0.20 + fresnel * 0.95);
+        }
     }
 
     vec3 color = mix(uniforms.clearColor.rgb, lighting + maskEffects.emissive, maskEffects.visibility);

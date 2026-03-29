@@ -3,12 +3,14 @@
 #include <algorithm>
 
 #include "imgui.h"
+#include "generated_prism.h"
 
 void App::BuildFractureWindow(bool& debugSettingsChanged)
 {
     auto& lighting = m_state.lighting;
     auto& fracture = m_state.fracture;
-    if (lighting.sceneKind != SceneKind::FractureTest)
+    if (lighting.sceneKind != SceneKind::FractureTest &&
+        lighting.sceneKind != SceneKind::City)
     {
         return;
     }
@@ -30,7 +32,7 @@ void App::BuildFractureWindow(bool& debugSettingsChanged)
             fracture.settings.mesh.mode = static_cast<damage::Mode>(mode);
             debugSettingsChanged = true;
         }
-        if (ImGui::Button("Reset scene"))
+        if (ImGui::Button(lighting.sceneKind == SceneKind::City ? "Rebuild city collision" : "Reset scene"))
         {
             m_state.runtime.reloadSceneRequested = true;
         }
@@ -91,22 +93,35 @@ void App::BuildFractureWindow(bool& debugSettingsChanged)
             fracture.settings.mesh.decalBurstCount = static_cast<std::uint32_t>(burstCount);
             debugSettingsChanged |= ImGui::SliderFloat("Fire rate", &fracture.settings.fireRate, 1.0f, 60.0f, "%.1f / s");
         }
-        ImGui::SeparatorText("Generated Prism");
-        ImGui::SliderFloat3("Half extents", &fracture.prism.halfExtents.x, 1.0f, 12.0f, "%.2f");
-        int segX = static_cast<int>(fracture.prism.segX);
-        int segY = static_cast<int>(fracture.prism.segY);
-        int segZ = static_cast<int>(fracture.prism.segZ);
-        ImGui::SliderInt("Face div X", &segX, 1, 40);
-        ImGui::SliderInt("Face div Y", &segY, 1, 60);
-        ImGui::SliderInt("Face div Z", &segZ, 1, 40);
-        fracture.prism.segX = static_cast<std::uint32_t>(segX);
-        fracture.prism.segY = static_cast<std::uint32_t>(segY);
-        fracture.prism.segZ = static_cast<std::uint32_t>(segZ);
-        if (ImGui::Button("Regenerate prism"))
+        if (lighting.sceneKind == SceneKind::FractureTest)
         {
-            m_state.runtime.reloadSceneRequested = true;
+            ImGui::SeparatorText("Generated Prism");
+            ImGui::SliderFloat3("Half extents", &fracture.prism.halfExtents.x, 1.0f, 12.0f, "%.2f");
+            ImGui::SliderFloat("Target quad size", &fracture.prism.quadSize, 0.2f, 2.0f, "%.3f");
+            fracture.prism.quadSize = std::max(fracture.prism.quadSize, 0.05f);
+            GeneratedPrismLayout layout = ComputeGeneratedPrismLayout(
+                fracture.prism.halfExtents,
+                fracture.prism.quadSize);
+            std::uint32_t prismTriangleCount =
+                4u * (layout.segX * layout.segY + layout.segY * layout.segZ + layout.segX * layout.segZ);
+            ImGui::Text(
+                "Face divs: %u x %u x %u",
+                layout.segX,
+                layout.segY,
+                layout.segZ);
+            ImGui::Text("Generated prism tris: %u", prismTriangleCount);
+            if (ImGui::Button("Regenerate prism"))
+            {
+                m_state.runtime.reloadSceneRequested = true;
+            }
+            ImGui::TextUnformatted("Left click dents, punches, or stamps decals on the generated prism.");
         }
-        ImGui::TextUnformatted("Left click dents, punches, or stamps decals on the generated prism.");
+        else
+        {
+            ImGui::SeparatorText("City Damage");
+            ImGui::TextUnformatted("Use the Surface Masks window to switch City interaction to Damage.");
+            ImGui::TextUnformatted("Left click dents, punches, or stamps decals on generated city buildings.");
+        }
     }
     ImGui::End();
 }

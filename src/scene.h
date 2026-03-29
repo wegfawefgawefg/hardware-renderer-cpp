@@ -44,6 +44,7 @@ struct MaterialData
     std::int32_t normalTextureIndex = -1;
     bool castsShadows = true;
     bool flipNormalY = true;
+    bool generatedQuadMaterialUv = false;
 };
 
 struct SpotLightData
@@ -105,9 +106,7 @@ struct SceneBounds
 struct FractureSceneConfig
 {
     Vec3 prismHalfExtents = {3.5f, 5.5f, 3.0f};
-    std::uint32_t prismSegX = 14;
-    std::uint32_t prismSegY = 20;
-    std::uint32_t prismSegZ = 12;
+    float prismQuadSize = 0.5f;
 };
 
 enum class SceneKind

@@ -88,6 +88,10 @@ void VulkanRenderer::CreateSceneBuffers(const SceneData& scene)
             {
                 item.castsShadows = model.materials[primitive.materialIndex].castsShadows;
                 item.flipNormalY = model.materials[primitive.materialIndex].flipNormalY;
+                if (model.materials[primitive.materialIndex].generatedQuadMaterialUv)
+                {
+                    item.materialFlags |= 4u;
+                }
             }
             m_drawItems.push_back(item);
         }
@@ -249,6 +253,10 @@ bool VulkanRenderer::UpdateSceneGeometry(const SceneData& scene)
             {
                 item.castsShadows = model.materials[primitive.materialIndex].castsShadows;
                 item.flipNormalY = model.materials[primitive.materialIndex].flipNormalY;
+                if (model.materials[primitive.materialIndex].generatedQuadMaterialUv)
+                {
+                    item.materialFlags |= 4u;
+                }
             }
             newDrawItems.push_back(item);
         }

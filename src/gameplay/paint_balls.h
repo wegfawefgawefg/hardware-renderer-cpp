@@ -19,6 +19,7 @@ enum class PaintInteractionMode : std::uint32_t
 {
     PaintBalls = 0,
     SurfaceBrush = 1,
+    Damage = 2,
 };
 
 struct PaintBallSettings

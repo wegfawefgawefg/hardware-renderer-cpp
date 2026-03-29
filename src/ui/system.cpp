@@ -94,6 +94,7 @@ void App::BuildImGui()
         BuildPaintBallsWindow(debugSettingsChanged);
         BuildSurfaceMasksWindow(debugSettingsChanged);
         BuildFractureWindow(debugSettingsChanged);
+        BuildCityWindow(debugSettingsChanged);
         BuildVehicleLightsWindow(debugSettingsChanged);
 
         if (debugSettingsChanged)

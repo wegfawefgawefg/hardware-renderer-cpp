@@ -29,11 +29,14 @@ void App::UpdateFractureSandbox(float dtSeconds)
 {
     auto& lighting = m_state.lighting;
     auto& fracture = m_state.fracture;
+    auto& paint = m_state.paint;
     UpdateFractureSandboxHover(
         m_state.core.worldCollider,
         m_state.core.camera,
         fracture,
-        lighting.sceneKind == SceneKind::FractureTest,
+        lighting.sceneKind == SceneKind::FractureTest ||
+            (lighting.sceneKind == SceneKind::City &&
+             paint.interactionMode == PaintInteractionMode::Damage),
         dtSeconds);
     if (fracture.settings.mesh.mode == damage::Mode::DamageDecal &&
         m_state.runtime.mouseCaptured &&

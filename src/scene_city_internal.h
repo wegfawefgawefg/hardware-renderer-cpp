@@ -39,18 +39,29 @@ std::uint32_t AddModelInstanceWithFootprint(
     bool traffic = false,
     std::int32_t trafficDirection = -1
 );
+std::uint32_t AddGeneratedModelInstance(
+    SceneData& scene,
+    ModelCache& cache,
+    std::string key,
+    ModelData model,
+    Vec3 position,
+    float yawDegrees,
+    bool collidable = true,
+    bool traffic = false,
+    std::int32_t trafficDirection = -1
+);
 float TileCenter(int tile);
 bool IsRoadTile(int tx, int tz);
 bool IsIntersectionTile(int tx, int tz);
 void AddGroundTile(SceneData& scene, const AssetRegistry& assetRegistry, ModelCache& cache, int tx, int tz);
 void AddRoadTile(SceneData& scene, const AssetRegistry& assetRegistry, ModelCache& cache, int tx, int tz);
-const char* ChooseBuildingAsset(int bx, int bz, int edgeIndex);
 void AddBlockPerimeterBuildings(
     SceneData& scene,
     const AssetRegistry& assetRegistry,
     ModelCache& cache,
     int blockX,
-    int blockZ
+    int blockZ,
+    float buildingQuadSize
 );
 void AddTrafficVehicles(
     SceneData& scene,
@@ -60,5 +71,5 @@ void AddTrafficVehicles(
     int maxTile
 );
 void AddStreetProps(SceneData& scene, const AssetRegistry& assetRegistry, ModelCache& cache);
-void AddStreetWorld(SceneData& scene, const AssetRegistry& assetRegistry);
+void AddStreetWorld(SceneData& scene, const AssetRegistry& assetRegistry, float buildingQuadSize);
 }

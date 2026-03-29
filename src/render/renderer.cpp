@@ -2,6 +2,7 @@
 #include "render/internal.h"
 
 #include <array>
+#include <cmath>
 #include <cstring>
 
 void VulkanRenderer::Render(
@@ -56,12 +57,17 @@ void VulkanRenderer::Render(
     FlushDirtyPaintTextures();
 
     std::memcpy(m_uniformBuffer.mapped, &uniforms, sizeof(uniforms));
-    std::uint32_t activeShadowedSpots =
-        std::min<std::uint32_t>(static_cast<std::uint32_t>(uniforms.sceneLightCounts.y), kMaxShadowedSpotLights);
-    m_activeShadowMapCount = kSunShadowCascadeCount + activeShadowedSpots;
+    std::uint32_t shaderFeatureMask = static_cast<std::uint32_t>(std::lround(uniforms.shadowParams.w));
+    m_sunShadowsEnabled = (shaderFeatureMask & (1u << 3)) != 0u;
+    m_localLightShadowsEnabled = (shaderFeatureMask & (1u << 5)) != 0u;
+    std::uint32_t activeSunShadowCascades = m_sunShadowsEnabled ? kSunShadowCascadeCount : 0u;
+    m_activeShadowedSpotCount = m_localLightShadowsEnabled
+        ? std::min<std::uint32_t>(static_cast<std::uint32_t>(uniforms.sceneLightCounts.y), kMaxShadowedSpotLights)
+        : 0u;
+    m_activeShadowMapCount = activeSunShadowCascades + m_activeShadowedSpotCount;
     DebugRenderOptions debug = debugOptions != nullptr ? *debugOptions : DebugRenderOptions{};
     m_mainCullDistance = std::max(debug.mainDrawDistance, 1.0f);
-    m_shadowCullDistance = std::max(debug.shadowDrawDistance, 1.0f);
+    m_shadowCullDistance = m_activeShadowMapCount > 0 ? std::max(debug.shadowDrawDistance, 1.0f) : 1.0f;
     UpdateMainPassVisibility(uniforms);
     UpdateDrawLightMasks(uniforms);
     UpdateFlatDecalGeometry(flatDecals);
