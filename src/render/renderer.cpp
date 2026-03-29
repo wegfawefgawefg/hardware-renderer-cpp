@@ -6,9 +6,8 @@
 
 void VulkanRenderer::Render(
     const SceneUniforms& uniforms,
-    std::span<const std::uint32_t> overlayPixels,
-    std::uint32_t overlayWidth,
-    std::uint32_t overlayHeight,
+    const text::System& text,
+    const decals::FlatDecalSystem* flatDecals,
     const CharacterRenderState* characterState,
     const DebugRenderOptions* debugOptions
 )
@@ -65,20 +64,11 @@ void VulkanRenderer::Render(
     m_shadowCullDistance = std::max(debug.shadowDrawDistance, 1.0f);
     UpdateMainPassVisibility(uniforms);
     UpdateDrawLightMasks(uniforms);
+    UpdateFlatDecalGeometry(flatDecals);
     m_characterState = characterState != nullptr ? *characterState : CharacterRenderState{};
     m_clearColor = uniforms.clearColor;
-    if (overlayPixels.size_bytes() > vulkan_renderer_internal::kOverlayTextureBytes)
-    {
-        return;
-    }
-    std::memset(
-        m_overlayUploadBuffer.mapped,
-        0,
-        static_cast<std::size_t>(vulkan_renderer_internal::kOverlayTextureBytes)
-    );
-    std::memcpy(m_overlayUploadBuffer.mapped, overlayPixels.data(), overlayPixels.size_bytes());
-    m_overlayWidth = overlayWidth;
-    m_overlayHeight = overlayHeight;
+    SyncOverlayAtlases(text);
+    UpdateOverlayGeometry(text);
 
     std::array<LightMarkerVertex, vulkan_renderer_internal::kLightMarkerCount> lightMarkers{};
     std::array<LightMarkerVertex, vulkan_renderer_internal::kLightLineVertexCount> lightLines{};

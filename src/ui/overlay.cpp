@@ -5,11 +5,36 @@
 #include <array>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <limits>
 #include <vector>
 
+#include "text/text_system.h"
+
 namespace
 {
+void AppendOverlayLabel(App& app, float x, float y, ImU32 color, const char* text)
+{
+    if (text == nullptr)
+    {
+        return;
+    }
+    Vec4 textColor = Vec4Make(
+        static_cast<float>((color >> IM_COL32_R_SHIFT) & 0xff) / 255.0f,
+        static_cast<float>((color >> IM_COL32_G_SHIFT) & 0xff) / 255.0f,
+        static_cast<float>((color >> IM_COL32_B_SHIFT) & 0xff) / 255.0f,
+        static_cast<float>((color >> IM_COL32_A_SHIFT) & 0xff) / 255.0f
+    );
+    text::DrawText(
+        app.m_state.text,
+        x,
+        y,
+        18.0f,
+        textColor,
+        text
+    );
+}
+
 Vec3 RotateYOffset(Vec3 v, float yawDegrees)
 {
     float radians = DegreesToRadians(yawDegrees);
@@ -181,7 +206,7 @@ void App::DrawLightDebugOverlay()
                 drawList->AddCircleFilled(sourceScreen, 4.0f, light.color, 12);
                 if (lighting.debugDrawLightLabels)
                 {
-                    drawList->AddText(ImVec2(sourceScreen.x + 8.0f, sourceScreen.y - 10.0f), light.color, light.label);
+                    AppendOverlayLabel(*this, sourceScreen.x + 8.0f, sourceScreen.y - 10.0f, light.color, light.label);
                 }
             }
         }
@@ -219,6 +244,6 @@ void App::DrawLightDebugOverlay()
         const char* type = state[i] == 2 ? "SH" : (state[i] == 1 ? "SP" : "IN");
         char label[64];
         std::snprintf(label, sizeof(label), "%s %u", type, i);
-        drawList->AddText(ImVec2(sourceScreen.x + 8.0f, sourceScreen.y - 8.0f), color, label);
+        AppendOverlayLabel(*this, sourceScreen.x + 8.0f, sourceScreen.y - 8.0f, color, label);
     }
 }

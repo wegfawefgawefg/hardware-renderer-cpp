@@ -1,12 +1,7 @@
 #pragma once
 
 #include <SDL3/SDL.h>
-#include <SDL3_ttf/SDL_ttf.h>
-
-#include <array>
-#include <cstdint>
-#include <vector>
-
+#include "audio/audio_system.h"
 #include "state.h"
 
 struct App
@@ -21,9 +16,6 @@ struct App
     void SyncRendererSize();
     void UpdateWindowTitle();
     void ResetMouseCapture(bool captured);
-    void InitializeAudio();
-    void ShutdownAudio();
-    void PlayRicochetSound();
     void InitializeImGui();
     void ShutdownImGui();
     void ProcessImGuiEvent(const SDL_Event& event);
@@ -61,23 +53,6 @@ struct App
     void BuildVehicleLightsWindow(bool& debugSettingsChanged);
 
     SDL_Window* m_window = nullptr;
-    TTF_Font* m_uiFont = nullptr;
-    struct AudioClip
-    {
-        SDL_AudioSpec spec = {};
-        std::vector<std::uint8_t> pcm;
-    };
-    struct AudioState
-    {
-        static constexpr std::size_t kRicochetClipCount = 3;
-        static constexpr std::size_t kRicochetVoiceCount = 8;
-        std::array<AudioClip, kRicochetClipCount> ricochetClips = {};
-        std::array<SDL_AudioStream*, kRicochetVoiceCount> ricochetVoices = {};
-        std::uint32_t nextRicochetClip = 0;
-        std::uint32_t nextRicochetVoice = 0;
-        std::uint32_t lastRicochetClip = 0xffffffffu;
-        std::uint32_t rngState = 0x9e3779b9u;
-        bool ready = false;
-    } m_audio;
+    audio::System m_audio;
     State m_state;
 };

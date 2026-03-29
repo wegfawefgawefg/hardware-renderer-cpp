@@ -1,7 +1,10 @@
 #include "render/internal.h"
 
+#include <SDL3_ttf/SDL_ttf.h>
+
 #include <array>
 #include <cstring>
+#include <filesystem>
 
 #include "assets/texture_loader.h"
 
@@ -115,6 +118,7 @@ ImageResource CreateSolidColorImage(
     DestroyBuffer(device, stagingBuffer);
     return image;
 }
+
 }
 
 void VulkanRenderer::CreateTextureResources(const SceneData& scene)
@@ -261,55 +265,69 @@ void VulkanRenderer::CreateTextureResources(const SceneData& scene)
     m_paintImages.assign(m_drawItems.size(), {});
 }
 
-void VulkanRenderer::CreateOverlayResources()
+void VulkanRenderer::CreateOverlayResources(const text::System* textSystem)
 {
+    if (textSystem == nullptr || textSystem->atlasCount == 0)
+    {
+        throw std::runtime_error("CreateOverlayResources requires initialized text system");
+    }
+    std::size_t maxBytes = 0;
+    for (std::uint32_t i = 0; i < textSystem->atlasCount; ++i)
+    {
+        maxBytes = std::max(maxBytes, textSystem->atlases[i].texture.pixels.size());
+    }
     m_overlayUploadBuffer = CreateBuffer(
         m_physicalDevice,
         m_device,
-        kOverlayTextureBytes,
+        static_cast<VkDeviceSize>(std::max<std::size_t>(maxBytes, 4)),
         VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
         true
     );
-    std::memset(m_overlayUploadBuffer.mapped, 0, static_cast<std::size_t>(kOverlayTextureBytes));
+    m_overlayAtlasCount = textSystem->atlasCount;
+    for (std::uint32_t i = 0; i < m_overlayAtlasCount; ++i)
+    {
+        const TextureData& atlas = textSystem->atlases[i].texture;
+        std::memcpy(m_overlayUploadBuffer.mapped, atlas.pixels.data(), atlas.pixels.size());
+        m_overlayImages[i] = CreateImage2D(
+            m_physicalDevice,
+            m_device,
+            atlas.width,
+            atlas.height,
+            VK_FORMAT_R8G8B8A8_SRGB,
+            VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+            VK_IMAGE_ASPECT_COLOR_BIT
+        );
 
-    m_overlayImage = CreateImage2D(
-        m_physicalDevice,
-        m_device,
-        kOverlayTextureWidth,
-        kOverlayTextureHeight,
-        VK_FORMAT_R8G8B8A8_UNORM,
-        VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-        VK_IMAGE_ASPECT_COLOR_BIT
-    );
-
-    TransitionImageLayout(
-        m_device,
-        m_graphicsQueue,
-        m_commandPool,
-        m_overlayImage.image,
-        VK_IMAGE_ASPECT_COLOR_BIT,
-        VK_IMAGE_LAYOUT_UNDEFINED,
-        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
-    );
-    CopyBufferToImage(
-        m_device,
-        m_graphicsQueue,
-        m_commandPool,
-        m_overlayUploadBuffer.buffer,
-        m_overlayImage.image,
-        kOverlayTextureWidth,
-        kOverlayTextureHeight
-    );
-    TransitionImageLayout(
-        m_device,
-        m_graphicsQueue,
-        m_commandPool,
-        m_overlayImage.image,
-        VK_IMAGE_ASPECT_COLOR_BIT,
-        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-    );
+        TransitionImageLayout(
+            m_device,
+            m_graphicsQueue,
+            m_commandPool,
+            m_overlayImages[i].image,
+            VK_IMAGE_ASPECT_COLOR_BIT,
+            VK_IMAGE_LAYOUT_UNDEFINED,
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+        );
+        CopyBufferToImage(
+            m_device,
+            m_graphicsQueue,
+            m_commandPool,
+            m_overlayUploadBuffer.buffer,
+            m_overlayImages[i].image,
+            atlas.width,
+            atlas.height
+        );
+        TransitionImageLayout(
+            m_device,
+            m_graphicsQueue,
+            m_commandPool,
+            m_overlayImages[i].image,
+            VK_IMAGE_ASPECT_COLOR_BIT,
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+        );
+        const_cast<text::Atlas&>(textSystem->atlases[i]).dirty = false;
+    }
 
     VkSamplerCreateInfo samplerInfo{};
     samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
@@ -325,8 +343,139 @@ void VulkanRenderer::CreateOverlayResources()
 
 void VulkanRenderer::DestroyOverlayResources()
 {
-    DestroyImage(m_device, m_overlayImage);
+    for (std::uint32_t i = 0; i < text::kMaxAtlases; ++i)
+    {
+        DestroyImage(m_device, m_overlayImages[i]);
+    }
+    m_overlayAtlasCount = 0;
     DestroyBuffer(m_device, m_overlayUploadBuffer);
+}
+
+void VulkanRenderer::UpdateOverlayGeometry(const text::System& text)
+{
+    std::vector<OverlayVertex> vertices;
+    vertices.reserve(kOverlayMaxGlyphs * 6);
+    m_overlayBatchCount = 0;
+
+    float width = static_cast<float>(m_swapchainExtent.width > 0 ? m_swapchainExtent.width : 1);
+    float height = static_cast<float>(m_swapchainExtent.height > 0 ? m_swapchainExtent.height : 1);
+
+    auto toNdcX = [&](float px) { return -1.0f + 2.0f * px / width; };
+    auto toNdcY = [&](float py) { return -1.0f + 2.0f * py / height; };
+
+    auto appendText = [&](const text::Entry& entry) {
+        const text::Atlas& atlas = text.atlases[entry.atlasIndex];
+        float cursorX = entry.x;
+        std::size_t count = std::min<std::size_t>(entry.length, kOverlayMaxGlyphs);
+        if (m_overlayBatchCount == 0 ||
+            m_overlayBatches[m_overlayBatchCount - 1].atlasIndex != entry.atlasIndex)
+        {
+            if (m_overlayBatchCount >= m_overlayBatches.size())
+            {
+                return;
+            }
+            m_overlayBatches[m_overlayBatchCount++] = OverlayBatch{
+                .atlasIndex = entry.atlasIndex,
+                .firstVertex = static_cast<std::uint32_t>(vertices.size()),
+                .vertexCount = 0,
+            };
+        }
+        OverlayBatch& batch = m_overlayBatches[m_overlayBatchCount - 1];
+        for (std::size_t i = 0; i < count && vertices.size() + 6 <= kOverlayMaxGlyphs * 6; ++i)
+        {
+            unsigned char c = static_cast<unsigned char>(entry.text[i]);
+            if (c < text::kFirstGlyph || c >= text::kFirstGlyph + text::kGlyphCount)
+            {
+                cursorX += atlas.lineHeight * 0.5f;
+                continue;
+            }
+
+            const text::Glyph& glyph = atlas.glyphs[c - text::kFirstGlyph];
+            float leftPx = cursorX + glyph.minX;
+            float topPx = entry.y + (atlas.ascent - glyph.maxY);
+            float rightPx = leftPx + glyph.width;
+            float bottomPx = topPx + glyph.height;
+
+            vertices.push_back({Vec2Make(toNdcX(leftPx), toNdcY(topPx)), Vec2Make(glyph.u0, glyph.v0), entry.color});
+            vertices.push_back({Vec2Make(toNdcX(rightPx), toNdcY(bottomPx)), Vec2Make(glyph.u1, glyph.v1), entry.color});
+            vertices.push_back({Vec2Make(toNdcX(leftPx), toNdcY(bottomPx)), Vec2Make(glyph.u0, glyph.v1), entry.color});
+            vertices.push_back({Vec2Make(toNdcX(leftPx), toNdcY(topPx)), Vec2Make(glyph.u0, glyph.v0), entry.color});
+            vertices.push_back({Vec2Make(toNdcX(rightPx), toNdcY(topPx)), Vec2Make(glyph.u1, glyph.v0), entry.color});
+            vertices.push_back({Vec2Make(toNdcX(rightPx), toNdcY(bottomPx)), Vec2Make(glyph.u1, glyph.v1), entry.color});
+            batch.vertexCount += 6;
+
+            cursorX += glyph.advance;
+        }
+    };
+
+    for (std::uint32_t i = 0; i < text.entryCount; ++i)
+    {
+        appendText(text.entries[i]);
+    }
+
+    m_overlayVertexCount = static_cast<std::uint32_t>(vertices.size());
+    if (m_overlayVertexCount > 0)
+    {
+        std::memcpy(m_overlayVertexBuffer.mapped, vertices.data(), sizeof(OverlayVertex) * vertices.size());
+    }
+}
+
+void VulkanRenderer::SyncOverlayAtlases(const text::System& textSystem)
+{
+    m_overlayAtlasCount = textSystem.atlasCount;
+    for (std::uint32_t i = 0; i < textSystem.atlasCount; ++i)
+    {
+        const text::Atlas& atlas = textSystem.atlases[i];
+        if (!atlas.valid || !atlas.dirty)
+        {
+            continue;
+        }
+
+        if (m_overlayImages[i].image != VK_NULL_HANDLE)
+        {
+            DestroyImage(m_device, m_overlayImages[i]);
+        }
+
+        std::memcpy(m_overlayUploadBuffer.mapped, atlas.texture.pixels.data(), atlas.texture.pixels.size());
+        m_overlayImages[i] = CreateImage2D(
+            m_physicalDevice,
+            m_device,
+            atlas.texture.width,
+            atlas.texture.height,
+            VK_FORMAT_R8G8B8A8_SRGB,
+            VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+            VK_IMAGE_ASPECT_COLOR_BIT
+        );
+        TransitionImageLayout(
+            m_device,
+            m_graphicsQueue,
+            m_commandPool,
+            m_overlayImages[i].image,
+            VK_IMAGE_ASPECT_COLOR_BIT,
+            VK_IMAGE_LAYOUT_UNDEFINED,
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+        );
+        CopyBufferToImage(
+            m_device,
+            m_graphicsQueue,
+            m_commandPool,
+            m_overlayUploadBuffer.buffer,
+            m_overlayImages[i].image,
+            atlas.texture.width,
+            atlas.texture.height
+        );
+        TransitionImageLayout(
+            m_device,
+            m_graphicsQueue,
+            m_commandPool,
+            m_overlayImages[i].image,
+            VK_IMAGE_ASPECT_COLOR_BIT,
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+        );
+        UpdateOverlayDescriptorSet(i);
+        const_cast<text::Atlas&>(atlas).dirty = false;
+    }
 }
 
 void VulkanRenderer::CreateSceneColorResources()
@@ -596,16 +745,21 @@ void VulkanRenderer::UpdatePaintDescriptorSet(std::uint32_t descriptorIndex)
     vkUpdateDescriptorSets(m_device, 1, &paintWrite, 0, nullptr);
 }
 
-void VulkanRenderer::UpdateOverlayDescriptorSet()
+void VulkanRenderer::UpdateOverlayDescriptorSet(std::uint32_t atlasIndex)
 {
+    if (atlasIndex >= m_overlayDescriptorSets.size() || m_overlayImages[atlasIndex].view == VK_NULL_HANDLE)
+    {
+        return;
+    }
+
     VkDescriptorImageInfo imageInfo{};
     imageInfo.sampler = m_overlaySampler;
-    imageInfo.imageView = m_overlayImage.view;
+    imageInfo.imageView = m_overlayImages[atlasIndex].view;
     imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
     VkWriteDescriptorSet imageWrite{};
     imageWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    imageWrite.dstSet = m_overlayDescriptorSet;
+    imageWrite.dstSet = m_overlayDescriptorSets[atlasIndex];
     imageWrite.dstBinding = 0;
     imageWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
     imageWrite.descriptorCount = 1;

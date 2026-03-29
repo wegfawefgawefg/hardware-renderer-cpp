@@ -115,6 +115,7 @@ That keeps the repo focused on renderer structure instead of tying it to legacy 
 - `docs/paint-uv-generation-notes.md`: offline-generated secondary UVs for persistent paint and layered material masks
 - `docs/world-paint-volume-notes.md`: sparse chunked 3D world-space paint volume idea for UV-independent persistence
 - `docs/deformation-and-decal-eval.md`: evaluation of current mesh damage code and why decals should become a real dedicated system
+- `docs/flat-decal-system-spec.md`: spec for the dedicated flat quad decal system and its renderer constraints
 - `docs/module-cleanup-notes.md`: cleanup note for moving damage, decals, and sound out of `App` and into dedicated modules
 - `docs/ideas.md`: gameplay and renderer experiment backlog for this sandbox
 

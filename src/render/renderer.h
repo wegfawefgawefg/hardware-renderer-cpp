@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <limits>
 #include <span>
+#include <string_view>
 #include <vector>
 
 #include <SDL3/SDL_video.h>
@@ -12,9 +13,11 @@
 #include "imgui.h"
 
 #include "animation/character.h"
+#include "decals/flat_decal_system.h"
 #include "gameplay/paint_balls.h"
 #include "paint_runtime.h"
 #include "scene.h"
+#include "text/text_system.h"
 #include "vulkan_helpers.h"
 
 constexpr std::uint32_t kMaxSceneSpotLights = 32;
@@ -73,6 +76,14 @@ struct OverlayVertex
 {
     Vec2 position;
     Vec2 uv;
+    Vec4 color;
+};
+
+struct OverlayBatch
+{
+    std::uint32_t atlasIndex = 0;
+    std::uint32_t firstVertex = 0;
+    std::uint32_t vertexCount = 0;
 };
 
 struct LightMarkerVertex
@@ -126,7 +137,9 @@ struct VulkanRenderer
     void Initialize(
         SDL_Window* window,
         const SceneData& scene,
-        const SkinnedCharacterAsset* characterAsset = nullptr
+        const decals::FlatDecalSystem* flatDecals = nullptr,
+        const SkinnedCharacterAsset* characterAsset = nullptr,
+        const text::System* textSystem = nullptr
     );
     void Shutdown();
     void Resize(std::uint32_t width, std::uint32_t height);
@@ -140,9 +153,8 @@ struct VulkanRenderer
     std::uint32_t GetDrawItemCount() const { return static_cast<std::uint32_t>(m_drawItems.size()); }
     void Render(
         const SceneUniforms& uniforms,
-        std::span<const std::uint32_t> overlayPixels,
-        std::uint32_t overlayWidth,
-        std::uint32_t overlayHeight,
+        const text::System& text,
+        const decals::FlatDecalSystem* flatDecals = nullptr,
         const CharacterRenderState* characterState = nullptr,
         const DebugRenderOptions* debugOptions = nullptr
     );
@@ -160,6 +172,7 @@ struct VulkanRenderer
     void CreateSyncObjects();
     void CreateDescriptorObjects();
     void CreatePipeline();
+    void CreateFlatDecalPipeline();
     void CreateOverlayDescriptorObjects();
     void CreatePostDescriptorObjects();
     void CreateOverlayPipeline();
@@ -186,18 +199,22 @@ struct VulkanRenderer
     void CreateShadowPipeline();
     void CreateSceneBuffers(const SceneData& scene);
     void CreateTextureResources(const SceneData& scene);
+    void CreateFlatDecalResources(const decals::FlatDecalSystem& flatDecals);
     void CreateCharacterResources(const SkinnedCharacterAsset& characterAsset);
-    void CreateOverlayResources();
+    void CreateOverlayResources(const text::System* textSystem);
     void DestroyOverlayResources();
+    void SyncOverlayAtlases(const text::System& textSystem);
     void CreateSceneColorResources();
     void DestroySceneColorResources();
     void CreateDepthResources();
     void UpdateDescriptorSet();
     void UpdatePaintDescriptorSet(std::uint32_t descriptorIndex);
-    void UpdateOverlayDescriptorSet();
+    void UpdateOverlayDescriptorSet(std::uint32_t atlasIndex);
     void UpdatePostDescriptorSet();
     void RecordShadowPass(VkCommandBuffer commandBuffer, std::uint32_t cascadeIndex);
     void RecordCommandBuffer(std::uint32_t imageIndex);
+    void UpdateFlatDecalGeometry(const decals::FlatDecalSystem* flatDecals);
+    void UpdateOverlayGeometry(const text::System& text);
 
     VkSurfaceFormatKHR ChooseSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& formats) const;
     VkPresentModeKHR ChoosePresentMode(const std::vector<VkPresentModeKHR>& modes) const;
@@ -229,13 +246,14 @@ struct VulkanRenderer
     std::vector<VkDescriptorSet> m_descriptorSets;
     VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
     VkPipeline m_pipeline = VK_NULL_HANDLE;
+    VkPipeline m_flatDecalPipeline = VK_NULL_HANDLE;
     VkShaderModule m_vertShaderModule = VK_NULL_HANDLE;
     VkShaderModule m_fragShaderModule = VK_NULL_HANDLE;
     VkDescriptorSetLayout m_overlayDescriptorSetLayout = VK_NULL_HANDLE;
     VkDescriptorSetLayout m_postDescriptorSetLayout = VK_NULL_HANDLE;
     VkDescriptorPool m_overlayDescriptorPool = VK_NULL_HANDLE;
     VkDescriptorPool m_postDescriptorPool = VK_NULL_HANDLE;
-    VkDescriptorSet m_overlayDescriptorSet = VK_NULL_HANDLE;
+    std::array<VkDescriptorSet, text::kMaxAtlases> m_overlayDescriptorSets = {};
     VkDescriptorSet m_postDescriptorSet = VK_NULL_HANDLE;
     VkPipelineLayout m_overlayPipelineLayout = VK_NULL_HANDLE;
     VkPipelineLayout m_postPipelineLayout = VK_NULL_HANDLE;
@@ -280,6 +298,8 @@ struct VulkanRenderer
     BufferResource m_lightSolidBuffer;
     BufferResource m_characterVertexBuffer;
     BufferResource m_characterIndexBuffer;
+    BufferResource m_flatDecalVertexBuffer;
+    BufferResource m_flatDecalIndexBuffer;
     std::vector<ImageResource> m_textureImages;
     std::vector<ImageResource> m_normalTextureImages;
     VkSampler m_textureSampler = VK_NULL_HANDLE;
@@ -289,7 +309,7 @@ struct VulkanRenderer
     std::vector<ImageResource> m_paintImages;
     VkSampler m_paintSampler = VK_NULL_HANDLE;
     ImageResource m_blankPaintImage;
-    ImageResource m_overlayImage;
+    std::array<ImageResource, text::kMaxAtlases> m_overlayImages = {};
     VkSampler m_overlaySampler = VK_NULL_HANDLE;
     ImageResource m_sceneColorImage;
     VkSampler m_sceneSampler = VK_NULL_HANDLE;
@@ -325,10 +345,26 @@ struct VulkanRenderer
         std::vector<std::uint8_t> pixels;
     };
 
+    struct FlatDecalTemplateGpu
+    {
+        std::uint32_t descriptorIndex = 0;
+        bool flipNormalY = true;
+    };
+
+    struct FlatDecalDraw
+    {
+        std::uint32_t firstIndex = 0;
+        std::uint32_t indexCount = 0;
+        std::uint32_t descriptorIndex = 0;
+        bool flipNormalY = true;
+    };
+
     bool ShadowDrawItemVisible(const DrawItem& drawItem, std::uint32_t cascadeIndex) const;
 
     std::vector<DrawItem> m_drawItems;
     std::vector<std::uint32_t> m_visibleDrawItems;
+    std::vector<FlatDecalTemplateGpu> m_flatDecalTemplates;
+    std::vector<FlatDecalDraw> m_flatDecalDraws;
     std::vector<PaintLayer> m_paintLayers;
     Vec3 m_cameraCullPosition = {};
     float m_mainCullDistance = 160.0f;
@@ -336,13 +372,17 @@ struct VulkanRenderer
     CharacterRenderState m_characterState = {};
     std::uint32_t m_characterIndexCount = 0;
     std::uint32_t m_characterDescriptorIndex = std::numeric_limits<std::uint32_t>::max();
+    std::uint32_t m_flatDecalVertexCount = 0;
+    std::uint32_t m_flatDecalIndexCount = 0;
     std::uint32_t m_sceneVertexCount = 0;
     std::uint32_t m_sceneIndexCount = 0;
     bool m_hasCharacter = false;
     std::uint32_t m_overlayTextureWidth = 0;
     std::uint32_t m_overlayTextureHeight = 0;
-    std::uint32_t m_overlayWidth = 0;
-    std::uint32_t m_overlayHeight = 0;
+    std::uint32_t m_overlayAtlasCount = 0;
+    std::uint32_t m_overlayVertexCount = 0;
+    std::array<OverlayBatch, text::kMaxAtlases> m_overlayBatches = {};
+    std::uint32_t m_overlayBatchCount = 0;
     std::uint32_t m_shadowMapSize = 2048;
     std::uint32_t m_activeShadowMapCount = kSunShadowCascadeCount;
     std::uint32_t m_accumulatedPaintHitCount = 0;

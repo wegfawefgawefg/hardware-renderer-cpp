@@ -363,7 +363,9 @@ void main()
 {
     vec3 normal = sampleMappedNormal(fragNormal, fragWorldPosition, fragUv);
     vec4 albedoSample = texture(albedoTexture, fragUv);
-    if (albedoSample.a <= 0.1)
+    bool alphaBlend = (drawPush.materialFlags & 2u) != 0u;
+    if ((!alphaBlend && albedoSample.a <= 0.1) ||
+        (alphaBlend && albedoSample.a <= 0.01))
     {
         discard;
     }
@@ -381,7 +383,8 @@ void main()
     }
     albedo = sampleVanishRippedAlbedo(fragUv, fragLocalPosition);
     SurfaceMaskEffects maskEffects = applySurfaceMasks(albedo, fragUv, fragLocalPosition);
-    if (maskEffects.visibility <= 0.01)
+    float outAlpha = alphaBlend ? albedoSample.a * maskEffects.visibility : 1.0;
+    if (maskEffects.visibility <= 0.01 || outAlpha <= 0.01)
     {
         discard;
     }
@@ -545,5 +548,5 @@ void main()
     vec3 color = mix(uniforms.clearColor.rgb, lighting + maskEffects.emissive, maskEffects.visibility);
     color = color / (color + vec3(1.0));
 
-    outColor = vec4(color, 1.0);
+    outColor = vec4(color, outAlpha);
 }

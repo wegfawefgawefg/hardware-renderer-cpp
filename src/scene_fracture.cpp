@@ -8,9 +8,6 @@ namespace
 {
 constexpr std::string_view kFracturePrismTexture = "rivet_plate.png";
 constexpr std::string_view kFracturePrismNormalTexture = "rivet_plate_normal.png";
-constexpr std::string_view kFractureDecalTexture = "metal_dent_trans.png";
-constexpr std::string_view kFractureDecalNormalTexture = "metal_dent_trans_normal.png";
-constexpr std::uint32_t kFractureDecalPoolSize = 96;
 
 TextureData MakeSolidTextureData(std::uint8_t r, std::uint8_t g, std::uint8_t b)
 {
@@ -164,48 +161,6 @@ ModelData MakeFracturePrismModel(const AssetRegistry& assetRegistry, Vec3 halfEx
     return model;
 }
 
-ModelData MakeFractureDecalModel(const AssetRegistry& assetRegistry)
-{
-    ModelData model{};
-    if (const std::filesystem::path* texturePath = assetRegistry.FindByRelativePath(kFractureDecalTexture))
-    {
-        model.textures.push_back(LoadTexture(texturePath->string()));
-    }
-    else
-    {
-        model.textures.push_back(MakeSolidTextureData(255, 255, 255));
-    }
-
-    std::int32_t normalTextureIndex = -1;
-    if (const std::filesystem::path* normalTexturePath = assetRegistry.FindByRelativePath(kFractureDecalNormalTexture))
-    {
-        normalTextureIndex = static_cast<std::int32_t>(model.textures.size());
-        model.textures.push_back(LoadTexture(normalTexturePath->string()));
-    }
-
-    model.materials.push_back(MaterialData{
-        .name = "fracture_decal",
-        .textureIndex = 0,
-        .normalTextureIndex = normalTextureIndex,
-        .castsShadows = false,
-        .flipNormalY = true,
-    });
-
-    model.mesh.vertices = {
-        Vertex{.position = Vec3Make(-0.5f, -0.5f, 0.0f), .normal = Vec3Make(0.0f, 0.0f, 1.0f), .uv = Vec2Make(0.0f, 1.0f)},
-        Vertex{.position = Vec3Make(0.5f, -0.5f, 0.0f), .normal = Vec3Make(0.0f, 0.0f, 1.0f), .uv = Vec2Make(1.0f, 1.0f)},
-        Vertex{.position = Vec3Make(0.5f, 0.5f, 0.0f), .normal = Vec3Make(0.0f, 0.0f, 1.0f), .uv = Vec2Make(1.0f, 0.0f)},
-        Vertex{.position = Vec3Make(-0.5f, 0.5f, 0.0f), .normal = Vec3Make(0.0f, 0.0f, 1.0f), .uv = Vec2Make(0.0f, 0.0f)},
-    };
-    model.mesh.indices = {0, 1, 2, 0, 2, 3};
-    model.primitives.push_back(PrimitiveData{
-        .firstIndex = 0,
-        .indexCount = static_cast<std::uint32_t>(model.mesh.indices.size()),
-        .materialIndex = 0,
-    });
-    return model;
-}
-
 }
 
 SceneData BuildFractureTestScene(const AssetRegistry& assetRegistry, const FractureSceneConfig& config)
@@ -242,16 +197,5 @@ SceneData BuildFractureTestScene(const AssetRegistry& assetRegistry, const Fract
         .collidable = true,
     });
 
-    std::uint32_t decalModelIndex = static_cast<std::uint32_t>(scene.models.size());
-    scene.models.push_back(MakeFractureDecalModel(assetRegistry));
-    for (std::uint32_t i = 0; i < kFractureDecalPoolSize; ++i)
-    {
-        scene.entities.push_back(EntityData{
-            .modelIndex = decalModelIndex,
-            .transform = Mat4Translate(Vec3Make(0.0f, -1000.0f - static_cast<float>(i), 0.0f)),
-            .assetPath = "generated/fracture_decal",
-            .collidable = false,
-        });
-    }
     return scene;
 }

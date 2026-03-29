@@ -11,7 +11,9 @@ VulkanRenderer::~VulkanRenderer()
 void VulkanRenderer::Initialize(
     SDL_Window* window,
     const SceneData& scene,
-    const SkinnedCharacterAsset* characterAsset
+    const decals::FlatDecalSystem* flatDecals,
+    const SkinnedCharacterAsset* characterAsset,
+    const text::System* textSystem
 )
 {
     if (m_initialized)
@@ -28,6 +30,10 @@ void VulkanRenderer::Initialize(
     CreateSyncObjects();
     CreateSceneBuffers(scene);
     CreateTextureResources(scene);
+    if (flatDecals != nullptr)
+    {
+        CreateFlatDecalResources(*flatDecals);
+    }
     if (characterAsset != nullptr)
     {
         CreateCharacterResources(*characterAsset);
@@ -41,7 +47,7 @@ void VulkanRenderer::Initialize(
     int width = 0;
     int height = 0;
     SDL_GetWindowSizeInPixels(window, &width, &height);
-    CreateOverlayResources();
+    CreateOverlayResources(textSystem);
     CreateSwapchain(
         static_cast<std::uint32_t>(width > 0 ? width : 1),
         static_cast<std::uint32_t>(height > 0 ? height : 1)
@@ -49,6 +55,7 @@ void VulkanRenderer::Initialize(
     CreateSceneRenderPass();
     CreateRenderPass();
     CreatePipeline();
+    CreateFlatDecalPipeline();
     CreateShadowPipeline();
     CreateLightPipeline();
     CreateLightLinePipeline();
@@ -57,7 +64,10 @@ void VulkanRenderer::Initialize(
     CreatePostPipeline();
     CreateFramebuffers();
     UpdateDescriptorSet();
-    UpdateOverlayDescriptorSet();
+    for (std::uint32_t i = 0; i < m_overlayAtlasCount; ++i)
+    {
+        UpdateOverlayDescriptorSet(i);
+    }
     UpdatePostDescriptorSet();
 
     m_initialized = true;
@@ -140,6 +150,8 @@ void VulkanRenderer::Shutdown()
     DestroyBuffer(m_device, m_lightSolidBuffer);
     DestroyBuffer(m_device, m_characterIndexBuffer);
     DestroyBuffer(m_device, m_characterVertexBuffer);
+    DestroyBuffer(m_device, m_flatDecalIndexBuffer);
+    DestroyBuffer(m_device, m_flatDecalVertexBuffer);
     DestroyBuffer(m_device, m_uniformBuffer);
     DestroyBuffer(m_device, m_indexBuffer);
     DestroyBuffer(m_device, m_vertexBuffer);
@@ -148,6 +160,11 @@ void VulkanRenderer::Shutdown()
     {
         vkDestroyPipeline(m_device, m_pipeline, nullptr);
         m_pipeline = VK_NULL_HANDLE;
+    }
+    if (m_flatDecalPipeline != VK_NULL_HANDLE)
+    {
+        vkDestroyPipeline(m_device, m_flatDecalPipeline, nullptr);
+        m_flatDecalPipeline = VK_NULL_HANDLE;
     }
     if (m_pipelineLayout != VK_NULL_HANDLE)
     {
@@ -341,6 +358,10 @@ void VulkanRenderer::Shutdown()
         m_instance = VK_NULL_HANDLE;
     }
 
+    m_flatDecalTemplates.clear();
+    m_flatDecalDraws.clear();
+    m_flatDecalVertexCount = 0;
+    m_flatDecalIndexCount = 0;
     m_initialized = false;
 }
 

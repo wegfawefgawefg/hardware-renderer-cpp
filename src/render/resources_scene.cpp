@@ -129,7 +129,7 @@ void VulkanRenderer::CreateSceneBuffers(const SceneData& scene)
     m_overlayVertexBuffer = CreateBuffer(
         m_physicalDevice,
         m_device,
-        sizeof(OverlayVertex) * 6,
+        sizeof(OverlayVertex) * vulkan_renderer_internal::kOverlayMaxGlyphs * 6,
         VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
         true
@@ -174,6 +174,22 @@ void VulkanRenderer::CreateSceneBuffers(const SceneData& scene)
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
         true
     );
+    m_flatDecalVertexBuffer = CreateBuffer(
+        m_physicalDevice,
+        m_device,
+        sizeof(Vertex) * decals::FlatDecalSystem::kMaxInstances * 4,
+        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        true
+    );
+    m_flatDecalIndexBuffer = CreateBuffer(
+        m_physicalDevice,
+        m_device,
+        sizeof(std::uint32_t) * decals::FlatDecalSystem::kMaxInstances * 6,
+        VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        true
+    );
 
     if (!mergedVertices.empty())
     {
@@ -184,12 +200,7 @@ void VulkanRenderer::CreateSceneBuffers(const SceneData& scene)
         std::memcpy(m_indexBuffer.mapped, mergedIndices.data(), static_cast<std::size_t>(indexSize));
     }
 
-    std::array<OverlayVertex, 6> quad = BuildOverlayQuad(
-        m_swapchainExtent.width,
-        m_swapchainExtent.height,
-        1,
-        1
-    );
+    std::array<OverlayVertex, 6> quad = {};
     std::memcpy(m_overlayVertexBuffer.mapped, quad.data(), sizeof(quad));
     std::memcpy(m_postVertexBuffer.mapped, quad.data(), sizeof(quad));
 }

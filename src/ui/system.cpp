@@ -3,6 +3,7 @@
 #include "backends/imgui_impl_sdl3.h"
 #include "backends/imgui_impl_vulkan.h"
 #include "imgui.h"
+#include "text/text_system.h"
 
 #include <cfloat>
 void App::InitializeImGui()
@@ -59,6 +60,7 @@ void App::ProcessImGuiEvent(const SDL_Event& event)
 void App::BuildImGui()
 {
     auto& runtime = m_state.runtime;
+    auto& text = m_state.text;
     if (ImGui::GetCurrentContext() == nullptr)
     {
         return;
@@ -101,6 +103,7 @@ void App::BuildImGui()
         }
     }
 
+    text::BeginFrame(text);
     DrawLightDebugOverlay();
     ImGui::Render();
 }

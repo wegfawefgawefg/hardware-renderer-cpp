@@ -25,6 +25,7 @@ constexpr std::uint32_t kLightLineVertexCount = 131072;
 constexpr std::uint32_t kLightSolidVertexCount = 65536;
 constexpr std::uint32_t kOverlayTextureWidth = 512;
 constexpr std::uint32_t kOverlayTextureHeight = 128;
+constexpr std::uint32_t kOverlayMaxGlyphs = 256;
 constexpr VkDeviceSize kOverlayTextureBytes =
     static_cast<VkDeviceSize>(kOverlayTextureWidth) * kOverlayTextureHeight * sizeof(std::uint32_t);
 
@@ -173,41 +174,4 @@ inline void CopyBufferToImage(
     EndSingleUseCommandBuffer(device, queue, commandPool, commandBuffer);
 }
 
-inline std::array<OverlayVertex, 6> BuildOverlayQuad(
-    std::uint32_t targetWidth,
-    std::uint32_t targetHeight,
-    std::uint32_t overlayWidth,
-    std::uint32_t overlayHeight
-)
-{
-    constexpr float padX = 16.0f;
-    constexpr float padY = 16.0f;
-
-    float width = static_cast<float>(targetWidth > 0 ? targetWidth : 1);
-    float height = static_cast<float>(targetHeight > 0 ? targetHeight : 1);
-    float left = -1.0f + 2.0f * padX / width;
-    float right = -1.0f + 2.0f * (padX + static_cast<float>(overlayWidth)) / width;
-    float top = 1.0f - 2.0f * padY / height;
-    float bottom = 1.0f - 2.0f * (padY + static_cast<float>(overlayHeight)) / height;
-    return {
-        OverlayVertex{Vec2Make(left, top), Vec2Make(0.0f, 0.0f)},
-        OverlayVertex{Vec2Make(right, bottom), Vec2Make(
-                                                   static_cast<float>(overlayWidth) / kOverlayTextureWidth,
-                                                   static_cast<float>(overlayHeight) / kOverlayTextureHeight
-                                               )},
-        OverlayVertex{Vec2Make(left, bottom), Vec2Make(
-                                                  0.0f,
-                                                  static_cast<float>(overlayHeight) / kOverlayTextureHeight
-                                              )},
-        OverlayVertex{Vec2Make(left, top), Vec2Make(0.0f, 0.0f)},
-        OverlayVertex{Vec2Make(right, top), Vec2Make(
-                                                static_cast<float>(overlayWidth) / kOverlayTextureWidth,
-                                                0.0f
-                                            )},
-        OverlayVertex{Vec2Make(right, bottom), Vec2Make(
-                                                   static_cast<float>(overlayWidth) / kOverlayTextureWidth,
-                                                   static_cast<float>(overlayHeight) / kOverlayTextureHeight
-                                               )},
-    };
-}
 }

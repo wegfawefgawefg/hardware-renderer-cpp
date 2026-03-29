@@ -32,84 +32,6 @@ void VulkanRenderer::RecordCommandBuffer(std::uint32_t imageIndex)
     renderPassInfo.clearValueCount = static_cast<std::uint32_t>(clearValues.size());
     renderPassInfo.pClearValues = clearValues.data();
 
-    if (m_overlayWidth > 0 && m_overlayHeight > 0)
-    {
-        std::array<OverlayVertex, 6> quad = BuildOverlayQuad(
-            m_swapchainExtent.width,
-            m_swapchainExtent.height,
-            m_overlayWidth,
-            m_overlayHeight
-        );
-        std::memcpy(m_overlayVertexBuffer.mapped, quad.data(), sizeof(quad));
-
-        VkImageMemoryBarrier toTransfer{};
-        toTransfer.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-        toTransfer.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
-        toTransfer.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-        toTransfer.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        toTransfer.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-        toTransfer.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        toTransfer.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        toTransfer.image = m_overlayImage.image;
-        toTransfer.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        toTransfer.subresourceRange.levelCount = 1;
-        toTransfer.subresourceRange.layerCount = 1;
-
-        vkCmdPipelineBarrier(
-            commandBuffer,
-            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-            VK_PIPELINE_STAGE_TRANSFER_BIT,
-            0,
-            0,
-            nullptr,
-            0,
-            nullptr,
-            1,
-            &toTransfer
-        );
-
-        VkBufferImageCopy copyRegion{};
-        copyRegion.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        copyRegion.imageSubresource.layerCount = 1;
-        copyRegion.imageExtent.width = kOverlayTextureWidth;
-        copyRegion.imageExtent.height = kOverlayTextureHeight;
-        copyRegion.imageExtent.depth = 1;
-        vkCmdCopyBufferToImage(
-            commandBuffer,
-            m_overlayUploadBuffer.buffer,
-            m_overlayImage.image,
-            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-            1,
-            &copyRegion
-        );
-
-        VkImageMemoryBarrier toSample{};
-        toSample.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-        toSample.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-        toSample.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-        toSample.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-        toSample.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        toSample.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        toSample.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        toSample.image = m_overlayImage.image;
-        toSample.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        toSample.subresourceRange.levelCount = 1;
-        toSample.subresourceRange.layerCount = 1;
-
-        vkCmdPipelineBarrier(
-            commandBuffer,
-            VK_PIPELINE_STAGE_TRANSFER_BIT,
-            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-            0,
-            0,
-            nullptr,
-            0,
-            nullptr,
-            1,
-            &toSample
-        );
-    }
-
     std::uint32_t sunShadowCount = std::min<std::uint32_t>(m_activeShadowMapCount, kSunShadowCascadeCount);
     for (std::uint32_t shadowIndex = 0; shadowIndex < sunShadowCount; ++shadowIndex)
     {
@@ -211,6 +133,53 @@ void VulkanRenderer::RecordCommandBuffer(std::uint32_t imageIndex)
         vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
         vkCmdBindIndexBuffer(commandBuffer, m_indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
     }
+
+    if (m_flatDecalIndexCount > 0 && !m_flatDecalDraws.empty())
+    {
+        DrawPushConstants pushConstants{};
+        pushConstants.model = Mat4Identity();
+        pushConstants.pointLightMask = 0xFu;
+        pushConstants.spotLightMask = 0xFFFFFFFFu;
+        pushConstants.shadowedSpotLightMask = (1u << kMaxShadowedSpotLights) - 1u;
+
+        VkBuffer decalBuffers[] = {m_flatDecalVertexBuffer.buffer};
+        VkDeviceSize decalOffsets[] = {0};
+        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_flatDecalPipeline);
+        vkCmdBindVertexBuffers(commandBuffer, 0, 1, decalBuffers, decalOffsets);
+        vkCmdBindIndexBuffer(commandBuffer, m_flatDecalIndexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+        for (const FlatDecalDraw& decalDraw : m_flatDecalDraws)
+        {
+            pushConstants.materialFlags = 2u;
+            if (decalDraw.flipNormalY)
+            {
+                pushConstants.materialFlags |= 1u;
+            }
+            vkCmdPushConstants(
+                commandBuffer,
+                m_pipelineLayout,
+                VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                0,
+                sizeof(pushConstants),
+                &pushConstants
+            );
+            vkCmdBindDescriptorSets(
+                commandBuffer,
+                VK_PIPELINE_BIND_POINT_GRAPHICS,
+                m_pipelineLayout,
+                0,
+                1,
+                &m_descriptorSets[decalDraw.descriptorIndex],
+                0,
+                nullptr
+            );
+            vkCmdDrawIndexed(commandBuffer, decalDraw.indexCount, 1, decalDraw.firstIndex, 0, 0);
+        }
+
+        VkBuffer vertexBuffers[] = {m_vertexBuffer.buffer};
+        VkDeviceSize offsets[] = {0};
+        vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+        vkCmdBindIndexBuffer(commandBuffer, m_indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+    }
     vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, m_timestampQueryPool, 3);
 
     VkBuffer lightBuffers[] = {m_lightMarkerBuffer.buffer};
@@ -282,12 +251,12 @@ void VulkanRenderer::RecordCommandBuffer(std::uint32_t imageIndex)
 
     std::array<OverlayVertex, 6> fullscreenQuad =
         {
-            OverlayVertex{Vec2Make(-1.0f, -1.0f), Vec2Make(0.0f, 1.0f)},
-            OverlayVertex{Vec2Make(-1.0f, 1.0f), Vec2Make(0.0f, 0.0f)},
-            OverlayVertex{Vec2Make(1.0f, 1.0f), Vec2Make(1.0f, 0.0f)},
-            OverlayVertex{Vec2Make(-1.0f, -1.0f), Vec2Make(0.0f, 1.0f)},
-            OverlayVertex{Vec2Make(1.0f, 1.0f), Vec2Make(1.0f, 0.0f)},
-            OverlayVertex{Vec2Make(1.0f, -1.0f), Vec2Make(1.0f, 1.0f)},
+            OverlayVertex{Vec2Make(-1.0f, -1.0f), Vec2Make(0.0f, 1.0f), Vec4Make(1.0f, 1.0f, 1.0f, 1.0f)},
+            OverlayVertex{Vec2Make(-1.0f, 1.0f), Vec2Make(0.0f, 0.0f), Vec4Make(1.0f, 1.0f, 1.0f, 1.0f)},
+            OverlayVertex{Vec2Make(1.0f, 1.0f), Vec2Make(1.0f, 0.0f), Vec4Make(1.0f, 1.0f, 1.0f, 1.0f)},
+            OverlayVertex{Vec2Make(-1.0f, -1.0f), Vec2Make(0.0f, 1.0f), Vec4Make(1.0f, 1.0f, 1.0f, 1.0f)},
+            OverlayVertex{Vec2Make(1.0f, 1.0f), Vec2Make(1.0f, 0.0f), Vec4Make(1.0f, 1.0f, 1.0f, 1.0f)},
+            OverlayVertex{Vec2Make(1.0f, -1.0f), Vec2Make(1.0f, 1.0f), Vec4Make(1.0f, 1.0f, 1.0f, 1.0f)},
         };
     std::memcpy(m_postVertexBuffer.mapped, fullscreenQuad.data(), sizeof(fullscreenQuad));
 
@@ -307,30 +276,27 @@ void VulkanRenderer::RecordCommandBuffer(std::uint32_t imageIndex)
     );
     vkCmdDraw(commandBuffer, 6, 1, 0, 0);
 
-    if (m_overlayWidth > 0 && m_overlayHeight > 0)
+    if (m_overlayVertexCount > 0)
     {
-        std::array<OverlayVertex, 6> quad = BuildOverlayQuad(
-            m_swapchainExtent.width,
-            m_swapchainExtent.height,
-            m_overlayWidth,
-            m_overlayHeight
-        );
-        std::memcpy(m_overlayVertexBuffer.mapped, quad.data(), sizeof(quad));
-
         VkBuffer overlayBuffers[] = {m_overlayVertexBuffer.buffer};
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_overlayPipeline);
         vkCmdBindVertexBuffers(commandBuffer, 0, 1, overlayBuffers, overlayOffsets);
-        vkCmdBindDescriptorSets(
-            commandBuffer,
-            VK_PIPELINE_BIND_POINT_GRAPHICS,
-            m_overlayPipelineLayout,
-            0,
-            1,
-            &m_overlayDescriptorSet,
-            0,
-            nullptr
-        );
-        vkCmdDraw(commandBuffer, 6, 1, 0, 0);
+        for (std::uint32_t i = 0; i < m_overlayBatchCount; ++i)
+        {
+            const OverlayBatch& batch = m_overlayBatches[i];
+            VkDescriptorSet descriptorSet = m_overlayDescriptorSets[batch.atlasIndex];
+            vkCmdBindDescriptorSets(
+                commandBuffer,
+                VK_PIPELINE_BIND_POINT_GRAPHICS,
+                m_overlayPipelineLayout,
+                0,
+                1,
+                &descriptorSet,
+                0,
+                nullptr
+            );
+            vkCmdDraw(commandBuffer, batch.vertexCount, 1, batch.firstVertex, 0);
+        }
     }
 
     if (m_imguiInitialized)
@@ -401,22 +367,12 @@ std::uint32_t VulkanRenderer::ChooseQueueFamily() const
 
 VkFormat VulkanRenderer::FindDepthFormat() const
 {
-    std::array<VkFormat, 3> candidates =
-        {
-            VK_FORMAT_D32_SFLOAT,
-            VK_FORMAT_D32_SFLOAT_S8_UINT,
-            VK_FORMAT_D24_UNORM_S8_UINT,
-        };
-
-    for (VkFormat format : candidates)
+    VkFormatProperties properties{};
+    vkGetPhysicalDeviceFormatProperties(m_physicalDevice, VK_FORMAT_D32_SFLOAT, &properties);
+    if ((properties.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT) != 0)
     {
-        VkFormatProperties properties{};
-        vkGetPhysicalDeviceFormatProperties(m_physicalDevice, format, &properties);
-        if ((properties.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT) != 0)
-        {
-            return format;
-        }
+        return VK_FORMAT_D32_SFLOAT;
     }
 
-    throw std::runtime_error("Failed to find a supported depth format");
+    throw std::runtime_error("Failed to find supported pure depth format");
 }

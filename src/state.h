@@ -8,13 +8,15 @@
 #include "assets/asset_registry.h"
 #include "camera.h"
 #include "collision/triangle_collider.h"
-#include "gameplay/fracture.h"
+#include "decals/flat_decal_system.h"
+#include "gameplay/fracture_sandbox.h"
 #include "gameplay/paint_balls.h"
 #include "gameplay/player_controller.h"
 #include "gameplay/traffic.h"
 #include "paint_runtime.h"
 #include "render/renderer.h"
 #include "scene.h"
+#include "text/text_system.h"
 #include "vehicle_lights.h"
 
 struct CpuProfilingStats
@@ -35,34 +37,11 @@ struct CoreState
     TriangleMeshCollider worldCollider;
     PlayerController player;
     TrafficSystem traffic;
-    FractureSystem fracture;
+    decals::FlatDecalSystem flatDecals;
     PaintBallSystem paintBalls;
     CharacterAnimationSet characterSet;
     CharacterRenderState characterRenderState;
     Camera camera;
-};
-
-struct FractureState
-{
-    struct PrismSettings
-    {
-        Vec3 halfExtents = {3.5f, 5.5f, 3.0f};
-        std::uint32_t segX = 14;
-        std::uint32_t segY = 20;
-        std::uint32_t segZ = 12;
-    };
-
-    FractureSettings settings = {};
-    PrismSettings prism = {};
-    bool showWireframe = false;
-    bool dentDepthMatchesRadius = true;
-    bool fireHeld = false;
-    float fireCooldown = 0.0f;
-    bool hitValid = false;
-    std::uint32_t nextDecalSlot = 0;
-    std::uint32_t decalShotCounter = 0;
-    Vec3 hitPosition = {};
-    Vec3 hitNormal = {0.0f, 1.0f, 0.0f};
 };
 
 struct RuntimeState
@@ -162,20 +141,13 @@ struct PaintState
     std::uint32_t nextSplatIndex = 0;
 };
 
-struct OverlayState
-{
-    std::array<std::uint32_t, 512 * 128> pixels = {};
-    std::uint32_t width = 0;
-    std::uint32_t height = 0;
-};
-
 struct State
 {
     CoreState core;
     RuntimeState runtime;
     LightingState lighting;
     VehicleLightEditorState vehicleLights;
-    FractureState fracture;
+    FractureSandboxState fracture;
     PaintState paint;
-    OverlayState overlay;
+    text::System text;
 };

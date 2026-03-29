@@ -1,4 +1,4 @@
-#include "app.h"
+#include "audio/audio_system.h"
 
 #include <algorithm>
 #include <array>
@@ -6,11 +6,12 @@
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
-#include <string_view>
-#include <vector>
+#include <string>
 
 #include <vorbis/vorbisfile.h>
 
+namespace audio
+{
 namespace
 {
 constexpr std::array<std::string_view, 3> kRicochetAssets = {
@@ -38,7 +39,7 @@ std::uint32_t NextRandom(std::uint32_t& state)
     return state;
 }
 
-std::uint32_t PickRicochetClipIndex(App::AudioState& audio)
+std::uint32_t PickRicochetClipIndex(System& audio)
 {
     const std::uint32_t clipCount = static_cast<std::uint32_t>(audio.ricochetClips.size());
     if (clipCount <= 1)
@@ -70,12 +71,11 @@ void AppendAudioLog(const char* fmt, ...)
     }
 }
 
-bool DecodeVorbisPcm16(std::string_view path, App::AudioClip& outClip)
+bool DecodeVorbisPcm16(std::string_view path, Clip& outClip)
 {
     OggVorbis_File vorbisFile{};
     if (ov_fopen(std::string(path).c_str(), &vorbisFile) < 0)
     {
-        SDL_LogWarn(SDL_LOG_CATEGORY_AUDIO, "Failed to open OGG '%s'", std::string(path).c_str());
         AppendAudioLog("Failed to open OGG '%s'", std::string(path).c_str());
         return false;
     }
@@ -83,7 +83,6 @@ bool DecodeVorbisPcm16(std::string_view path, App::AudioClip& outClip)
     vorbis_info* info = ov_info(&vorbisFile, -1);
     if (info == nullptr || info->channels <= 0 || info->rate <= 0)
     {
-        SDL_LogWarn(SDL_LOG_CATEGORY_AUDIO, "Invalid OGG stream info for '%s'", std::string(path).c_str());
         AppendAudioLog("Invalid OGG stream info for '%s'", std::string(path).c_str());
         ov_clear(&vorbisFile);
         return false;
@@ -111,15 +110,35 @@ bool DecodeVorbisPcm16(std::string_view path, App::AudioClip& outClip)
     }
 
     ov_clear(&vorbisFile);
-    SDL_Log("Loaded ricochet clip '%s' (%d Hz, %u ch, %zu bytes)", std::string(path).c_str(), outClip.spec.freq, static_cast<unsigned>(outClip.spec.channels), outClip.pcm.size());
     AppendAudioLog("Loaded ricochet clip '%s' (%d Hz, %u ch, %zu bytes)", std::string(path).c_str(), outClip.spec.freq, static_cast<unsigned>(outClip.spec.channels), outClip.pcm.size());
     return !outClip.pcm.empty();
 }
 }
 
-void App::InitializeAudio()
+void Shutdown(System& audio)
 {
-    ShutdownAudio();
+    for (SDL_AudioStream*& stream : audio.ricochetVoices)
+    {
+        if (stream != nullptr)
+        {
+            SDL_DestroyAudioStream(stream);
+            stream = nullptr;
+        }
+    }
+    audio.ready = false;
+    audio.nextRicochetVoice = 0;
+    audio.lastRicochetClip = 0xffffffffu;
+    audio.rngState = 0x9e3779b9u ^ static_cast<std::uint32_t>(SDL_GetTicks());
+
+    if ((SDL_WasInit(SDL_INIT_AUDIO) & SDL_INIT_AUDIO) != 0)
+    {
+        SDL_QuitSubSystem(SDL_INIT_AUDIO);
+    }
+}
+
+void Initialize(System& audio, std::string_view assetsRoot)
+{
+    Shutdown(audio);
     {
         std::ofstream clear(std::string(kAudioLogPath), std::ios::trunc);
         if (clear.is_open())
@@ -131,8 +150,7 @@ void App::InitializeAudio()
     AppendAudioLog("Available SDL audio drivers:");
     for (int i = 0; i < SDL_GetNumAudioDrivers(); ++i)
     {
-        const char* driver = SDL_GetAudioDriver(i);
-        if (driver != nullptr)
+        if (const char* driver = SDL_GetAudioDriver(i))
         {
             AppendAudioLog("  - %s", driver);
         }
@@ -154,7 +172,6 @@ void App::InitializeAudio()
         }
         if (!audioReady)
         {
-            SDL_LogWarn(SDL_LOG_CATEGORY_AUDIO, "Audio disabled: could not initialize any preferred SDL audio driver");
             AppendAudioLog("Audio disabled: could not initialize any preferred SDL audio driver");
             return;
         }
@@ -163,26 +180,24 @@ void App::InitializeAudio()
     bool loadedAnyClip = false;
     for (std::size_t i = 0; i < kRicochetAssets.size(); ++i)
     {
-        const std::filesystem::path path = std::filesystem::path(HARDWARE_RENDERER_ASSETS_ROOT) / kRicochetAssets[i];
-        loadedAnyClip |= DecodeVorbisPcm16(path.string(), m_audio.ricochetClips[i]);
+        const std::filesystem::path path = std::filesystem::path(assetsRoot) / kRicochetAssets[i];
+        loadedAnyClip |= DecodeVorbisPcm16(path.string(), audio.ricochetClips[i]);
     }
-    if (!loadedAnyClip || m_audio.ricochetClips[0].pcm.empty())
+    if (!loadedAnyClip || audio.ricochetClips[0].pcm.empty())
     {
-        SDL_LogWarn(SDL_LOG_CATEGORY_AUDIO, "Audio disabled: no ricochet clips loaded");
         AppendAudioLog("Audio disabled: no ricochet clips loaded");
         return;
     }
 
     std::size_t openedVoices = 0;
-    for (std::size_t voiceIndex = 0; voiceIndex < m_audio.ricochetVoices.size(); ++voiceIndex)
+    for (std::size_t voiceIndex = 0; voiceIndex < audio.ricochetVoices.size(); ++voiceIndex)
     {
-        SDL_AudioStream*& stream = m_audio.ricochetVoices[voiceIndex];
-        stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &m_audio.ricochetClips[0].spec, nullptr, nullptr);
+        SDL_AudioStream*& stream = audio.ricochetVoices[voiceIndex];
+        stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &audio.ricochetClips[0].spec, nullptr, nullptr);
         if (stream != nullptr)
         {
             if (!SDL_ResumeAudioStreamDevice(stream))
             {
-                SDL_LogWarn(SDL_LOG_CATEGORY_AUDIO, "Failed to resume ricochet voice %zu: %s", voiceIndex, SDL_GetError());
                 AppendAudioLog("Failed to resume ricochet voice %zu: %s", voiceIndex, SDL_GetError());
                 SDL_DestroyAudioStream(stream);
                 stream = nullptr;
@@ -193,81 +208,54 @@ void App::InitializeAudio()
         }
         else
         {
-            SDL_LogWarn(SDL_LOG_CATEGORY_AUDIO, "Failed to open ricochet voice %zu: %s", voiceIndex, SDL_GetError());
             AppendAudioLog("Failed to open ricochet voice %zu: %s", voiceIndex, SDL_GetError());
         }
     }
 
-    m_audio.ready = m_audio.ricochetVoices[0] != nullptr;
-    SDL_Log("Ricochet audio %s with %zu voices", m_audio.ready ? "ready" : "disabled", openedVoices);
-    AppendAudioLog("Ricochet audio %s with %zu voices", m_audio.ready ? "ready" : "disabled", openedVoices);
+    audio.ready = audio.ricochetVoices[0] != nullptr;
+    AppendAudioLog("Ricochet audio %s with %zu voices", audio.ready ? "ready" : "disabled", openedVoices);
 }
 
-void App::ShutdownAudio()
+void PlayRicochet(System& audio)
 {
-    for (SDL_AudioStream*& stream : m_audio.ricochetVoices)
-    {
-        if (stream != nullptr)
-        {
-            SDL_DestroyAudioStream(stream);
-            stream = nullptr;
-        }
-    }
-    m_audio.ready = false;
-    m_audio.nextRicochetClip = 0;
-    m_audio.nextRicochetVoice = 0;
-    m_audio.lastRicochetClip = 0xffffffffu;
-    m_audio.rngState = 0x9e3779b9u ^ static_cast<std::uint32_t>(SDL_GetTicks());
-
-    if ((SDL_WasInit(SDL_INIT_AUDIO) & SDL_INIT_AUDIO) != 0)
-    {
-        SDL_QuitSubSystem(SDL_INIT_AUDIO);
-    }
-}
-
-void App::PlayRicochetSound()
-{
-    if (!m_audio.ready)
+    if (!audio.ready)
     {
         return;
     }
 
-    const std::uint32_t clipIndex = PickRicochetClipIndex(m_audio);
-    const AudioClip& clip = m_audio.ricochetClips[clipIndex];
-    m_audio.nextRicochetClip = clipIndex;
+    const std::uint32_t clipIndex = PickRicochetClipIndex(audio);
+    const Clip& clip = audio.ricochetClips[clipIndex];
     if (clip.pcm.empty())
     {
         return;
     }
 
-    SDL_AudioStream* stream = m_audio.ricochetVoices[m_audio.nextRicochetVoice % m_audio.ricochetVoices.size()];
-    m_audio.nextRicochetVoice = (m_audio.nextRicochetVoice + 1u) % static_cast<std::uint32_t>(m_audio.ricochetVoices.size());
+    SDL_AudioStream* stream = audio.ricochetVoices[audio.nextRicochetVoice % audio.ricochetVoices.size()];
+    audio.nextRicochetVoice = (audio.nextRicochetVoice + 1u) % static_cast<std::uint32_t>(audio.ricochetVoices.size());
     if (stream == nullptr)
     {
-        SDL_LogWarn(SDL_LOG_CATEGORY_AUDIO, "Ricochet playback skipped: selected voice stream is null");
         AppendAudioLog("Ricochet playback skipped: selected voice stream is null");
         return;
     }
 
     if (!SDL_ClearAudioStream(stream))
     {
-        SDL_LogWarn(SDL_LOG_CATEGORY_AUDIO, "SDL_ClearAudioStream failed: %s", SDL_GetError());
         AppendAudioLog("SDL_ClearAudioStream failed: %s", SDL_GetError());
         return;
     }
     if (!SDL_PutAudioStreamData(stream, clip.pcm.data(), static_cast<int>(clip.pcm.size())))
     {
-        SDL_LogWarn(SDL_LOG_CATEGORY_AUDIO, "SDL_PutAudioStreamData failed: %s", SDL_GetError());
         AppendAudioLog("SDL_PutAudioStreamData failed: %s", SDL_GetError());
         return;
     }
-    AppendAudioLog("Queued ricochet clip %u on voice %u (%zu bytes)",
+    AppendAudioLog(
+        "Queued ricochet clip %u on voice %u (%zu bytes)",
         clipIndex,
-        (m_audio.nextRicochetVoice + m_audio.ricochetVoices.size() - 1u) % static_cast<std::uint32_t>(m_audio.ricochetVoices.size()),
+        (audio.nextRicochetVoice + audio.ricochetVoices.size() - 1u) % static_cast<std::uint32_t>(audio.ricochetVoices.size()),
         clip.pcm.size());
     if (!SDL_FlushAudioStream(stream))
     {
-        SDL_LogWarn(SDL_LOG_CATEGORY_AUDIO, "SDL_FlushAudioStream failed: %s", SDL_GetError());
         AppendAudioLog("SDL_FlushAudioStream failed: %s", SDL_GetError());
     }
+}
 }

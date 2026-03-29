@@ -126,7 +126,7 @@ void App::Update(float dtSeconds)
     auto& vehicleLights = m_state.vehicleLights;
     auto& fracture = m_state.fracture;
     auto& paint = m_state.paint;
-    auto& overlay = m_state.overlay;
+    auto& text = m_state.text;
 
     using Clock = std::chrono::steady_clock;
     auto frameStart = Clock::now();
@@ -296,9 +296,9 @@ void App::Update(float dtSeconds)
     runtime.overlayRefreshSeconds -= dtSeconds;
     if (runtime.overlayRefreshSeconds <= 0.0f)
     {
-        UpdateOverlayText(&uniforms);
         runtime.overlayRefreshSeconds = kOverlayRefreshPeriod;
     }
+    UpdateOverlayText(&uniforms);
 
     DebugRenderOptions debugOptions{};
     debugOptions.drawLightProxies = lighting.drawLightProxies;
@@ -472,9 +472,8 @@ void App::Update(float dtSeconds)
     auto renderStart = Clock::now();
     core.renderer.Render(
         uniforms,
-        overlay.pixels,
-        overlay.width,
-        overlay.height,
+        text,
+        &core.flatDecals,
         runtime.hasCharacter ? &core.characterRenderState : nullptr,
         &debugOptions
     );

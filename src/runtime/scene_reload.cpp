@@ -1,10 +1,29 @@
 #include "app.h"
 
+#include <array>
 #include <cmath>
 #include <stdexcept>
 
+#include "decals/flat_decal_system.h"
+
 namespace
 {
+struct FractureDecalTemplateSpec
+{
+    const char* name;
+    const char* albedoPath;
+    const char* normalPath;
+    bool flipNormalY;
+};
+
+constexpr std::array<FractureDecalTemplateSpec, 5> kFractureDecalTemplates = {{
+    {"Metal Dent", "metal_dent_trans.png", "metal_dent_trans_normal.png", true},
+    {"Circle Soft", "decal_circle_soft.png", "", true},
+    {"Circle Hard", "decal_circle_hard.png", "", true},
+    {"Ring Black", "decal_ring_black.png", "", true},
+    {"Bullet Hole", "decal_bullet_hole_simple.png", "", true},
+}};
+
 Vec3 RotateYOffset(Vec3 v, float yawDegrees)
 {
     float radians = DegreesToRadians(yawDegrees);
@@ -76,6 +95,13 @@ void App::ReloadScene()
     auto& fracture = m_state.fracture;
     ShutdownImGui();
     core.renderer.Shutdown();
+    decals::ClearFlatDecals(core.flatDecals);
+    decals::ResetFlatDecalTemplates(core.flatDecals);
+    fracture.damageDecalTemplates = {};
+    fracture.damageDecalTemplateNames = {};
+    fracture.damageDecalTemplateCount = 0;
+    fracture.selectedDamageDecalTemplate = 0;
+    fracture.decalShotCounter = 0;
 
     if (lighting.sceneKind == SceneKind::FractureTest)
     {
@@ -85,6 +111,30 @@ void App::ReloadScene()
         config.prismSegY = fracture.prism.segY;
         config.prismSegZ = fracture.prism.segZ;
         core.scene = BuildFractureTestScene(core.assetRegistry, config);
+        for (const FractureDecalTemplateSpec& decalSpec : kFractureDecalTemplates)
+        {
+            if (fracture.damageDecalTemplateCount >= fracture.kMaxDamageDecalTemplates)
+            {
+                break;
+            }
+
+            decals::FlatDecalTemplateId templateId = decals::RegisterFlatDecalTemplate(
+                core.flatDecals,
+                decals::FlatDecalTemplate{
+                    .name = decalSpec.name,
+                    .albedoAssetPath = decalSpec.albedoPath,
+                    .normalAssetPath = decalSpec.normalPath,
+                    .flipNormalY = decalSpec.flipNormalY,
+                });
+            if (templateId == decals::kInvalidFlatDecalTemplateId)
+            {
+                continue;
+            }
+
+            std::uint32_t slot = fracture.damageDecalTemplateCount++;
+            fracture.damageDecalTemplates[slot] = templateId;
+            fracture.damageDecalTemplateNames[slot] = decalSpec.name;
+        }
     }
     else
     {
@@ -114,7 +164,6 @@ void App::ReloadScene()
     m_state.paint.nextSplatIndex = 0;
     core.traffic.Initialize(core.scene);
     core.worldCollider.BuildFromScene(core.scene);
-    core.fracture.Clear();
     m_state.fracture.hitValid = false;
     m_state.fracture.fireHeld = false;
     m_state.fracture.fireCooldown = 0.0f;
@@ -218,7 +267,13 @@ void App::ReloadScene()
     }
 
     core.renderer.m_shadowMapSize = lighting.shadowMapSize;
-    core.renderer.Initialize(m_window, core.scene, runtime.hasCharacter ? &core.characterSet.asset : nullptr);
+    core.renderer.Initialize(
+        m_window,
+        core.scene,
+        &core.flatDecals,
+        runtime.hasCharacter ? &core.characterSet.asset : nullptr,
+        &m_state.text
+    );
     InitializeImGui();
     SyncRendererSize();
     UpdateWindowTitle();
@@ -238,7 +293,13 @@ void App::RebuildCurrentSceneResources()
     runtime.sceneTriangleCount = CountSceneTriangles(core.scene);
     core.worldCollider.BuildFromScene(core.scene);
     core.renderer.m_shadowMapSize = lighting.shadowMapSize;
-    core.renderer.Initialize(m_window, core.scene, runtime.hasCharacter ? &core.characterSet.asset : nullptr);
+    core.renderer.Initialize(
+        m_window,
+        core.scene,
+        &core.flatDecals,
+        runtime.hasCharacter ? &core.characterSet.asset : nullptr,
+        &m_state.text
+    );
     InitializeImGui();
     SyncRendererSize();
     UpdateWindowTitle();

@@ -95,10 +95,10 @@ void VulkanRenderer::CreateOverlayDescriptorObjects()
         "vkCreateDescriptorSetLayout(overlay)"
     );
 
-    VkDescriptorPoolSize poolSize{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1};
+    VkDescriptorPoolSize poolSize{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, text::kMaxAtlases};
     VkDescriptorPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    poolInfo.maxSets = 1;
+    poolInfo.maxSets = text::kMaxAtlases;
     poolInfo.poolSizeCount = 1;
     poolInfo.pPoolSizes = &poolSize;
     CheckVk(
@@ -109,10 +109,12 @@ void VulkanRenderer::CreateOverlayDescriptorObjects()
     VkDescriptorSetAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
     allocInfo.descriptorPool = m_overlayDescriptorPool;
-    allocInfo.descriptorSetCount = 1;
-    allocInfo.pSetLayouts = &m_overlayDescriptorSetLayout;
+    std::array<VkDescriptorSetLayout, text::kMaxAtlases> layouts{};
+    layouts.fill(m_overlayDescriptorSetLayout);
+    allocInfo.descriptorSetCount = text::kMaxAtlases;
+    allocInfo.pSetLayouts = layouts.data();
     CheckVk(
-        vkAllocateDescriptorSets(m_device, &allocInfo, &m_overlayDescriptorSet),
+        vkAllocateDescriptorSets(m_device, &allocInfo, m_overlayDescriptorSets.data()),
         "vkAllocateDescriptorSets(overlay)"
     );
 }

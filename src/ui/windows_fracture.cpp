@@ -60,6 +60,30 @@ void App::BuildFractureWindow(bool& debugSettingsChanged)
         else if (fracture.settings.mesh.mode == damage::Mode::DamageDecal)
         {
             ImGui::TextUnformatted("Radius sets decal size.");
+            if (fracture.damageDecalTemplateCount > 0)
+            {
+                std::uint32_t selectedIndex = std::min(
+                    fracture.selectedDamageDecalTemplate,
+                    fracture.damageDecalTemplateCount - 1u);
+                const char* preview = fracture.damageDecalTemplateNames[selectedIndex].c_str();
+                if (ImGui::BeginCombo("Decal template", preview))
+                {
+                    for (std::uint32_t i = 0; i < fracture.damageDecalTemplateCount; ++i)
+                    {
+                        bool selected = (i == selectedIndex);
+                        if (ImGui::Selectable(fracture.damageDecalTemplateNames[i].c_str(), selected))
+                        {
+                            fracture.selectedDamageDecalTemplate = i;
+                            debugSettingsChanged = true;
+                        }
+                        if (selected)
+                        {
+                            ImGui::SetItemDefaultFocus();
+                        }
+                    }
+                    ImGui::EndCombo();
+                }
+            }
             debugSettingsChanged |= ImGui::SliderFloat("Roll variance", &fracture.settings.mesh.decalRollVarianceDegrees, 0.0f, 180.0f, "%.1f deg");
             debugSettingsChanged |= ImGui::SliderFloat("Shot spread", &fracture.settings.mesh.decalSpreadDegrees, 0.0f, 20.0f, "%.1f deg");
             int burstCount = static_cast<int>(fracture.settings.mesh.decalBurstCount);

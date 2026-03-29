@@ -174,16 +174,18 @@ add_executable(hardware-renderer-cpp
   src/runtime/lifecycle.cpp
   src/runtime/update.cpp
   src/runtime/scene_reload.cpp
-  src/audio/ricochet_audio.cpp
+  src/text/text_system.cpp
+  src/audio/audio_system.cpp
   src/debug/settings.cpp
   src/debug/spotlight_placement.cpp
+  src/decals/flat_decal_system.cpp
   src/ui/system.cpp
   src/ui/overlay.cpp
   src/ui/windows.cpp
   src/ui/windows_fracture.cpp
   src/lighting/apply.cpp
   src/damage/mesh_damage.cpp
-  src/gameplay/fracture.cpp
+  src/gameplay/fracture_sandbox.cpp
   src/gameplay/fracture_runtime.cpp
   src/gameplay/paint_runtime.cpp
   src/gameplay/vehicle_light_editor.cpp
@@ -226,6 +228,7 @@ add_executable(hardware-renderer-cpp
   src/render/pipeline_descriptors.cpp
   src/render/pipeline_lights.cpp
   src/render/resources.cpp
+  src/render/renderer_flat_decals.cpp
   src/render/resources_scene.cpp
   src/render/shadow.cpp
   src/render/swapchain.cpp
