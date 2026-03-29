@@ -72,6 +72,7 @@ void App::BuildLightingWindow(bool& debugSettingsChanged)
         debugSettingsChanged |= ImGui::SliderFloat("Moon intensity", &lighting.moonIntensity, 0.0f, 1.0f, "%.2f");
         debugSettingsChanged |= ImGui::SliderFloat("Ambient intensity", &lighting.ambientIntensity, 0.0f, 1.0f, "%.2f");
         debugSettingsChanged |= ImGui::SliderFloat("Point lights", &lighting.pointLightIntensity, 0.0f, 3.0f, "%.2f");
+        debugSettingsChanged |= ImGui::SliderFloat("Normal strength", &lighting.normalMapStrength, 0.0f, 3.0f, "%.2f");
         debugSettingsChanged |= ImGui::SliderFloat("Cascade split", &lighting.shadowCascadeSplit, 8.0f, 96.0f, "%.1f");
         ImGui::Separator();
         ImGui::Text("%s", runtime.mouseCaptured ? "Play mode: F1 or Esc to release mouse" : "Mouse mode: F1 to enter play mode");

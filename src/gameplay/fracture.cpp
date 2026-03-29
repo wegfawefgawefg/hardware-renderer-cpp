@@ -10,8 +10,10 @@
 
 namespace
 {
-constexpr std::string_view kFractureBuildingAsset =
+constexpr std::string_view kFractureTallBuildingAsset =
     "kenney/kenney_city-kit-commercial_2.1/Models/FBX format/building-skyscraper-b.fbx";
+constexpr std::string_view kFractureSmallBuildingAsset =
+    "kenney/kenney_city-kit-suburban_20/Models/FBX format/building-type-q.fbx";
 
 Vec3 TransformPoint(Mat4 m, Vec3 p)
 {
@@ -126,12 +128,16 @@ float Hash01(std::uint32_t v)
     v ^= v >> 16;
     return static_cast<float>(v & 0x00ffffffu) / static_cast<float>(0x01000000u);
 }
-}
 
-bool FractureSystem::InitializeFromAsset(const AssetRegistry& assetRegistry, std::string_view relativePath, const FractureSettings& settings)
+bool AppendAssetInstance(
+    std::vector<FractureChunk>& outChunks,
+    const AssetRegistry& assetRegistry,
+    std::string_view relativePath,
+    const FractureSettings& settings,
+    Vec3 worldOffset,
+    float targetFootprint)
 {
-    Clear();
-    const std::filesystem::path* path = assetRegistry.FindByRelativePath(relativePath.empty() ? kFractureBuildingAsset : relativePath);
+    const std::filesystem::path* path = assetRegistry.FindByRelativePath(relativePath);
     if (path == nullptr)
     {
         return false;
@@ -144,8 +150,8 @@ bool FractureSystem::InitializeFromAsset(const AssetRegistry& assetRegistry, std
     }
 
     float footprint = ComputeModelFootprint(model);
-    float scale = 8.5f / footprint;
-    Mat4 baseTransform = Mat4Scale(scale);
+    float scale = targetFootprint / footprint;
+    Mat4 baseTransform = Mat4Mul(Mat4Translate(worldOffset), Mat4Scale(scale));
     float minY = ComputeModelMinY(model, baseTransform);
     Mat4 transform = Mat4Mul(Mat4Translate(Vec3Make(0.0f, -minY, 0.0f)), baseTransform);
 
@@ -167,6 +173,7 @@ bool FractureSystem::InitializeFromAsset(const AssetRegistry& assetRegistry, std
     const float rayStart = boundsMax.y + step * 2.0f;
     const float rayDistance = (boundsMax.y - boundsMin.y) + step * 4.0f;
 
+    std::uint32_t baseSeed = static_cast<std::uint32_t>(outChunks.size() * 9781u + 17u);
     for (float x = boundsMin.x + half; x <= boundsMax.x - half; x += step)
     {
         for (float z = boundsMin.z + half; z <= boundsMax.z - half; z += step)
@@ -179,16 +186,62 @@ bool FractureSystem::InitializeFromAsset(const AssetRegistry& assetRegistry, std
 
             for (float y = boundsMin.y + half; y <= hit.position.y - half * 0.1f; y += step)
             {
-                std::uint32_t seed = static_cast<std::uint32_t>(m_templateChunks.size() * 9781u + 17u);
+                std::uint32_t seed = static_cast<std::uint32_t>(outChunks.size() * 9781u + baseSeed);
                 float tone = 0.44f + Hash01(seed) * 0.18f + (y - boundsMin.y) * 0.006f;
                 FractureChunk chunk{};
                 chunk.center = Vec3Make(x, y, z);
                 chunk.halfExtent = half * 0.92f;
                 chunk.color = Vec3Make(tone * 0.94f, tone * 0.96f, tone);
                 chunk.active = true;
-                m_templateChunks.push_back(chunk);
+                outChunks.push_back(chunk);
             }
         }
+    }
+
+    return true;
+}
+}
+
+bool FractureSystem::InitializeFromAsset(const AssetRegistry& assetRegistry, std::string_view relativePath, const FractureSettings& settings)
+{
+    Clear();
+    if (!AppendAssetInstance(
+            m_templateChunks,
+            assetRegistry,
+            relativePath.empty() ? kFractureTallBuildingAsset : relativePath,
+            settings,
+            Vec3Make(0.0f, 0.0f, 0.0f),
+            8.5f))
+    {
+        return false;
+    }
+
+    Reset();
+    return !m_templateChunks.empty();
+}
+
+bool FractureSystem::InitializeTestSet(const AssetRegistry& assetRegistry, const FractureSettings& settings)
+{
+    Clear();
+    bool tallReady = AppendAssetInstance(
+        m_templateChunks,
+        assetRegistry,
+        kFractureTallBuildingAsset,
+        settings,
+        Vec3Make(6.5f, 0.0f, 0.0f),
+        8.5f
+    );
+    bool smallReady = AppendAssetInstance(
+        m_templateChunks,
+        assetRegistry,
+        kFractureSmallBuildingAsset,
+        settings,
+        Vec3Make(-6.0f, 0.0f, 1.5f),
+        6.0f
+    );
+    if (!tallReady && !smallReady)
+    {
+        return false;
     }
 
     Reset();
@@ -199,7 +252,7 @@ void FractureSystem::Reset()
 {
     m_chunks = m_templateChunks;
     m_debris.clear();
-    m_debris.resize(192);
+    m_debris.resize(std::max<std::size_t>(192, m_templateChunks.size() / 3));
 }
 
 void FractureSystem::Clear()

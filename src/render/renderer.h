@@ -54,6 +54,7 @@ struct alignas(16) SceneUniforms
     Vec4 paintSplatNormals[kMaxPaintSplats];
     Vec4 paintSplatColors[kMaxPaintSplats];
     Vec4 surfaceMaskParamsA;
+    Vec4 surfaceMaskParamsB;
     Vec4 paintSplatCounts;
 };
 
@@ -65,6 +66,7 @@ struct alignas(16) DrawPushConstants
     std::uint32_t pointLightMask = 0;
     std::uint32_t spotLightMask = 0;
     std::uint32_t shadowedSpotLightMask = 0;
+    std::uint32_t materialFlags = 0;
 };
 
 struct OverlayVertex
@@ -83,6 +85,7 @@ struct DebugRenderOptions
 {
     static constexpr std::uint32_t kMaxSelectionSpheres = 16;
     static constexpr std::uint32_t kMaxCustomCubes = 1024;
+    static constexpr std::uint32_t kMaxCustomLines = 32768;
     bool drawLightProxies = true;
     bool drawLightMarkers = true;
     bool drawLightDirections = false;
@@ -98,6 +101,10 @@ struct DebugRenderOptions
     std::uint32_t customCubeCount = 0;
     std::array<Vec4, kMaxCustomCubes> customCubes = {};
     std::array<Vec4, kMaxCustomCubes> customCubeColors = {};
+    std::uint32_t customLineCount = 0;
+    std::array<Vec4, kMaxCustomLines> customLineStarts = {};
+    std::array<Vec4, kMaxCustomLines> customLineEnds = {};
+    std::array<Vec4, kMaxCustomLines> customLineColors = {};
 };
 
 struct RenderProfilingStats
@@ -124,6 +131,7 @@ struct VulkanRenderer
     void Shutdown();
     void Resize(std::uint32_t width, std::uint32_t height);
     void UpdateSceneTransforms(const SceneData& scene);
+    bool UpdateSceneGeometry(const SceneData& scene);
     void InitializeImGuiBackend();
     void ShutdownImGuiBackend();
     ImTextureID GetShadowDebugTexture(std::uint32_t cascadeIndex) const;
@@ -258,6 +266,7 @@ struct VulkanRenderer
     VkFence m_frameFence = VK_NULL_HANDLE;
     VkQueryPool m_timestampQueryPool = VK_NULL_HANDLE;
     float m_gpuTimestampPeriodNs = 1.0f;
+    bool m_supportsWideLines = false;
 
     BufferResource m_vertexBuffer;
     BufferResource m_indexBuffer;
@@ -272,8 +281,10 @@ struct VulkanRenderer
     BufferResource m_characterVertexBuffer;
     BufferResource m_characterIndexBuffer;
     std::vector<ImageResource> m_textureImages;
+    std::vector<ImageResource> m_normalTextureImages;
     VkSampler m_textureSampler = VK_NULL_HANDLE;
     ImageResource m_effectPatternImage;
+    ImageResource m_flatNormalImage;
     VkSampler m_effectSampler = VK_NULL_HANDLE;
     std::vector<ImageResource> m_paintImages;
     VkSampler m_paintSampler = VK_NULL_HANDLE;
@@ -300,6 +311,8 @@ struct VulkanRenderer
         std::uint32_t skinned = 0;
         std::uint32_t entityIndex = 0;
         std::uint32_t primitiveIndex = 0;
+        bool castsShadows = true;
+        bool flipNormalY = true;
     };
 
     struct PaintLayer
@@ -323,6 +336,8 @@ struct VulkanRenderer
     CharacterRenderState m_characterState = {};
     std::uint32_t m_characterIndexCount = 0;
     std::uint32_t m_characterDescriptorIndex = std::numeric_limits<std::uint32_t>::max();
+    std::uint32_t m_sceneVertexCount = 0;
+    std::uint32_t m_sceneIndexCount = 0;
     bool m_hasCharacter = false;
     std::uint32_t m_overlayTextureWidth = 0;
     std::uint32_t m_overlayTextureHeight = 0;

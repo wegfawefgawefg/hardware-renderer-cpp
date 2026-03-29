@@ -33,6 +33,7 @@ layout(binding = 0) uniform SceneUniforms
     vec4 paintSplatNormals[128];
     vec4 paintSplatColors[128];
     vec4 surfaceMaskParamsA;
+    vec4 surfaceMaskParamsB;
     vec4 paintSplatCounts;
 } uniforms;
 
@@ -44,6 +45,7 @@ layout(push_constant) uniform DrawPushConstants
     uint pointLightMask;
     uint spotLightMask;
     uint shadowedSpotLightMask;
+    uint materialFlags;
 } drawPush;
 
 void main()

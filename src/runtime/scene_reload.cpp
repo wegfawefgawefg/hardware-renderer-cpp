@@ -73,10 +73,23 @@ void App::ReloadScene()
     auto& core = m_state.core;
     auto& runtime = m_state.runtime;
     auto& lighting = m_state.lighting;
+    auto& fracture = m_state.fracture;
     ShutdownImGui();
     core.renderer.Shutdown();
 
-    core.scene = LoadSampleScene(core.assetRegistry, lighting.sceneKind);
+    if (lighting.sceneKind == SceneKind::FractureTest)
+    {
+        FractureSceneConfig config{};
+        config.prismHalfExtents = fracture.prism.halfExtents;
+        config.prismSegX = fracture.prism.segX;
+        config.prismSegY = fracture.prism.segY;
+        config.prismSegZ = fracture.prism.segZ;
+        core.scene = BuildFractureTestScene(core.assetRegistry, config);
+    }
+    else
+    {
+        core.scene = LoadSampleScene(core.assetRegistry, lighting.sceneKind);
+    }
     if (lighting.sceneKind == SceneKind::PlayerMaskTest && runtime.hasCharacter && core.scene.models.size() >= 2 && core.scene.entities.size() >= 2)
     {
         ModelData characterModel = BuildStaticCharacterModel(core.characterSet.asset);
@@ -120,7 +133,6 @@ void App::ReloadScene()
     {
         lighting.shadowTestSpotTargetValid = false;
         lighting.cycleDayNight = false;
-        lighting.timeOfDay = 0.56f;
         lighting.sunAzimuthDegrees = -40.0f;
         lighting.sunIntensity = 1.4f;
         lighting.moonIntensity = 0.0f;
@@ -139,7 +151,6 @@ void App::ReloadScene()
     {
         lighting.shadowTestSpotTargetValid = false;
         lighting.cycleDayNight = false;
-        lighting.timeOfDay = 0.58f;
         lighting.sunAzimuthDegrees = -18.0f;
         lighting.sunIntensity = 1.4f;
         lighting.moonIntensity = 0.0f;
@@ -149,16 +160,10 @@ void App::ReloadScene()
         core.camera.position = Vec3Make(0.0f, 8.5f, 19.0f);
         core.camera.yawRadians = DegreesToRadians(180.0f);
         core.camera.pitchRadians = DegreesToRadians(-16.0f);
-        core.fracture.InitializeFromAsset(
-            core.assetRegistry,
-            "kenney/kenney_city-kit-commercial_2.1/Models/FBX format/building-skyscraper-b.fbx",
-            m_state.fracture.settings
-        );
     }
     else if (lighting.sceneKind == SceneKind::ShadowTest)
     {
         lighting.cycleDayNight = false;
-        lighting.timeOfDay = 0.50f;
         lighting.sunAzimuthDegrees = -35.0f;
         lighting.sunIntensity = 1.35f;
         lighting.moonIntensity = 0.0f;
@@ -182,7 +187,6 @@ void App::ReloadScene()
     {
         lighting.shadowTestSpotTargetValid = false;
         lighting.cycleDayNight = false;
-        lighting.timeOfDay = 0.50f;
         lighting.sunAzimuthDegrees = -35.0f;
         lighting.sunIntensity = 0.0f;
         lighting.moonIntensity = 0.0f;
@@ -194,7 +198,6 @@ void App::ReloadScene()
     {
         lighting.shadowTestSpotTargetValid = false;
         lighting.cycleDayNight = false;
-        lighting.timeOfDay = 0.72f;
         lighting.sunAzimuthDegrees = -28.0f;
         lighting.sunIntensity = 0.12f;
         lighting.moonIntensity = 0.0f;
@@ -221,4 +224,37 @@ void App::ReloadScene()
     UpdateWindowTitle();
     UpdateOverlayText();
     runtime.reloadSceneRequested = false;
+}
+
+void App::RebuildCurrentSceneResources()
+{
+    auto& core = m_state.core;
+    auto& runtime = m_state.runtime;
+    auto& lighting = m_state.lighting;
+
+    ShutdownImGui();
+    core.renderer.Shutdown();
+    core.sceneBounds = ComputeSceneBounds(core.scene);
+    runtime.sceneTriangleCount = CountSceneTriangles(core.scene);
+    core.worldCollider.BuildFromScene(core.scene);
+    core.renderer.m_shadowMapSize = lighting.shadowMapSize;
+    core.renderer.Initialize(m_window, core.scene, runtime.hasCharacter ? &core.characterSet.asset : nullptr);
+    InitializeImGui();
+    SyncRendererSize();
+    UpdateWindowTitle();
+}
+
+void App::RefreshCurrentSceneGeometry()
+{
+    auto& core = m_state.core;
+    auto& runtime = m_state.runtime;
+
+    core.sceneBounds = ComputeSceneBounds(core.scene);
+    runtime.sceneTriangleCount = CountSceneTriangles(core.scene);
+    core.worldCollider.BuildFromScene(core.scene);
+    if (!core.renderer.UpdateSceneGeometry(core.scene))
+    {
+        RebuildCurrentSceneResources();
+        return;
+    }
 }

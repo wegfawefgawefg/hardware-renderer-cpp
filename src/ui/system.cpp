@@ -40,6 +40,9 @@ void App::ProcessImGuiEvent(const SDL_Event& event)
         {
             switch (event.type)
             {
+            case SDL_EVENT_KEY_DOWN:
+            case SDL_EVENT_KEY_UP:
+            case SDL_EVENT_TEXT_INPUT:
             case SDL_EVENT_MOUSE_MOTION:
             case SDL_EVENT_MOUSE_WHEEL:
             case SDL_EVENT_MOUSE_BUTTON_DOWN:
@@ -74,6 +77,8 @@ void App::BuildImGui()
         }
         io.MouseWheel = 0.0f;
         io.MouseWheelH = 0.0f;
+        io.WantCaptureMouse = false;
+        io.WantCaptureKeyboard = false;
     }
 
     if (runtime.showImGui)

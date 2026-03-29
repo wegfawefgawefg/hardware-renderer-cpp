@@ -470,7 +470,12 @@ TriangleMeshCollider::RayHit TriangleMeshCollider::Raycast(
                 best.hit = true;
                 best.distance = hitDistance;
                 best.position = Vec3Add(origin, Vec3Scale(rayDir, hitDistance));
-                best.normal = tri.n;
+                Vec3 hitNormal = tri.n;
+                if (Vec3Dot(hitNormal, rayDir) > 0.0f)
+                {
+                    hitNormal = Vec3Scale(hitNormal, -1.0f);
+                }
+                best.normal = hitNormal;
                 best.entityIndex = tri.entityIndex;
                 best.primitiveIndex = tri.primitiveIndex;
                 best.uv = InterpolateUv(tri, best.position);

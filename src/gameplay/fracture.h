@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "assets/asset_registry.h"
+#include "gameplay/destruction_mesh.h"
 #include "math_types.h"
 #include "render/renderer.h"
 
@@ -37,6 +38,7 @@ struct FractureHit
 
 struct FractureSettings
 {
+    MeshFractureSettings mesh = {};
     float chunkHalfExtent = 0.75f;
     float blastRadius = 1.65f;
     float fireRate = 6.0f;
@@ -49,6 +51,7 @@ struct FractureSettings
 struct FractureSystem
 {
     bool InitializeFromAsset(const AssetRegistry& assetRegistry, std::string_view relativePath, const FractureSettings& settings);
+    bool InitializeTestSet(const AssetRegistry& assetRegistry, const FractureSettings& settings);
     void Reset();
     void Clear();
     void Update(float dtSeconds, const FractureSettings& settings);

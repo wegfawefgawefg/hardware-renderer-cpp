@@ -119,7 +119,13 @@ void VulkanRenderer::Shutdown()
         DestroyImage(m_device, textureImage);
     }
     m_textureImages.clear();
+    for (ImageResource& normalImage : m_normalTextureImages)
+    {
+        DestroyImage(m_device, normalImage);
+    }
+    m_normalTextureImages.clear();
     DestroyImage(m_device, m_effectPatternImage);
+    DestroyImage(m_device, m_flatNormalImage);
     for (ImageResource& paintImage : m_paintImages)
     {
         DestroyImage(m_device, paintImage);

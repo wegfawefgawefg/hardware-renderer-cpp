@@ -29,6 +29,7 @@ layout(binding = 0) uniform SceneUniforms
     vec4 paintSplatNormals[128];
     vec4 paintSplatColors[128];
     vec4 surfaceMaskParamsA;
+    vec4 surfaceMaskParamsB;
     vec4 paintSplatCounts;
 } uniforms;
 
@@ -36,6 +37,7 @@ layout(binding = 1) uniform sampler2D albedoTexture;
 layout(binding = 2) uniform sampler2D shadowMaps[6];
 layout(binding = 3) uniform sampler2D paintTexture;
 layout(binding = 4) uniform sampler2D effectPatternTexture;
+layout(binding = 5) uniform sampler2D normalTexture;
 
 layout(location = 0) in vec3 fragWorldPosition;
 layout(location = 1) in vec3 fragNormal;
@@ -54,6 +56,7 @@ layout(push_constant) uniform DrawPushConstants
     uint pointLightMask;
     uint spotLightMask;
     uint shadowedSpotLightMask;
+    uint materialFlags;
 } drawPush;
 
 layout(location = 0) out vec4 outColor;
@@ -192,6 +195,38 @@ vec3 applyPaintSplats(vec3 baseAlbedo, vec3 worldPosition, vec3 normal)
     return painted;
 }
 
+vec3 sampleMappedNormal(vec3 baseNormal, vec3 worldPosition, vec2 uv)
+{
+    vec3 map = texture(normalTexture, uv).xyz * 2.0 - 1.0;
+    bool flipNormalY = (drawPush.materialFlags & 1u) != 0u;
+    if (flipNormalY)
+    {
+        map.y = -map.y;
+    }
+    float strength = max(uniforms.surfaceMaskParamsB.x, 0.0);
+    if (map.z <= -0.999)
+    {
+        return normalize(baseNormal);
+    }
+
+    vec3 dp1 = dFdx(worldPosition);
+    vec3 dp2 = dFdy(worldPosition);
+    vec2 duv1 = dFdx(uv);
+    vec2 duv2 = dFdy(uv);
+    float det = duv1.x * duv2.y - duv1.y * duv2.x;
+    if (abs(det) <= 1e-6)
+    {
+        return normalize(baseNormal);
+    }
+
+    vec3 tangent = normalize((dp1 * duv2.y - dp2 * duv1.y) / det);
+    vec3 bitangent = normalize((-dp1 * duv2.x + dp2 * duv1.x) / det);
+    vec3 normal = normalize(baseNormal);
+    mat3 tbn = mat3(tangent, bitangent, normal);
+    vec3 mapped = normalize(tbn * normalize(vec3(map.xy * max(strength, 0.0), map.z)));
+    return normalize(mix(normal, mapped, clamp(strength, 0.0, 1.0)));
+}
+
 vec3 sampleVanishRippedAlbedo(vec2 uv, vec3 localPosition)
 {
     float time = uniforms.cameraPosition.w;
@@ -326,8 +361,13 @@ vec3 visualizeUv(vec2 uv)
 
 void main()
 {
-    vec3 normal = normalize(fragNormal);
-    vec3 albedo = texture(albedoTexture, fragUv).rgb;
+    vec3 normal = sampleMappedNormal(fragNormal, fragWorldPosition, fragUv);
+    vec4 albedoSample = texture(albedoTexture, fragUv);
+    if (albedoSample.a <= 0.1)
+    {
+        discard;
+    }
+    vec3 albedo = albedoSample.rgb;
     int materialDebugMode = int(uniforms.paintSplatCounts.y + 0.5);
     if (materialDebugMode == 2)
     {

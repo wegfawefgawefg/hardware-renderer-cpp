@@ -29,6 +29,26 @@ TextureData GetPrimitiveTexture(
     return MakeSolidTexture(255, 255, 255);
 }
 
+TextureData GetPrimitiveNormalTexture(
+    const SceneData& scene,
+    const EntityData& entity,
+    const PrimitiveData& primitive
+)
+{
+    const ModelData& model = scene.models[entity.modelIndex];
+    if (primitive.materialIndex < model.materials.size())
+    {
+        const MaterialData& material = model.materials[primitive.materialIndex];
+        if (material.normalTextureIndex >= 0 &&
+            static_cast<std::size_t>(material.normalTextureIndex) < model.textures.size())
+        {
+            return model.textures[static_cast<std::size_t>(material.normalTextureIndex)];
+        }
+    }
+
+    return MakeSolidTexture(128, 128, 255);
+}
+
 ImageResource CreateSolidColorImage(
     VkPhysicalDevice physicalDevice,
     VkDevice device,
@@ -166,6 +186,8 @@ void VulkanRenderer::CreateTextureResources(const SceneData& scene)
         {
             TextureData texture = GetPrimitiveTexture(scene, entity, primitive);
             m_textureImages.push_back(uploadTexture(texture, VK_FORMAT_R8G8B8A8_SRGB));
+            TextureData normalTexture = GetPrimitiveNormalTexture(scene, entity, primitive);
+            m_normalTextureImages.push_back(uploadTexture(normalTexture, VK_FORMAT_R8G8B8A8_UNORM));
         }
     }
 
@@ -198,6 +220,18 @@ void VulkanRenderer::CreateTextureResources(const SceneData& scene)
 
     TextureData effectPattern = LoadTexture(std::string(HARDWARE_RENDERER_ASSETS_ROOT) + "/waterdrops.png");
     m_effectPatternImage = uploadTexture(effectPattern, VK_FORMAT_R8G8B8A8_UNORM);
+    m_flatNormalImage = CreateSolidColorImage(
+        m_physicalDevice,
+        m_device,
+        m_graphicsQueue,
+        m_commandPool,
+        1,
+        1,
+        128,
+        128,
+        255,
+        255
+    );
 
     VkSamplerCreateInfo paintSamplerInfo{};
     paintSamplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
@@ -494,6 +528,18 @@ void VulkanRenderer::UpdateDescriptorSet()
         effectInfo.imageView = m_effectPatternImage.view;
         effectInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
+        VkDescriptorImageInfo normalInfo{};
+        normalInfo.sampler = m_textureSampler;
+        if (i < m_normalTextureImages.size())
+        {
+            normalInfo.imageView = m_normalTextureImages[i].view;
+        }
+        else
+        {
+            normalInfo.imageView = m_flatNormalImage.view;
+        }
+        normalInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
         VkWriteDescriptorSet effectWrite{};
         effectWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         effectWrite.dstSet = m_descriptorSets[i];
@@ -502,7 +548,21 @@ void VulkanRenderer::UpdateDescriptorSet()
         effectWrite.descriptorCount = 1;
         effectWrite.pImageInfo = &effectInfo;
 
-        std::array<VkWriteDescriptorSet, 5> writes = {uniformWrite, imageWrite, shadowWrite, paintWrite, effectWrite};
+        VkWriteDescriptorSet normalWrite{};
+        normalWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        normalWrite.dstSet = m_descriptorSets[i];
+        normalWrite.dstBinding = 5;
+        normalWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        normalWrite.descriptorCount = 1;
+        normalWrite.pImageInfo = &normalInfo;
+
+        std::array<VkWriteDescriptorSet, 6> writes = {
+            uniformWrite,
+            imageWrite,
+            shadowWrite,
+            paintWrite,
+            effectWrite,
+            normalWrite};
         vkUpdateDescriptorSets(m_device, static_cast<std::uint32_t>(writes.size()), writes.data(), 0, nullptr);
     }
 }

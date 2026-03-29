@@ -81,8 +81,12 @@ void VulkanRenderer::CreateDevice()
             VK_KHR_SWAPCHAIN_EXTENSION_NAME,
         };
 
+    VkPhysicalDeviceFeatures supportedFeatures{};
+    vkGetPhysicalDeviceFeatures(m_physicalDevice, &supportedFeatures);
+
     VkPhysicalDeviceFeatures features{};
     features.samplerAnisotropy = VK_TRUE;
+    features.wideLines = supportedFeatures.wideLines;
 
     VkDeviceCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -99,6 +103,7 @@ void VulkanRenderer::CreateDevice()
     VkPhysicalDeviceProperties properties{};
     vkGetPhysicalDeviceProperties(m_physicalDevice, &properties);
     m_gpuTimestampPeriodNs = properties.limits.timestampPeriod;
+    m_supportsWideLines = supportedFeatures.wideLines == VK_TRUE;
 
     VkQueryPoolCreateInfo queryInfo{};
     queryInfo.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;

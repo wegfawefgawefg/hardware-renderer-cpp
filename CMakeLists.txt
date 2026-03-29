@@ -9,17 +9,19 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 
 include(FetchContent)
+include(FindPkgConfig)
 find_package(Vulkan REQUIRED)
 find_program(GLSLANG_VALIDATOR glslangValidator REQUIRED)
+pkg_check_modules(VORBISFILE REQUIRED vorbisfile)
 
 set(SDL_SHARED ON CACHE BOOL "" FORCE)
 set(SDL_STATIC OFF CACHE BOOL "" FORCE)
 set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
 set(SDL_TESTS OFF CACHE BOOL "" FORCE)
-set(SDL_ALSA OFF CACHE BOOL "" FORCE)
+set(SDL_ALSA ON CACHE BOOL "" FORCE)
 set(SDL_JACK OFF CACHE BOOL "" FORCE)
-set(SDL_PIPEWIRE OFF CACHE BOOL "" FORCE)
-set(SDL_PULSEAUDIO OFF CACHE BOOL "" FORCE)
+set(SDL_PIPEWIRE ON CACHE BOOL "" FORCE)
+set(SDL_PULSEAUDIO ON CACHE BOOL "" FORCE)
 set(SDL_SNDIO OFF CACHE BOOL "" FORCE)
 set(SDL_X11_XSCRNSAVER OFF CACHE BOOL "" FORCE)
 set(SDL_X11_XTEST OFF CACHE BOOL "" FORCE)
@@ -172,6 +174,7 @@ add_executable(hardware-renderer-cpp
   src/runtime/lifecycle.cpp
   src/runtime/update.cpp
   src/runtime/scene_reload.cpp
+  src/audio/ricochet_audio.cpp
   src/debug/settings.cpp
   src/debug/spotlight_placement.cpp
   src/ui/system.cpp
@@ -179,6 +182,7 @@ add_executable(hardware-renderer-cpp
   src/ui/windows.cpp
   src/ui/windows_fracture.cpp
   src/lighting/apply.cpp
+  src/gameplay/destruction_mesh.cpp
   src/gameplay/fracture.cpp
   src/gameplay/fracture_runtime.cpp
   src/gameplay/paint_runtime.cpp
@@ -246,6 +250,7 @@ target_include_directories(hardware-renderer-cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${imgui_SOURCE_DIR}
     ${imgui_SOURCE_DIR}/backends
+    ${VORBISFILE_INCLUDE_DIRS}
 )
 
 target_link_libraries(hardware-renderer-cpp
@@ -253,6 +258,7 @@ target_link_libraries(hardware-renderer-cpp
     SDL3::SDL3
     SDL3_ttf::SDL3_ttf
     Vulkan::Vulkan
+    ${VORBISFILE_LINK_LIBRARIES}
 )
 
 target_compile_definitions(hardware-renderer-cpp

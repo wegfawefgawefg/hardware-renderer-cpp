@@ -80,11 +80,11 @@ void App::Initialize()
 
     if (!SDL_Init(SDL_INIT_VIDEO))
     {
-        throw std::runtime_error("SDL_Init failed");
+        throw std::runtime_error(std::string("SDL_Init failed: ") + SDL_GetError());
     }
     if (!TTF_Init())
     {
-        throw std::runtime_error("TTF_Init failed");
+        throw std::runtime_error(std::string("TTF_Init failed: ") + SDL_GetError());
     }
 
     SDL_SetHint(SDL_HINT_X11_WINDOW_TYPE, kX11DialogWindowType.data());
@@ -105,6 +105,8 @@ void App::Initialize()
     {
         throw std::runtime_error(std::string("TTF_OpenFont failed: ") + SDL_GetError());
     }
+
+    InitializeAudio();
 
     CenterWindowOnPrimaryDisplay(m_window);
     core.assetRegistry.ScanFbx(HARDWARE_RENDERER_ASSETS_ROOT);
@@ -140,6 +142,7 @@ void App::Shutdown()
     auto& core = m_state.core;
     ShutdownImGui();
     core.renderer.Shutdown();
+    ShutdownAudio();
 
     if (m_uiFont != nullptr)
     {

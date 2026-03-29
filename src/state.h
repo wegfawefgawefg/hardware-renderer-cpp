@@ -44,10 +44,23 @@ struct CoreState
 
 struct FractureState
 {
+    struct PrismSettings
+    {
+        Vec3 halfExtents = {3.5f, 5.5f, 3.0f};
+        std::uint32_t segX = 14;
+        std::uint32_t segY = 20;
+        std::uint32_t segZ = 12;
+    };
+
     FractureSettings settings = {};
+    PrismSettings prism = {};
+    bool showWireframe = false;
+    bool dentDepthMatchesRadius = true;
     bool fireHeld = false;
     float fireCooldown = 0.0f;
     bool hitValid = false;
+    std::uint32_t nextDecalSlot = 0;
+    std::uint32_t decalShotCounter = 0;
     Vec3 hitPosition = {};
     Vec3 hitNormal = {0.0f, 1.0f, 0.0f};
 };
@@ -109,6 +122,7 @@ struct LightingState
     float spotLightActivationForwardOffset = 10.0f;
     float shadowedSpotLightActivationDistance = 16.0f;
     float shadowedSpotLightActivationForwardOffset = 6.0f;
+    float normalMapStrength = 1.0f;
     float uvDebugScale = 8.0f;
     std::uint32_t uvDebugMode = 0;
     std::uint32_t materialDebugMode = 0;

@@ -63,6 +63,7 @@ void App::LoadDebugSettings()
     auto& lighting = m_state.lighting;
     auto& vehicle = m_state.vehicleLights;
     auto& paint = m_state.paint;
+    auto& fracture = m_state.fracture;
     std::ifstream in(DebugSettingsPath());
     if (!in)
     {
@@ -96,6 +97,7 @@ void App::LoadDebugSettings()
     ExtractFloat(text, "\"moon_intensity\"", lighting.moonIntensity);
     ExtractFloat(text, "\"ambient_intensity\"", lighting.ambientIntensity);
     ExtractFloat(text, "\"point_light_intensity\"", lighting.pointLightIntensity);
+    ExtractFloat(text, "\"normal_map_strength\"", lighting.normalMapStrength);
     ExtractFloat(text, "\"shadow_cascade_split\"", lighting.shadowCascadeSplit);
     ExtractUInt(text, "\"shadow_map_size\"", lighting.shadowMapSize);
     if (ExtractFloat(text, "\"shadow_blur\"", boolValue)) lighting.shadowBlur = boolValue != 0.0f;
@@ -150,6 +152,13 @@ void App::LoadDebugSettings()
     ExtractFloat(text, "\"paint_ball_color_g\"", paint.ballSettings.baseColor.y);
     ExtractFloat(text, "\"paint_ball_color_b\"", paint.ballSettings.baseColor.z);
     if (ExtractFloat(text, "\"paint_ball_cycle_color\"", boolValue)) paint.ballSettings.cycleColorOnShoot = boolValue != 0.0f;
+    if (ExtractFloat(text, "\"fracture_dent_depth_matches_radius\"", boolValue)) fracture.dentDepthMatchesRadius = boolValue != 0.0f;
+    ExtractFloat(text, "\"fracture_punch_inner_radius_scale\"", fracture.settings.mesh.punchInnerRadiusScale);
+    ExtractFloat(text, "\"fracture_punch_core_radius_scale\"", fracture.settings.mesh.punchCoreRadiusScale);
+    ExtractFloat(text, "\"fracture_decal_roll_variance_degrees\"", fracture.settings.mesh.decalRollVarianceDegrees);
+    ExtractFloat(text, "\"fracture_decal_spread_degrees\"", fracture.settings.mesh.decalSpreadDegrees);
+    ExtractUInt(text, "\"fracture_decal_burst_count\"", fracture.settings.mesh.decalBurstCount);
+    ExtractFloat(text, "\"fracture_fire_rate\"", fracture.settings.fireRate);
 }
 
 void App::SaveDebugSettings() const
@@ -157,6 +166,7 @@ void App::SaveDebugSettings() const
     const auto& lighting = m_state.lighting;
     const auto& vehicle = m_state.vehicleLights;
     const auto& paint = m_state.paint;
+    const auto& fracture = m_state.fracture;
     std::filesystem::create_directories(DebugSettingsPath().parent_path());
     std::FILE* file = std::fopen(DebugSettingsPath().string().c_str(), "wb");
     if (file == nullptr)
@@ -182,6 +192,7 @@ void App::SaveDebugSettings() const
         "  \"moon_intensity\": %.6f,\n"
         "  \"ambient_intensity\": %.6f,\n"
         "  \"point_light_intensity\": %.6f,\n"
+        "  \"normal_map_strength\": %.6f,\n"
         "  \"shadow_cascade_split\": %.6f,\n"
         "  \"shadow_map_size\": %u,\n"
         "  \"shadow_blur\": %d,\n"
@@ -227,7 +238,14 @@ void App::SaveDebugSettings() const
         "  \"paint_ball_color_r\": %.6f,\n"
         "  \"paint_ball_color_g\": %.6f,\n"
         "  \"paint_ball_color_b\": %.6f,\n"
-        "  \"paint_ball_cycle_color\": %d\n"
+        "  \"paint_ball_cycle_color\": %d,\n"
+        "  \"fracture_dent_depth_matches_radius\": %d,\n"
+        "  \"fracture_punch_inner_radius_scale\": %.6f,\n"
+        "  \"fracture_punch_core_radius_scale\": %.6f,\n"
+        "  \"fracture_decal_roll_variance_degrees\": %.6f,\n"
+        "  \"fracture_decal_spread_degrees\": %.6f,\n"
+        "  \"fracture_decal_burst_count\": %u,\n"
+        "  \"fracture_fire_rate\": %.6f\n"
         "}\n",
         static_cast<std::uint32_t>(lighting.sceneKind),
         lighting.cycleDayNight ? 1 : 0,
@@ -244,6 +262,7 @@ void App::SaveDebugSettings() const
         lighting.moonIntensity,
         lighting.ambientIntensity,
         lighting.pointLightIntensity,
+        lighting.normalMapStrength,
         lighting.shadowCascadeSplit,
         lighting.shadowMapSize,
         lighting.shadowBlur ? 1 : 0,
@@ -289,7 +308,14 @@ void App::SaveDebugSettings() const
         paint.ballSettings.baseColor.x,
         paint.ballSettings.baseColor.y,
         paint.ballSettings.baseColor.z,
-        paint.ballSettings.cycleColorOnShoot ? 1 : 0
+        paint.ballSettings.cycleColorOnShoot ? 1 : 0,
+        fracture.dentDepthMatchesRadius ? 1 : 0,
+        fracture.settings.mesh.punchInnerRadiusScale,
+        fracture.settings.mesh.punchCoreRadiusScale,
+        fracture.settings.mesh.decalRollVarianceDegrees,
+        fracture.settings.mesh.decalSpreadDegrees,
+        fracture.settings.mesh.decalBurstCount,
+        fracture.settings.fireRate
     );
 
     std::fclose(file);

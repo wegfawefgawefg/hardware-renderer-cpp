@@ -84,11 +84,18 @@ void VulkanRenderer::CreateSceneBuffers(const SceneData& scene)
             item.descriptorIndex = static_cast<std::uint32_t>(m_drawItems.size());
             item.entityIndex = static_cast<std::uint32_t>(&entity - scene.entities.data());
             item.primitiveIndex = static_cast<std::uint32_t>(&primitive - model.primitives.data());
+            if (primitive.materialIndex < model.materials.size())
+            {
+                item.castsShadows = model.materials[primitive.materialIndex].castsShadows;
+                item.flipNormalY = model.materials[primitive.materialIndex].flipNormalY;
+            }
             m_drawItems.push_back(item);
         }
     }
     m_visibleDrawItems.reserve(m_drawItems.size());
     m_paintLayers.assign(m_drawItems.size(), {});
+    m_sceneVertexCount = static_cast<std::uint32_t>(mergedVertices.size());
+    m_sceneIndexCount = static_cast<std::uint32_t>(mergedIndices.size());
 
     VkDeviceSize vertexSize = sizeof(Vertex) * mergedVertices.size();
     VkDeviceSize indexSize = sizeof(std::uint32_t) * mergedIndices.size();
@@ -185,6 +192,75 @@ void VulkanRenderer::CreateSceneBuffers(const SceneData& scene)
     );
     std::memcpy(m_overlayVertexBuffer.mapped, quad.data(), sizeof(quad));
     std::memcpy(m_postVertexBuffer.mapped, quad.data(), sizeof(quad));
+}
+
+bool VulkanRenderer::UpdateSceneGeometry(const SceneData& scene)
+{
+    std::vector<Vertex> mergedVertices;
+    std::vector<std::uint32_t> mergedIndices;
+    std::vector<BoundsSphere> modelBounds(scene.models.size());
+    for (std::size_t modelIndex = 0; modelIndex < scene.models.size(); ++modelIndex)
+    {
+        modelBounds[modelIndex] = ComputeMeshBounds(scene.models[modelIndex].mesh);
+    }
+
+    std::vector<DrawItem> newDrawItems;
+    newDrawItems.reserve(m_drawItems.size());
+    for (const EntityData& entity : scene.entities)
+    {
+        if (entity.modelIndex >= scene.models.size())
+        {
+            continue;
+        }
+
+        const ModelData& model = scene.models[entity.modelIndex];
+        const BoundsSphere& bounds = modelBounds[entity.modelIndex];
+        std::uint32_t baseVertex = static_cast<std::uint32_t>(mergedVertices.size());
+        std::uint32_t baseIndex = static_cast<std::uint32_t>(mergedIndices.size());
+        mergedVertices.insert(mergedVertices.end(), model.mesh.vertices.begin(), model.mesh.vertices.end());
+        for (std::uint32_t index : model.mesh.indices)
+        {
+            mergedIndices.push_back(index + baseVertex);
+        }
+
+        for (const PrimitiveData& primitive : model.primitives)
+        {
+            DrawItem item{};
+            item.model = entity.transform;
+            item.localBoundsCenter = bounds.center;
+            item.localBoundsRadius = bounds.radius;
+            item.firstIndex = baseIndex + primitive.firstIndex;
+            item.indexCount = primitive.indexCount;
+            item.descriptorIndex = static_cast<std::uint32_t>(newDrawItems.size());
+            item.entityIndex = static_cast<std::uint32_t>(&entity - scene.entities.data());
+            item.primitiveIndex = static_cast<std::uint32_t>(&primitive - model.primitives.data());
+            if (primitive.materialIndex < model.materials.size())
+            {
+                item.castsShadows = model.materials[primitive.materialIndex].castsShadows;
+                item.flipNormalY = model.materials[primitive.materialIndex].flipNormalY;
+            }
+            newDrawItems.push_back(item);
+        }
+    }
+
+    if (mergedVertices.size() != m_sceneVertexCount ||
+        mergedIndices.size() != m_sceneIndexCount ||
+        newDrawItems.size() != m_drawItems.size())
+    {
+        return false;
+    }
+
+    if (!mergedVertices.empty())
+    {
+        std::memcpy(m_vertexBuffer.mapped, mergedVertices.data(), sizeof(Vertex) * mergedVertices.size());
+    }
+    if (!mergedIndices.empty())
+    {
+        std::memcpy(m_indexBuffer.mapped, mergedIndices.data(), sizeof(std::uint32_t) * mergedIndices.size());
+    }
+
+    m_drawItems = std::move(newDrawItems);
+    return true;
 }
 
 void VulkanRenderer::UpdateSceneTransforms(const SceneData& scene)

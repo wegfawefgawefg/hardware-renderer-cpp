@@ -32,8 +32,20 @@ layout(binding = 0) uniform SceneUniforms
     vec4 paintSplatNormals[128];
     vec4 paintSplatColors[128];
     vec4 surfaceMaskParamsA;
+    vec4 surfaceMaskParamsB;
     vec4 paintSplatCounts;
 } uniforms;
+
+layout(push_constant) uniform DrawPushConstants
+{
+    mat4 model;
+    uint skinned;
+    uint shadowCascade;
+    uint pointLightMask;
+    uint spotLightMask;
+    uint shadowedSpotLightMask;
+    uint materialFlags;
+} drawPush;
 
 layout(location = 0) out vec3 fragColor;
 layout(location = 1) out vec3 fragWorldPosition;

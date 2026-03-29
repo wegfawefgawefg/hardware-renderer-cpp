@@ -196,6 +196,10 @@ void VulkanRenderer::RecordShadowPass(VkCommandBuffer commandBuffer, std::uint32
 
     for (const DrawItem& drawItem : m_drawItems)
     {
+        if (!drawItem.castsShadows)
+        {
+            continue;
+        }
         if (!ShadowDrawItemVisible(drawItem, cascadeIndex))
         {
             continue;

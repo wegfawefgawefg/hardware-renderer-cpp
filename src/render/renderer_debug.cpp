@@ -344,4 +344,17 @@ void VulkanRenderer::BuildDebugLightGeometry(
             );
         }
     }
+
+    for (std::uint32_t i = 0; i < debug.customLineCount && i < DebugRenderOptions::kMaxCustomLines; ++i)
+    {
+        Vec4 start = debug.customLineStarts[i];
+        Vec4 end = debug.customLineEnds[i];
+        Vec4 color = debug.customLineColors[i];
+        AppendLine(
+            lightLines,
+            m_lightLineVertexCount,
+            Vec3Make(start.x, start.y, start.z),
+            Vec3Make(end.x, end.y, end.z),
+            Vec3Make(color.x, color.y, color.z));
+    }
 }

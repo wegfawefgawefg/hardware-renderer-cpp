@@ -409,7 +409,7 @@ SceneData LoadSampleScene(const AssetRegistry& assetRegistry, SceneKind kind)
     }
     if (kind == SceneKind::FractureTest)
     {
-        return BuildFractureTestScene(assetRegistry);
+        return BuildFractureTestScene(assetRegistry, FractureSceneConfig{});
     }
     if (kind == SceneKind::ShadowTest)
     {

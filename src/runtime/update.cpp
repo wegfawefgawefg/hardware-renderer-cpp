@@ -10,6 +10,17 @@ namespace
 {
 constexpr float kTitleRefreshPeriod = 0.20f;
 constexpr float kOverlayRefreshPeriod = 0.12f;
+
+Vec3 TransformPoint(Mat4 m, Vec3 p)
+{
+    Vec4 out = Mat4MulVec4(m, Vec4Make(p.x, p.y, p.z, 1.0f));
+    if (std::fabs(out.w) > 1e-6f && out.w != 1.0f)
+    {
+        float invW = 1.0f / out.w;
+        return Vec3Make(out.x * invW, out.y * invW, out.z * invW);
+    }
+    return Vec3Make(out.x, out.y, out.z);
+}
 }
 
 void App::HandleEvent(const SDL_Event& event)
@@ -64,7 +75,7 @@ void App::HandleEvent(const SDL_Event& event)
             {
                 if (lighting.sceneKind == SceneKind::FractureTest)
                 {
-                    fracture.fireHeld = true;
+                    fracture.fireHeld = fracture.settings.mesh.mode == FractureMode::DamageDecal;
                     TryFireFractureShot();
                 }
                 else if (paint.interactionMode == PaintInteractionMode::PaintBalls)
@@ -215,6 +226,12 @@ void App::Update(float dtSeconds)
         paint.vanishStaticStrength,
         paint.vanishEdgeGlowStrength
     );
+    uniforms.surfaceMaskParamsB = Vec4Make(
+        lighting.normalMapStrength,
+        0.0f,
+        0.0f,
+        0.0f
+    );
     for (std::uint32_t i = 0; i < paint.splatCount && i < kMaxPaintSplats; ++i)
     {
         const PaintSplat& splat = paint.splats[i];
@@ -362,7 +379,6 @@ void App::Update(float dtSeconds)
     debugOptions.customCubeCount = cubeIndex;
     if (lighting.sceneKind == SceneKind::FractureTest)
     {
-        core.fracture.AppendDebugGeometry(debugOptions);
         if (fracture.hitValid && debugOptions.selectionSphereCount < DebugRenderOptions::kMaxSelectionSpheres)
         {
             std::uint32_t sphereIndex = debugOptions.selectionSphereCount++;
@@ -370,9 +386,86 @@ void App::Update(float dtSeconds)
                 fracture.hitPosition.x,
                 fracture.hitPosition.y,
                 fracture.hitPosition.z,
-                fracture.settings.blastRadius
+                fracture.settings.mesh.radius
             );
             debugOptions.selectionSphereColors[sphereIndex] = Vec4Make(1.0f, 0.55f, 0.15f, 1.0f);
+        }
+
+        if (fracture.hitValid && fracture.settings.mesh.mode == FractureMode::Punch)
+        {
+            const float radius = fracture.settings.mesh.radius;
+            const float innerRadius = radius * std::clamp(fracture.settings.mesh.punchInnerRadiusScale, 0.05f, 0.95f);
+            const float coreRadius = radius * std::clamp(
+                fracture.settings.mesh.punchCoreRadiusScale,
+                0.02f,
+                std::clamp(fracture.settings.mesh.punchInnerRadiusScale, 0.05f, 0.95f) - 0.01f);
+
+            if (debugOptions.selectionSphereCount < DebugRenderOptions::kMaxSelectionSpheres)
+            {
+                std::uint32_t sphereIndex = debugOptions.selectionSphereCount++;
+                debugOptions.selectionSpheres[sphereIndex] = Vec4Make(
+                    fracture.hitPosition.x,
+                    fracture.hitPosition.y,
+                    fracture.hitPosition.z,
+                    innerRadius
+                );
+                debugOptions.selectionSphereColors[sphereIndex] = Vec4Make(1.0f, 0.9f, 0.18f, 1.0f);
+            }
+
+            if (debugOptions.selectionSphereCount < DebugRenderOptions::kMaxSelectionSpheres)
+            {
+                std::uint32_t sphereIndex = debugOptions.selectionSphereCount++;
+                debugOptions.selectionSpheres[sphereIndex] = Vec4Make(
+                    fracture.hitPosition.x,
+                    fracture.hitPosition.y,
+                    fracture.hitPosition.z,
+                    coreRadius
+                );
+                debugOptions.selectionSphereColors[sphereIndex] = Vec4Make(1.0f, 0.15f, 0.15f, 1.0f);
+            }
+        }
+
+        if (fracture.showWireframe)
+        {
+            std::uint32_t lineIndex = 0;
+            for (const EntityData& entity : core.scene.entities)
+            {
+                if (!entity.collidable || entity.modelIndex >= core.scene.models.size())
+                {
+                    continue;
+                }
+
+                const ModelData& model = core.scene.models[entity.modelIndex];
+                const auto appendEdge = [&](Vec3 a, Vec3 b)
+                {
+                    if (lineIndex >= DebugRenderOptions::kMaxCustomLines)
+                    {
+                        return;
+                    }
+                    debugOptions.customLineStarts[lineIndex] = Vec4Make(a.x, a.y, a.z, 1.0f);
+                    debugOptions.customLineEnds[lineIndex] = Vec4Make(b.x, b.y, b.z, 1.0f);
+                    debugOptions.customLineColors[lineIndex] = Vec4Make(0.12f, 0.95f, 0.55f, 1.0f);
+                    ++lineIndex;
+                };
+
+                for (std::size_t i = 0; i + 2 < model.mesh.indices.size() && lineIndex + 2 < DebugRenderOptions::kMaxCustomLines; i += 3)
+                {
+                    std::uint32_t i0 = model.mesh.indices[i + 0];
+                    std::uint32_t i1 = model.mesh.indices[i + 1];
+                    std::uint32_t i2 = model.mesh.indices[i + 2];
+                    if (i0 >= model.mesh.vertices.size() || i1 >= model.mesh.vertices.size() || i2 >= model.mesh.vertices.size())
+                    {
+                        continue;
+                    }
+                    Vec3 a = TransformPoint(entity.transform, model.mesh.vertices[i0].position);
+                    Vec3 b = TransformPoint(entity.transform, model.mesh.vertices[i1].position);
+                    Vec3 c = TransformPoint(entity.transform, model.mesh.vertices[i2].position);
+                    appendEdge(a, b);
+                    appendEdge(b, c);
+                    appendEdge(c, a);
+                }
+            }
+            debugOptions.customLineCount = lineIndex;
         }
     }
 

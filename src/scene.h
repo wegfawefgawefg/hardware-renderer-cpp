@@ -41,6 +41,9 @@ struct MaterialData
 {
     std::string name;
     std::int32_t textureIndex = -1;
+    std::int32_t normalTextureIndex = -1;
+    bool castsShadows = true;
+    bool flipNormalY = true;
 };
 
 struct SpotLightData
@@ -99,6 +102,14 @@ struct SceneBounds
     float radius = 1.0f;
 };
 
+struct FractureSceneConfig
+{
+    Vec3 prismHalfExtents = {3.5f, 5.5f, 3.0f};
+    std::uint32_t prismSegX = 14;
+    std::uint32_t prismSegY = 20;
+    std::uint32_t prismSegZ = 12;
+};
+
 enum class SceneKind
 {
     PlayerMaskTest,
@@ -111,6 +122,6 @@ enum class SceneKind
 
 SceneBounds ComputeSceneBounds(const SceneData& scene);
 std::uint32_t CountSceneTriangles(const SceneData& scene);
-SceneData BuildFractureTestScene(const AssetRegistry& assetRegistry);
+SceneData BuildFractureTestScene(const AssetRegistry& assetRegistry, const FractureSceneConfig& config);
 SceneData BuildVehicleLightTestScene(const AssetRegistry& assetRegistry);
 SceneData LoadSampleScene(const AssetRegistry& assetRegistry, SceneKind kind);
