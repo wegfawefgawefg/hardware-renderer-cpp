@@ -25,8 +25,8 @@ The right direction is:
 
 Current mesh damage mostly lives in:
 
-- [destruction_mesh.h](/home/vega/Coding/Graphics/hardware-renderer-cpp/src/gameplay/destruction_mesh.h)
-- [destruction_mesh.cpp](/home/vega/Coding/Graphics/hardware-renderer-cpp/src/gameplay/destruction_mesh.cpp)
+- [mesh_damage.h](/home/vega/Coding/Graphics/hardware-renderer-cpp/src/damage/mesh_damage.h)
+- [mesh_damage.cpp](/home/vega/Coding/Graphics/hardware-renderer-cpp/src/damage/mesh_damage.cpp)
 
 This is the right file pair conceptually. The actual algorithms are already somewhat self-contained:
 
@@ -93,7 +93,7 @@ The actual deformation math is not the main problem.
 
 The mess is more about ownership and boundaries:
 
-- `destruction_mesh.cpp` owns deformation logic, which is good
+- `mesh_damage.cpp` owns deformation logic, which is good
 - `fracture_runtime.cpp` owns decal placement and sandbox firing logic, which is okay for now
 - but the overall feature is still coupled to:
   - a generated scene

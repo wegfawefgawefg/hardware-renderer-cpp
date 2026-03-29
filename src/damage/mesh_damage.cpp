@@ -1,9 +1,11 @@
-#include "gameplay/destruction_mesh.h"
+#include "damage/mesh_damage.h"
 
 #include <algorithm>
 #include <cmath>
 #include <vector>
 
+namespace damage
+{
 namespace
 {
 struct LocalTransform
@@ -24,19 +26,6 @@ LocalTransform ExtractLocalTransform(Mat4 m)
 Vec3 LocalToWorld(const LocalTransform& transform, Vec3 p)
 {
     return Vec3Add(transform.translation, Vec3Scale(p, transform.scale));
-}
-
-float DistancePointToSegment(Vec3 p, Vec3 a, Vec3 b)
-{
-    Vec3 ab = Vec3Sub(b, a);
-    float denom = Vec3Dot(ab, ab);
-    if (denom <= 1e-6f)
-    {
-        return Vec3Length(Vec3Sub(p, a));
-    }
-    float t = std::clamp(Vec3Dot(Vec3Sub(p, a), ab) / denom, 0.0f, 1.0f);
-    Vec3 closest = Vec3Add(a, Vec3Scale(ab, t));
-    return Vec3Length(Vec3Sub(p, closest));
 }
 
 Vec3 ClosestPointOnTriangle(Vec3 p, Vec3 a, Vec3 b, Vec3 c)
@@ -100,25 +89,6 @@ bool TriangleHitsSphere(Vec3 a, Vec3 b, Vec3 c, Vec3 center, float radius)
     Vec3 closest = ClosestPointOnTriangle(center, a, b, c);
     Vec3 delta = Vec3Sub(closest, center);
     return Vec3Dot(delta, delta) <= radius * radius;
-}
-
-bool TriangleHitsCapsule(Vec3 a, Vec3 b, Vec3 c, Vec3 segStart, Vec3 segEnd, float radius)
-{
-    if (DistancePointToSegment(a, segStart, segEnd) <= radius ||
-        DistancePointToSegment(b, segStart, segEnd) <= radius ||
-        DistancePointToSegment(c, segStart, segEnd) <= radius)
-    {
-        return true;
-    }
-
-    if (TriangleHitsSphere(a, b, c, segStart, radius) ||
-        TriangleHitsSphere(a, b, c, segEnd, radius))
-    {
-        return true;
-    }
-
-    Vec3 centroid = Vec3Scale(Vec3Add(Vec3Add(a, b), c), 1.0f / 3.0f);
-    return DistancePointToSegment(centroid, segStart, segEnd) <= radius;
 }
 
 float TriangleArea(Vec3 a, Vec3 b, Vec3 c)
@@ -316,19 +286,16 @@ bool ApplyPunch(
         return false;
     }
 
-    if (changed)
-    {
-        RecomputeNormals(model);
-    }
-    return changed;
+    RecomputeNormals(model);
+    return true;
 }
 }
 
-bool ApplyMeshFracture(
+bool ApplyMeshDamage(
     SceneData& scene,
     const TriangleMeshCollider::RayHit& hit,
     Vec3 shotDirection,
-    const MeshFractureSettings& settings)
+    const MeshSettings& settings)
 {
     if (!hit.hit || hit.entityIndex >= scene.entities.size())
     {
@@ -354,9 +321,9 @@ bool ApplyMeshFracture(
 
     switch (settings.mode)
     {
-    case FractureMode::Dent:
+    case Mode::Dent:
         return ApplyDent(model, transform, hit.position, punchDirection, settings.radius, dentDepth);
-    case FractureMode::Punch:
+    case Mode::Punch:
         return ApplyPunch(
             model,
             transform,
@@ -366,9 +333,10 @@ bool ApplyMeshFracture(
             settings.radius,
             settings.punchInnerRadiusScale,
             settings.punchCoreRadiusScale);
-    case FractureMode::DamageDecal:
+    case Mode::DamageDecal:
         return false;
     }
 
     return false;
+}
 }

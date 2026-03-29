@@ -5,7 +5,7 @@
 #include <vector>
 
 #include "assets/asset_registry.h"
-#include "gameplay/destruction_mesh.h"
+#include "damage/mesh_damage.h"
 #include "math_types.h"
 #include "render/renderer.h"
 
@@ -38,7 +38,7 @@ struct FractureHit
 
 struct FractureSettings
 {
-    MeshFractureSettings mesh = {};
+    damage::MeshSettings mesh = {};
     float chunkHalfExtent = 0.75f;
     float blastRadius = 1.65f;
     float fireRate = 6.0f;

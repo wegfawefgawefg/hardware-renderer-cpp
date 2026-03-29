@@ -3,16 +3,18 @@
 #include "collision/triangle_collider.h"
 #include "scene.h"
 
-enum class FractureMode
+namespace damage
+{
+enum class Mode
 {
     Dent = 0,
     Punch,
     DamageDecal,
 };
 
-struct MeshFractureSettings
+struct MeshSettings
 {
-    FractureMode mode = FractureMode::Dent;
+    Mode mode = Mode::Dent;
     float radius = 1.6f;
     float punchDepth = 2.4f;
     float punchInnerRadiusScale = 0.58f;
@@ -22,9 +24,10 @@ struct MeshFractureSettings
     std::uint32_t decalBurstCount = 1;
 };
 
-bool ApplyMeshFracture(
+bool ApplyMeshDamage(
     SceneData& scene,
     const TriangleMeshCollider::RayHit& hit,
     Vec3 shotDirection,
-    const MeshFractureSettings& settings
+    const MeshSettings& settings
 );
+}

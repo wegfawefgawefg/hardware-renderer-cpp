@@ -75,7 +75,7 @@ void App::HandleEvent(const SDL_Event& event)
             {
                 if (lighting.sceneKind == SceneKind::FractureTest)
                 {
-                    fracture.fireHeld = fracture.settings.mesh.mode == FractureMode::DamageDecal;
+                    fracture.fireHeld = fracture.settings.mesh.mode == damage::Mode::DamageDecal;
                     TryFireFractureShot();
                 }
                 else if (paint.interactionMode == PaintInteractionMode::PaintBalls)
@@ -391,7 +391,7 @@ void App::Update(float dtSeconds)
             debugOptions.selectionSphereColors[sphereIndex] = Vec4Make(1.0f, 0.55f, 0.15f, 1.0f);
         }
 
-        if (fracture.hitValid && fracture.settings.mesh.mode == FractureMode::Punch)
+        if (fracture.hitValid && fracture.settings.mesh.mode == damage::Mode::Punch)
         {
             const float radius = fracture.settings.mesh.radius;
             const float innerRadius = radius * std::clamp(fracture.settings.mesh.punchInnerRadiusScale, 0.05f, 0.95f);

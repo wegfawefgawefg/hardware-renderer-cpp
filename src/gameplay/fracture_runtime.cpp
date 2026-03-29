@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
-#include "gameplay/destruction_mesh.h"
+#include "damage/mesh_damage.h"
 
 namespace
 {
@@ -124,7 +124,7 @@ bool App::TryFireFractureShot()
 
     fracture.hitPosition = hit.position;
     fracture.hitNormal = hit.normal;
-    if (fracture.settings.mesh.mode == FractureMode::DamageDecal)
+    if (fracture.settings.mesh.mode == damage::Mode::DamageDecal)
     {
         bool placed = false;
         std::uint32_t burstCount = std::max(1u, fracture.settings.mesh.decalBurstCount);
@@ -156,11 +156,11 @@ bool App::TryFireFractureShot()
         return placed;
     }
 
-    if (!ApplyMeshFracture(core.scene, hit, rayDirection, fracture.settings.mesh))
+    if (!damage::ApplyMeshDamage(core.scene, hit, rayDirection, fracture.settings.mesh))
     {
         return false;
     }
-    if (fracture.settings.mesh.mode == FractureMode::Dent)
+    if (fracture.settings.mesh.mode == damage::Mode::Dent)
     {
         RefreshCurrentSceneGeometry();
     }
@@ -194,7 +194,7 @@ void App::UpdateFractureSandbox(float dtSeconds)
         fracture.hitPosition = hoverHit.position;
         fracture.hitNormal = hoverHit.normal;
     }
-    if (fracture.settings.mesh.mode == FractureMode::DamageDecal &&
+    if (fracture.settings.mesh.mode == damage::Mode::DamageDecal &&
         m_state.runtime.mouseCaptured &&
         fracture.fireHeld &&
         fracture.fireCooldown <= 0.0f)

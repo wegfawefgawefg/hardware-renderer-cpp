@@ -27,7 +27,7 @@ void App::BuildFractureWindow(bool& debugSettingsChanged)
         int mode = static_cast<int>(fracture.settings.mesh.mode);
         if (ImGui::Combo("Damage mode", &mode, kModeNames, IM_ARRAYSIZE(kModeNames)))
         {
-            fracture.settings.mesh.mode = static_cast<FractureMode>(mode);
+            fracture.settings.mesh.mode = static_cast<damage::Mode>(mode);
             debugSettingsChanged = true;
         }
         if (ImGui::Button("Reset scene"))
@@ -36,7 +36,7 @@ void App::BuildFractureWindow(bool& debugSettingsChanged)
         }
         ImGui::SeparatorText("Damage");
         debugSettingsChanged |= ImGui::SliderFloat("Radius", &fracture.settings.mesh.radius, 0.05f, 4.0f, "%.2f");
-        if (fracture.settings.mesh.mode == FractureMode::Dent)
+        if (fracture.settings.mesh.mode == damage::Mode::Dent)
         {
             debugSettingsChanged |= ImGui::Checkbox("Depth = radius", &fracture.dentDepthMatchesRadius);
             if (fracture.dentDepthMatchesRadius)
@@ -48,7 +48,7 @@ void App::BuildFractureWindow(bool& debugSettingsChanged)
                 debugSettingsChanged |= ImGui::SliderFloat("Dent depth", &fracture.settings.mesh.punchDepth, 0.2f, 6.0f, "%.2f");
             }
         }
-        else if (fracture.settings.mesh.mode == FractureMode::Punch)
+        else if (fracture.settings.mesh.mode == damage::Mode::Punch)
         {
             debugSettingsChanged |= ImGui::SliderFloat("Inner size", &fracture.settings.mesh.punchInnerRadiusScale, 0.10f, 0.95f, "%.2f");
             debugSettingsChanged |= ImGui::SliderFloat("Core size", &fracture.settings.mesh.punchCoreRadiusScale, 0.02f, 0.90f, "%.2f");
@@ -57,7 +57,7 @@ void App::BuildFractureWindow(bool& debugSettingsChanged)
                 fracture.settings.mesh.punchInnerRadiusScale - 0.01f);
             fracture.settings.mesh.punchCoreRadiusScale = std::max(fracture.settings.mesh.punchCoreRadiusScale, 0.02f);
         }
-        else if (fracture.settings.mesh.mode == FractureMode::DamageDecal)
+        else if (fracture.settings.mesh.mode == damage::Mode::DamageDecal)
         {
             ImGui::TextUnformatted("Radius sets decal size.");
             debugSettingsChanged |= ImGui::SliderFloat("Roll variance", &fracture.settings.mesh.decalRollVarianceDegrees, 0.0f, 180.0f, "%.1f deg");

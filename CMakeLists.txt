@@ -182,7 +182,7 @@ add_executable(hardware-renderer-cpp
   src/ui/windows.cpp
   src/ui/windows_fracture.cpp
   src/lighting/apply.cpp
-  src/gameplay/destruction_mesh.cpp
+  src/damage/mesh_damage.cpp
   src/gameplay/fracture.cpp
   src/gameplay/fracture_runtime.cpp
   src/gameplay/paint_runtime.cpp
