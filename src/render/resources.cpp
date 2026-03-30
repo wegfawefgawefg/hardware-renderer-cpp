@@ -705,13 +705,69 @@ void VulkanRenderer::UpdateDescriptorSet()
         normalWrite.descriptorCount = 1;
         normalWrite.pImageInfo = &normalInfo;
 
-        std::array<VkWriteDescriptorSet, 6> writes = {
+        VkDescriptorBufferInfo procCityLightInfo{};
+        procCityLightInfo.buffer = m_procCityDynamicLightBuffer.buffer;
+        procCityLightInfo.offset = 0;
+        procCityLightInfo.range = sizeof(DynamicPointLightGpu) * kMaxProcCityDynamicLights;
+
+        VkWriteDescriptorSet procCityLightWrite{};
+        procCityLightWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        procCityLightWrite.dstSet = m_descriptorSets[i];
+        procCityLightWrite.dstBinding = 6;
+        procCityLightWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        procCityLightWrite.descriptorCount = 1;
+        procCityLightWrite.pBufferInfo = &procCityLightInfo;
+
+        VkDescriptorBufferInfo procCityLightIndexInfo{};
+        procCityLightIndexInfo.buffer = m_procCityDynamicLightIndexBuffer.buffer;
+        procCityLightIndexInfo.offset = 0;
+        procCityLightIndexInfo.range = sizeof(std::uint32_t) * std::max<std::size_t>(1, m_drawItems.size() * kMaxProcCityLightRefsPerInstance);
+
+        VkWriteDescriptorSet procCityLightIndexWrite{};
+        procCityLightIndexWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        procCityLightIndexWrite.dstSet = m_descriptorSets[i];
+        procCityLightIndexWrite.dstBinding = 7;
+        procCityLightIndexWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        procCityLightIndexWrite.descriptorCount = 1;
+        procCityLightIndexWrite.pBufferInfo = &procCityLightIndexInfo;
+
+        VkDescriptorBufferInfo procCityTileInfo{};
+        procCityTileInfo.buffer = m_procCityLightTileBuffer.buffer;
+        procCityTileInfo.offset = 0;
+        procCityTileInfo.range = sizeof(ProcCityLightTileGpu) * kMaxProcCityLightTiles;
+
+        VkWriteDescriptorSet procCityTileWrite{};
+        procCityTileWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        procCityTileWrite.dstSet = m_descriptorSets[i];
+        procCityTileWrite.dstBinding = 8;
+        procCityTileWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        procCityTileWrite.descriptorCount = 1;
+        procCityTileWrite.pBufferInfo = &procCityTileInfo;
+
+        VkDescriptorBufferInfo procCityTileLightIndexInfo{};
+        procCityTileLightIndexInfo.buffer = m_procCityTileLightIndexBuffer.buffer;
+        procCityTileLightIndexInfo.offset = 0;
+        procCityTileLightIndexInfo.range = sizeof(std::uint32_t) * kMaxProcCityTileLightRefs;
+
+        VkWriteDescriptorSet procCityTileLightIndexWrite{};
+        procCityTileLightIndexWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        procCityTileLightIndexWrite.dstSet = m_descriptorSets[i];
+        procCityTileLightIndexWrite.dstBinding = 9;
+        procCityTileLightIndexWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        procCityTileLightIndexWrite.descriptorCount = 1;
+        procCityTileLightIndexWrite.pBufferInfo = &procCityTileLightIndexInfo;
+
+        std::array<VkWriteDescriptorSet, 10> writes = {
             uniformWrite,
             imageWrite,
             shadowWrite,
             paintWrite,
             effectWrite,
-            normalWrite};
+            normalWrite,
+            procCityLightWrite,
+            procCityLightIndexWrite,
+            procCityTileWrite,
+            procCityTileLightIndexWrite};
         vkUpdateDescriptorSets(m_device, static_cast<std::uint32_t>(writes.size()), writes.data(), 0, nullptr);
     }
 }

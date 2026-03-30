@@ -6,6 +6,7 @@
 
 #include "assets/asset_registry.h"
 #include "scene.h"
+#include "scene_city.h"
 
 namespace city_internal
 {
@@ -53,15 +54,29 @@ std::uint32_t AddGeneratedModelInstance(
 float TileCenter(int tile);
 bool IsRoadTile(int tx, int tz);
 bool IsIntersectionTile(int tx, int tz);
-void AddGroundTile(SceneData& scene, const AssetRegistry& assetRegistry, ModelCache& cache, int tx, int tz);
-void AddRoadTile(SceneData& scene, const AssetRegistry& assetRegistry, ModelCache& cache, int tx, int tz);
+void AddGroundTile(
+    SceneData& scene,
+    const AssetRegistry& assetRegistry,
+    const CitySceneConfig& config,
+    ModelCache& cache,
+    int tx,
+    int tz
+);
+void AddRoadTile(
+    SceneData& scene,
+    const AssetRegistry& assetRegistry,
+    ModelCache& cache,
+    const CitySceneConfig& config,
+    int tx,
+    int tz
+);
 void AddBlockPerimeterBuildings(
     SceneData& scene,
     const AssetRegistry& assetRegistry,
     ModelCache& cache,
     int blockX,
     int blockZ,
-    float buildingQuadSize
+    const CitySceneConfig& config
 );
 void AddTrafficVehicles(
     SceneData& scene,
@@ -71,5 +86,5 @@ void AddTrafficVehicles(
     int maxTile
 );
 void AddStreetProps(SceneData& scene, const AssetRegistry& assetRegistry, ModelCache& cache);
-void AddStreetWorld(SceneData& scene, const AssetRegistry& assetRegistry, float buildingQuadSize);
+void AddStreetWorld(SceneData& scene, const AssetRegistry& assetRegistry, const CitySceneConfig& config);
 }

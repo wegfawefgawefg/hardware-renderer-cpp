@@ -17,10 +17,36 @@ struct GeneratedBuildingSpec
     float yawDegrees = 0.0f;
 };
 
+struct KenneyBuildingChoice
+{
+    std::string_view assetPath;
+    float targetFootprint = kBuildingFootprint;
+};
+
+constexpr std::array<KenneyBuildingChoice, 12> kKenneyBuildingChoices = {{
+    {"kenney/kenney_city-kit-commercial_2.1/Models/FBX format/low-detail-building-a.fbx", 5.0f},
+    {"kenney/kenney_city-kit-commercial_2.1/Models/FBX format/low-detail-building-f.fbx", 5.0f},
+    {"kenney/kenney_city-kit-commercial_2.1/Models/FBX format/low-detail-building-j.fbx", 5.0f},
+    {"kenney/kenney_city-kit-commercial_2.1/Models/FBX format/building-skyscraper-b.fbx", 5.0f},
+    {"kenney/kenney_city-kit-industrial_1.0/Models/FBX format/building-h.fbx", 5.0f},
+    {"kenney/kenney_city-kit-industrial_1.0/Models/FBX format/building-r.fbx", 5.0f},
+    {"kenney/kenney_city-kit-industrial_1.0/Models/FBX format/building-t.fbx", 5.0f},
+    {"kenney/kenney_city-kit-industrial_1.0/Models/FBX format/chimney-large.fbx", 5.0f},
+    {"kenney/kenney_city-kit-suburban_20/Models/FBX format/building-type-c.fbx", 5.0f},
+    {"kenney/kenney_city-kit-suburban_20/Models/FBX format/building-type-h.fbx", 5.0f},
+    {"kenney/kenney_city-kit-suburban_20/Models/FBX format/building-type-q.fbx", 5.0f},
+    {"kenney/kenney_city-kit-suburban_20/Models/FBX format/building-type-u.fbx", 5.0f},
+}};
+
 constexpr std::array<float, 3> kBaseBuildingWidths = {3.75f, 4.375f, 5.0f};
 constexpr std::array<float, 3> kBaseBuildingDepths = {3.75f, 4.375f, 5.0f};
 constexpr std::array<float, 11> kBaseBuildingHeights = {
     5.0f, 5.625f, 6.25f, 6.875f, 7.5f, 8.125f, 8.75f, 9.375f, 10.0f, 10.625f, 11.25f,
+};
+constexpr std::array<Vec3, 3> kProcCityArchetypeHalfExtents = {
+    Vec3{2.5f, 2.5f, 2.5f},
+    Vec3{2.5f, 4.0f, 2.5f},
+    Vec3{2.5f, 5.5f, 2.5f},
 };
 
 std::uint32_t HashBuildingSeed(int blockX, int blockZ, int edgeIndex)
@@ -42,9 +68,18 @@ GeneratedBuildingSpec ChooseGeneratedBuildingSpec(
     int blockZ,
     int edgeIndex,
     float yawDegrees,
-    float quadSize)
+    float quadSize,
+    CitySceneConfig::BuildingMode buildingMode)
 {
     std::uint32_t seed = HashBuildingSeed(blockX, blockZ, edgeIndex);
+    if (buildingMode == CitySceneConfig::BuildingMode::Procedural)
+    {
+        GeneratedBuildingSpec spec{};
+        spec.halfExtents = kProcCityArchetypeHalfExtents[seed % kProcCityArchetypeHalfExtents.size()];
+        spec.yawDegrees = yawDegrees;
+        return spec;
+    }
+
     float fullWidth = kBaseBuildingWidths[seed % kBaseBuildingWidths.size()];
     float fullDepth = kBaseBuildingDepths[(seed / 3u) % kBaseBuildingDepths.size()];
     float fullHeight = kBaseBuildingHeights[(seed / 9u) % kBaseBuildingHeights.size()];
@@ -61,6 +96,7 @@ void AddGeneratedBuildingInstance(
     SceneData& scene,
     const AssetRegistry& assetRegistry,
     ModelCache& cache,
+    const CitySceneConfig& config,
     int blockX,
     int blockZ,
     int edgeIndex,
@@ -70,34 +106,108 @@ void AddGeneratedBuildingInstance(
 )
 {
     float clampedQuadSize = std::max(quadSize, 0.05f);
-    GeneratedBuildingSpec spec = ChooseGeneratedBuildingSpec(blockX, blockZ, edgeIndex, yawDegrees, clampedQuadSize);
+    GeneratedBuildingSpec spec = ChooseGeneratedBuildingSpec(
+        blockX,
+        blockZ,
+        edgeIndex,
+        yawDegrees,
+        clampedQuadSize,
+        config.buildingMode);
     int widthSteps = static_cast<int>(std::round((spec.halfExtents.x * 2.0f) / clampedQuadSize));
     int heightSteps = static_cast<int>(std::round((spec.halfExtents.y * 2.0f) / clampedQuadSize));
     int depthSteps = static_cast<int>(std::round((spec.halfExtents.z * 2.0f) / clampedQuadSize));
 
     char key[128];
-    std::snprintf(
-        key,
-        sizeof(key),
-        "generated/city_building_w%d_h%d_d%d_q%03d",
-        widthSteps,
-        heightSteps,
-        depthSteps,
-        static_cast<int>(std::round(clampedQuadSize * 100.0f)));
+    if (config.buildingMode == CitySceneConfig::BuildingMode::Procedural)
+    {
+        std::snprintf(
+            key,
+            sizeof(key),
+            "generated/proc_city_building_a%d_q%03d",
+            HashBuildingSeed(blockX, blockZ, edgeIndex) % static_cast<int>(kProcCityArchetypeHalfExtents.size()),
+            static_cast<int>(std::round(clampedQuadSize * 100.0f)));
+    }
+    else
+    {
+        std::snprintf(
+            key,
+            sizeof(key),
+            "generated/city_building_w%d_h%d_d%d_q%03d",
+            widthSteps,
+            heightSteps,
+            depthSteps,
+            static_cast<int>(std::round(clampedQuadSize * 100.0f)));
+    }
 
+    ModelData model = config.buildingMode == CitySceneConfig::BuildingMode::Procedural
+        ? MakeGeneratedProcCityModel(assetRegistry, spec.halfExtents, clampedQuadSize)
+        : MakeGeneratedPrismModel(assetRegistry, spec.halfExtents, clampedQuadSize);
     AddGeneratedModelInstance(
         scene,
         cache,
         key,
-        MakeGeneratedPrismModel(assetRegistry, spec.halfExtents, clampedQuadSize),
+        std::move(model),
         Vec3Make(position.x, spec.halfExtents.y, position.z),
         spec.yawDegrees);
+}
+
+void AddKenneyBuildingInstance(
+    SceneData& scene,
+    const AssetRegistry& assetRegistry,
+    ModelCache& cache,
+    int blockX,
+    int blockZ,
+    int edgeIndex,
+    Vec3 position,
+    float yawDegrees)
+{
+    std::uint32_t seed = HashBuildingSeed(blockX, blockZ, edgeIndex);
+    const KenneyBuildingChoice& choice = kKenneyBuildingChoices[seed % kKenneyBuildingChoices.size()];
+    AddModelInstanceWithFootprint(
+        scene,
+        assetRegistry,
+        cache,
+        choice.assetPath,
+        position,
+        yawDegrees,
+        choice.targetFootprint);
+}
+
+void AddCityBuildingInstance(
+    SceneData& scene,
+    const AssetRegistry& assetRegistry,
+    ModelCache& cache,
+    const CitySceneConfig& config,
+    int blockX,
+    int blockZ,
+    int edgeIndex,
+    Vec3 position,
+    float yawDegrees)
+{
+    if (config.buildingMode == CitySceneConfig::BuildingMode::Procedural)
+    {
+        AddGeneratedBuildingInstance(
+            scene,
+            assetRegistry,
+            cache,
+            config,
+            blockX,
+            blockZ,
+            edgeIndex,
+            position,
+            yawDegrees,
+            config.buildingQuadSize);
+        return;
+    }
+
+    AddKenneyBuildingInstance(scene, assetRegistry, cache, blockX, blockZ, edgeIndex, position, yawDegrees);
 }
 }
 
 void AddGroundTile(
     SceneData& scene,
     const AssetRegistry& assetRegistry,
+    const CitySceneConfig& config,
     ModelCache& cache,
     int tx,
     int tz
@@ -108,25 +218,37 @@ void AddGroundTile(
         return;
     }
 
-    AddModelInstanceWithFootprint(
-        scene,
-        assetRegistry,
-        cache,
-        "kenney/kenney_city-kit-roads/Models/OBJ format/tile-low.obj",
-        Vec3Make(TileCenter(tx), 0.0f, TileCenter(tz)),
-        0.0f,
-        kRoadTileSize
-    );
+    if (config.buildingMode == CitySceneConfig::BuildingMode::Procedural)
+    {
+        AddGeneratedModelInstance(
+            scene,
+            cache,
+            "generated/proc_city_ground_tile",
+            MakeGeneratedProcCityGroundTileModel(kRoadTileSize),
+            Vec3Make(TileCenter(tx), 0.0f, TileCenter(tz)),
+            0.0f
+        );
+        return;
+    }
+
+    AddModelInstanceWithFootprint(scene, assetRegistry, cache, "kenney/kenney_city-kit-roads/Models/OBJ format/tile-low.obj", Vec3Make(TileCenter(tx), 0.0f, TileCenter(tz)), 0.0f, kRoadTileSize);
 }
 
 static void AddRoadLights(
     SceneData& scene,
     const AssetRegistry& assetRegistry,
     ModelCache& cache,
+    const CitySceneConfig& config,
     int tx,
     int tz
 )
 {
+    int stride = std::max(config.roadLightStride, 1);
+    if ((((tx + kHalfCityTiles) / stride) + ((tz + kHalfCityTiles) / stride)) % stride != 0)
+    {
+        return;
+    }
+
     const Vec3 center = Vec3Make(TileCenter(tx), 0.0f, TileCenter(tz));
     if (tx % kRoadStrideTiles == 0)
     {
@@ -134,8 +256,16 @@ static void AddRoadLights(
         Vec3 rightPosition = Vec3Add(center, Vec3Make(kRoadLightOffset, 0.0f, 0.0f));
         float leftYaw = 90.0f;
         float rightYaw = -90.0f;
-        AddModelInstanceWithFootprint(scene, assetRegistry, cache, "kenney/kenney_city-kit-roads/Models/FBX format/light-square.fbx", leftPosition, leftYaw, 1.6f);
-        AddModelInstanceWithFootprint(scene, assetRegistry, cache, "kenney/kenney_city-kit-roads/Models/FBX format/light-square.fbx", rightPosition, rightYaw, 1.6f);
+        if (config.buildingMode == CitySceneConfig::BuildingMode::Procedural)
+        {
+            AddGeneratedModelInstance(scene, cache, "generated/proc_city_street_light", MakeGeneratedProcCityStreetLightModel(), leftPosition, leftYaw);
+            AddGeneratedModelInstance(scene, cache, "generated/proc_city_street_light", MakeGeneratedProcCityStreetLightModel(), rightPosition, rightYaw);
+        }
+        else
+        {
+            AddModelInstanceWithFootprint(scene, assetRegistry, cache, "kenney/kenney_city-kit-roads/Models/FBX format/light-square.fbx", leftPosition, leftYaw, 1.6f);
+            AddModelInstanceWithFootprint(scene, assetRegistry, cache, "kenney/kenney_city-kit-roads/Models/FBX format/light-square.fbx", rightPosition, rightYaw, 1.6f);
+        }
         scene.spotLights.push_back(SpotLightData{
             .position = Vec3Add(leftPosition, Vec3Make(0.0f, kRoadLightHeight, 0.0f)),
             .range = 10.0f,
@@ -163,8 +293,16 @@ static void AddRoadLights(
     Vec3 farPosition = Vec3Add(center, Vec3Make(0.0f, 0.0f, kRoadLightOffset));
     float nearYaw = 0.0f;
     float farYaw = 180.0f;
-    AddModelInstanceWithFootprint(scene, assetRegistry, cache, "kenney/kenney_city-kit-roads/Models/FBX format/light-square.fbx", nearPosition, nearYaw, 1.6f);
-    AddModelInstanceWithFootprint(scene, assetRegistry, cache, "kenney/kenney_city-kit-roads/Models/FBX format/light-square.fbx", farPosition, farYaw, 1.6f);
+    if (config.buildingMode == CitySceneConfig::BuildingMode::Procedural)
+    {
+        AddGeneratedModelInstance(scene, cache, "generated/proc_city_street_light", MakeGeneratedProcCityStreetLightModel(), nearPosition, nearYaw);
+        AddGeneratedModelInstance(scene, cache, "generated/proc_city_street_light", MakeGeneratedProcCityStreetLightModel(), farPosition, farYaw);
+    }
+    else
+    {
+        AddModelInstanceWithFootprint(scene, assetRegistry, cache, "kenney/kenney_city-kit-roads/Models/FBX format/light-square.fbx", nearPosition, nearYaw, 1.6f);
+        AddModelInstanceWithFootprint(scene, assetRegistry, cache, "kenney/kenney_city-kit-roads/Models/FBX format/light-square.fbx", farPosition, farYaw, 1.6f);
+    }
     scene.spotLights.push_back(SpotLightData{
         .position = Vec3Add(nearPosition, Vec3Make(0.0f, kRoadLightHeight, 0.0f)),
         .range = 10.0f,
@@ -187,7 +325,13 @@ static void AddRoadLights(
     });
 }
 
-void AddRoadTile(SceneData& scene, const AssetRegistry& assetRegistry, ModelCache& cache, int tx, int tz)
+void AddRoadTile(
+    SceneData& scene,
+    const AssetRegistry& assetRegistry,
+    ModelCache& cache,
+    const CitySceneConfig& config,
+    int tx,
+    int tz)
 {
     if (!IsRoadTile(tx, tz))
     {
@@ -197,28 +341,32 @@ void AddRoadTile(SceneData& scene, const AssetRegistry& assetRegistry, ModelCach
     const Vec3 p = Vec3Make(TileCenter(tx), 0.0f, TileCenter(tz));
     if (IsIntersectionTile(tx, tz))
     {
-        AddModelInstanceWithFootprint(
-            scene,
-            assetRegistry,
-            cache,
-            "kenney/kenney_city-kit-roads/Models/FBX format/road-crossroad.fbx",
-            p,
-            0.0f,
-            kRoadTileSize
-        );
+        if (config.buildingMode == CitySceneConfig::BuildingMode::Procedural)
+        {
+            AddGeneratedModelInstance(scene, cache, "generated/proc_city_crossroad", MakeGeneratedProcCityRoadTileModel(kRoadTileSize, true), p, 0.0f);
+        }
+        else
+        {
+            AddModelInstanceWithFootprint(scene, assetRegistry, cache, "kenney/kenney_city-kit-roads/Models/FBX format/road-crossroad.fbx", p, 0.0f, kRoadTileSize);
+        }
         return;
     }
 
-    AddModelInstanceWithFootprint(
-        scene,
-        assetRegistry,
-        cache,
-        "kenney/kenney_city-kit-roads/Models/FBX format/road-straight.fbx",
-        p,
-        tx % kRoadStrideTiles == 0 ? 90.0f : 0.0f,
-        kRoadTileSize
-    );
-    AddRoadLights(scene, assetRegistry, cache, tx, tz);
+    if (config.buildingMode == CitySceneConfig::BuildingMode::Procedural)
+    {
+        AddGeneratedModelInstance(
+            scene,
+            cache,
+            "generated/proc_city_road_straight",
+            MakeGeneratedProcCityRoadTileModel(kRoadTileSize, false),
+            p,
+            tx % kRoadStrideTiles == 0 ? 90.0f : 0.0f);
+    }
+    else
+    {
+        AddModelInstanceWithFootprint(scene, assetRegistry, cache, "kenney/kenney_city-kit-roads/Models/FBX format/road-straight.fbx", p, tx % kRoadStrideTiles == 0 ? 90.0f : 0.0f, kRoadTileSize);
+    }
+    AddRoadLights(scene, assetRegistry, cache, config, tx, tz);
 }
 
 void AddBlockPerimeterBuildings(
@@ -227,7 +375,7 @@ void AddBlockPerimeterBuildings(
     ModelCache& cache,
     int blockX,
     int blockZ,
-    float buildingQuadSize
+    const CitySceneConfig& config
 )
 {
     const int baseTileX = blockX * kRoadStrideTiles;
@@ -237,58 +385,58 @@ void AddBlockPerimeterBuildings(
     {
         const int txNorth = baseTileX + localX;
         const int tzNorth = baseTileZ + 1;
-        AddGeneratedBuildingInstance(
+        AddCityBuildingInstance(
             scene,
             assetRegistry,
             cache,
+            config,
             blockX,
             blockZ,
             localX,
             Vec3Make(TileCenter(txNorth), 0.0f, TileCenter(tzNorth)),
-            180.0f,
-            buildingQuadSize);
+            180.0f);
 
         const int txSouth = baseTileX + localX;
         const int tzSouth = baseTileZ + kLotsPerBlockSide;
-        AddGeneratedBuildingInstance(
+        AddCityBuildingInstance(
             scene,
             assetRegistry,
             cache,
+            config,
             blockX,
             blockZ,
             10 + localX,
             Vec3Make(TileCenter(txSouth), 0.0f, TileCenter(tzSouth)),
-            0.0f,
-            buildingQuadSize);
+            0.0f);
     }
 
     for (int localZ = 2; localZ <= kLotsPerBlockSide - 1; ++localZ)
     {
         const int txWest = baseTileX + 1;
         const int tzWest = baseTileZ + localZ;
-        AddGeneratedBuildingInstance(
+        AddCityBuildingInstance(
             scene,
             assetRegistry,
             cache,
+            config,
             blockX,
             blockZ,
             20 + localZ,
             Vec3Make(TileCenter(txWest), 0.0f, TileCenter(tzWest)),
-            90.0f,
-            buildingQuadSize);
+            90.0f);
 
         const int txEast = baseTileX + kLotsPerBlockSide;
         const int tzEast = baseTileZ + localZ;
-        AddGeneratedBuildingInstance(
+        AddCityBuildingInstance(
             scene,
             assetRegistry,
             cache,
+            config,
             blockX,
             blockZ,
             30 + localZ,
             Vec3Make(TileCenter(txEast), 0.0f, TileCenter(tzEast)),
-            -90.0f,
-            buildingQuadSize);
+            -90.0f);
     }
 }
 
@@ -358,7 +506,7 @@ void AddStreetProps(SceneData& scene, const AssetRegistry& assetRegistry, ModelC
     }
 }
 
-void AddStreetWorld(SceneData& scene, const AssetRegistry& assetRegistry, float buildingQuadSize)
+void AddStreetWorld(SceneData& scene, const AssetRegistry& assetRegistry, const CitySceneConfig& config)
 {
     ModelCache cache{};
     const int minTile = -kHalfCityTiles;
@@ -370,8 +518,8 @@ void AddStreetWorld(SceneData& scene, const AssetRegistry& assetRegistry, float 
     {
         for (int tx = minTile; tx <= maxTile; ++tx)
         {
-            AddGroundTile(scene, assetRegistry, cache, tx, tz);
-            AddRoadTile(scene, assetRegistry, cache, tx, tz);
+            AddGroundTile(scene, assetRegistry, config, cache, tx, tz);
+            AddRoadTile(scene, assetRegistry, cache, config, tx, tz);
         }
     }
 
@@ -379,11 +527,14 @@ void AddStreetWorld(SceneData& scene, const AssetRegistry& assetRegistry, float 
     {
         for (int bx = minBlock; bx < maxBlockExclusive; ++bx)
         {
-            AddBlockPerimeterBuildings(scene, assetRegistry, cache, bx, bz, buildingQuadSize);
+            AddBlockPerimeterBuildings(scene, assetRegistry, cache, bx, bz, config);
         }
     }
 
     AddStreetProps(scene, assetRegistry, cache);
-    AddTrafficVehicles(scene, assetRegistry, cache, minTile, maxTile);
+    if (config.trafficVehiclesEnabled)
+    {
+        AddTrafficVehicles(scene, assetRegistry, cache, minTile, maxTile);
+    }
 }
 }

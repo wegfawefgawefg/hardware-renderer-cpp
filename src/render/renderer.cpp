@@ -66,10 +66,14 @@ void VulkanRenderer::Render(
         : 0u;
     m_activeShadowMapCount = activeSunShadowCascades + m_activeShadowedSpotCount;
     DebugRenderOptions debug = debugOptions != nullptr ? *debugOptions : DebugRenderOptions{};
+    m_useProcCityPipeline = debug.useProcCityPipeline;
+    m_useProcCityTiledLighting = debug.useProcCityTiledLighting;
     m_mainCullDistance = std::max(debug.mainDrawDistance, 1.0f);
     m_shadowCullDistance = m_activeShadowMapCount > 0 ? std::max(debug.shadowDrawDistance, 1.0f) : 1.0f;
     UpdateMainPassVisibility(uniforms);
     UpdateDrawLightMasks(uniforms);
+    BuildVisibleStaticInstances();
+    BuildProcCityTiledLightLists(uniforms);
     UpdateFlatDecalGeometry(flatDecals);
     m_characterState = characterState != nullptr ? *characterState : CharacterRenderState{};
     m_clearColor = uniforms.clearColor;

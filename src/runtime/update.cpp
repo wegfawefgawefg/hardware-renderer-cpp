@@ -245,9 +245,15 @@ void App::Update(float dtSeconds)
     );
     uniforms.surfaceMaskParamsB = Vec4Make(
         lighting.normalMapStrength,
-        lighting.sceneKind == SceneKind::City ? m_state.city.buildingQuadSize : fracture.prism.quadSize,
-        0.0f,
-        0.0f
+        (lighting.sceneKind == SceneKind::City || lighting.sceneKind == SceneKind::ProcCity)
+            ? m_state.city.buildingQuadSize
+            : fracture.prism.quadSize,
+        lighting.sceneKind == SceneKind::ProcCity && lighting.useProcCityTiledLighting
+            ? static_cast<float>((runtime.windowWidth + 31u) / 32u)
+            : 0.0f,
+        lighting.sceneKind == SceneKind::ProcCity && lighting.useProcCityTiledLighting
+            ? static_cast<float>((runtime.windowHeight + 31u) / 32u)
+            : 0.0f
     );
     for (std::uint32_t i = 0; i < paint.splatCount && i < kMaxPaintSplats; ++i)
     {
@@ -323,6 +329,8 @@ void App::Update(float dtSeconds)
     debugOptions.drawLightDirections = lighting.debugDrawLightDirections;
     debugOptions.drawLightVolumes = lighting.debugDrawLightVolumes;
     debugOptions.drawActivationVolumes = lighting.debugDrawActivationVolumes;
+    debugOptions.useProcCityPipeline = lighting.sceneKind == SceneKind::ProcCity;
+    debugOptions.useProcCityTiledLighting = lighting.sceneKind == SceneKind::ProcCity && lighting.useProcCityTiledLighting;
     debugOptions.mainDrawDistance = lighting.mainDrawDistance;
     debugOptions.shadowDrawDistance = lighting.shadowDrawDistance;
     Vec3 forward = CameraForward(core.camera);
@@ -502,6 +510,7 @@ void App::Update(float dtSeconds)
     }
 
     auto renderStart = Clock::now();
+    core.renderer.SetProcCityDynamicLights(m_state.lighting.procCityDynamicLights);
     core.renderer.Render(
         uniforms,
         text,

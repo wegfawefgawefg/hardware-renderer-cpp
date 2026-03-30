@@ -16,3 +16,11 @@ ModelData MakeGeneratedPrismModel(
     Vec3 halfExtents,
     float targetQuadSize
 );
+ModelData MakeGeneratedProcCityModel(
+    const AssetRegistry& assetRegistry,
+    Vec3 halfExtents,
+    float targetQuadSize
+);
+ModelData MakeGeneratedProcCityGroundTileModel(float tileSize);
+ModelData MakeGeneratedProcCityRoadTileModel(float tileSize, bool intersection);
+ModelData MakeGeneratedProcCityStreetLightModel();

@@ -25,6 +25,100 @@ std::uint32_t ComputeSegments(float fullExtent, float targetQuadSize)
     return static_cast<std::uint32_t>(std::max(1.0f, std::round(fullExtent / clampedQuadSize)));
 }
 
+void AddQuad(
+    ModelData& model,
+    Vec3 a,
+    Vec3 b,
+    Vec3 c,
+    Vec3 d,
+    Vec3 normal,
+    Vec2 uvMin = Vec2Make(0.0f, 0.0f),
+    Vec2 uvMax = Vec2Make(1.0f, 1.0f))
+{
+    std::uint32_t baseVertex = static_cast<std::uint32_t>(model.mesh.vertices.size());
+    model.mesh.vertices.push_back(Vertex{.position = a, .normal = normal, .uv = Vec2Make(uvMin.x, uvMin.y)});
+    model.mesh.vertices.push_back(Vertex{.position = b, .normal = normal, .uv = Vec2Make(uvMax.x, uvMin.y)});
+    model.mesh.vertices.push_back(Vertex{.position = c, .normal = normal, .uv = Vec2Make(uvMax.x, uvMax.y)});
+    model.mesh.vertices.push_back(Vertex{.position = d, .normal = normal, .uv = Vec2Make(uvMin.x, uvMax.y)});
+    model.mesh.indices.push_back(baseVertex + 0);
+    model.mesh.indices.push_back(baseVertex + 1);
+    model.mesh.indices.push_back(baseVertex + 2);
+    model.mesh.indices.push_back(baseVertex + 0);
+    model.mesh.indices.push_back(baseVertex + 2);
+    model.mesh.indices.push_back(baseVertex + 3);
+}
+
+void AppendBox(ModelData& model, Vec3 halfExtents, Vec3 center, std::uint32_t materialIndex)
+{
+    std::uint32_t firstIndex = static_cast<std::uint32_t>(model.mesh.indices.size());
+    Vec3 min = Vec3Sub(center, halfExtents);
+    Vec3 max = Vec3Add(center, halfExtents);
+    AddQuad(
+        model,
+        Vec3Make(min.x, min.y, max.z),
+        Vec3Make(max.x, min.y, max.z),
+        Vec3Make(max.x, max.y, max.z),
+        Vec3Make(min.x, max.y, max.z),
+        Vec3Make(0.0f, 0.0f, 1.0f));
+    AddQuad(
+        model,
+        Vec3Make(max.x, min.y, min.z),
+        Vec3Make(min.x, min.y, min.z),
+        Vec3Make(min.x, max.y, min.z),
+        Vec3Make(max.x, max.y, min.z),
+        Vec3Make(0.0f, 0.0f, -1.0f));
+    AddQuad(
+        model,
+        Vec3Make(min.x, min.y, min.z),
+        Vec3Make(min.x, min.y, max.z),
+        Vec3Make(min.x, max.y, max.z),
+        Vec3Make(min.x, max.y, min.z),
+        Vec3Make(-1.0f, 0.0f, 0.0f));
+    AddQuad(
+        model,
+        Vec3Make(max.x, min.y, max.z),
+        Vec3Make(max.x, min.y, min.z),
+        Vec3Make(max.x, max.y, min.z),
+        Vec3Make(max.x, max.y, max.z),
+        Vec3Make(1.0f, 0.0f, 0.0f));
+    AddQuad(
+        model,
+        Vec3Make(min.x, max.y, max.z),
+        Vec3Make(max.x, max.y, max.z),
+        Vec3Make(max.x, max.y, min.z),
+        Vec3Make(min.x, max.y, min.z),
+        Vec3Make(0.0f, 1.0f, 0.0f));
+    AddQuad(
+        model,
+        Vec3Make(min.x, min.y, min.z),
+        Vec3Make(max.x, min.y, min.z),
+        Vec3Make(max.x, min.y, max.z),
+        Vec3Make(min.x, min.y, max.z),
+        Vec3Make(0.0f, -1.0f, 0.0f));
+
+    model.primitives.push_back(PrimitiveData{
+        .firstIndex = firstIndex,
+        .indexCount = static_cast<std::uint32_t>(model.mesh.indices.size()) - firstIndex,
+        .materialIndex = materialIndex,
+    });
+}
+
+ModelData MakeSolidColorModelData(std::uint8_t r, std::uint8_t g, std::uint8_t b, std::string_view name)
+{
+    ModelData model{};
+    model.textures.push_back(MakeSolidTextureData(r, g, b));
+    model.materials.push_back(MaterialData{
+        .name = std::string(name),
+        .textureIndex = 0,
+        .normalTextureIndex = -1,
+        .castsShadows = true,
+        .flipNormalY = true,
+        .generatedQuadMaterialUv = false,
+        .leanShading = true,
+    });
+    return model;
+}
+
 void AppendQuadGrid(
     ModelData& model,
     Vec3 origin,
@@ -183,5 +277,147 @@ ModelData MakeGeneratedPrismModel(
         .materialIndex = 0,
     });
 
+    return model;
+}
+
+ModelData MakeGeneratedProcCityModel(
+    const AssetRegistry& assetRegistry,
+    Vec3 halfExtents,
+    float targetQuadSize
+)
+{
+    (void)targetQuadSize;
+    ModelData model{};
+    if (const std::filesystem::path* texturePath = assetRegistry.FindByRelativePath(kPrismTexture))
+    {
+        model.textures.push_back(LoadTexture(texturePath->string()));
+    }
+    else
+    {
+        model.textures.push_back(MakeSolidTextureData(196, 201, 210));
+    }
+
+    std::int32_t normalTextureIndex = -1;
+    if (const std::filesystem::path* normalTexturePath = assetRegistry.FindByRelativePath(kPrismNormalTexture))
+    {
+        normalTextureIndex = static_cast<std::int32_t>(model.textures.size());
+        model.textures.push_back(LoadTexture(normalTexturePath->string()));
+    }
+
+    model.materials.push_back(MaterialData{
+        .name = "generated_proc_city",
+        .textureIndex = 0,
+        .normalTextureIndex = normalTextureIndex,
+        .flipNormalY = true,
+        .generatedQuadMaterialUv = true,
+        .leanShading = true,
+    });
+
+    AppendQuadGrid(
+        model,
+        Vec3Make(-halfExtents.x, -halfExtents.y, halfExtents.z),
+        Vec3Make(halfExtents.x * 2.0f, 0.0f, 0.0f),
+        Vec3Make(0.0f, halfExtents.y * 2.0f, 0.0f),
+        Vec3Make(0.0f, 0.0f, 1.0f),
+        1,
+        1);
+    AppendQuadGrid(
+        model,
+        Vec3Make(halfExtents.x, -halfExtents.y, -halfExtents.z),
+        Vec3Make(-halfExtents.x * 2.0f, 0.0f, 0.0f),
+        Vec3Make(0.0f, halfExtents.y * 2.0f, 0.0f),
+        Vec3Make(0.0f, 0.0f, -1.0f),
+        1,
+        1);
+    AppendQuadGrid(
+        model,
+        Vec3Make(-halfExtents.x, -halfExtents.y, -halfExtents.z),
+        Vec3Make(0.0f, 0.0f, halfExtents.z * 2.0f),
+        Vec3Make(0.0f, halfExtents.y * 2.0f, 0.0f),
+        Vec3Make(-1.0f, 0.0f, 0.0f),
+        1,
+        1);
+    AppendQuadGrid(
+        model,
+        Vec3Make(halfExtents.x, -halfExtents.y, halfExtents.z),
+        Vec3Make(0.0f, 0.0f, -halfExtents.z * 2.0f),
+        Vec3Make(0.0f, halfExtents.y * 2.0f, 0.0f),
+        Vec3Make(1.0f, 0.0f, 0.0f),
+        1,
+        1);
+    AppendQuadGrid(
+        model,
+        Vec3Make(-halfExtents.x, halfExtents.y, halfExtents.z),
+        Vec3Make(halfExtents.x * 2.0f, 0.0f, 0.0f),
+        Vec3Make(0.0f, 0.0f, -halfExtents.z * 2.0f),
+        Vec3Make(0.0f, 1.0f, 0.0f),
+        1,
+        1);
+    AppendQuadGrid(
+        model,
+        Vec3Make(-halfExtents.x, -halfExtents.y, -halfExtents.z),
+        Vec3Make(halfExtents.x * 2.0f, 0.0f, 0.0f),
+        Vec3Make(0.0f, 0.0f, halfExtents.z * 2.0f),
+        Vec3Make(0.0f, -1.0f, 0.0f),
+        1,
+        1);
+
+    model.primitives.push_back(PrimitiveData{
+        .firstIndex = 0,
+        .indexCount = static_cast<std::uint32_t>(model.mesh.indices.size()),
+        .materialIndex = 0,
+    });
+
+    return model;
+}
+
+ModelData MakeGeneratedProcCityGroundTileModel(float tileSize)
+{
+    ModelData model = MakeSolidColorModelData(194, 194, 188, "generated_proc_city_ground");
+    AddQuad(
+        model,
+        Vec3Make(-tileSize * 0.5f, 0.0f, -tileSize * 0.5f),
+        Vec3Make(-tileSize * 0.5f, 0.0f, tileSize * 0.5f),
+        Vec3Make(tileSize * 0.5f, 0.0f, tileSize * 0.5f),
+        Vec3Make(tileSize * 0.5f, 0.0f, -tileSize * 0.5f),
+        Vec3Make(0.0f, 1.0f, 0.0f));
+    model.primitives.push_back(PrimitiveData{
+        .firstIndex = 0,
+        .indexCount = static_cast<std::uint32_t>(model.mesh.indices.size()),
+        .materialIndex = 0,
+    });
+    return model;
+}
+
+ModelData MakeGeneratedProcCityRoadTileModel(float tileSize, bool intersection)
+{
+    (void)intersection;
+    ModelData model = MakeSolidColorModelData(
+        58,
+        60,
+        64,
+        intersection ? "generated_proc_city_crossroad" : "generated_proc_city_road");
+    AddQuad(
+        model,
+        Vec3Make(-tileSize * 0.5f, 0.0f, -tileSize * 0.5f),
+        Vec3Make(-tileSize * 0.5f, 0.0f, tileSize * 0.5f),
+        Vec3Make(tileSize * 0.5f, 0.0f, tileSize * 0.5f),
+        Vec3Make(tileSize * 0.5f, 0.0f, -tileSize * 0.5f),
+        Vec3Make(0.0f, 1.0f, 0.0f));
+    model.primitives.push_back(PrimitiveData{
+        .firstIndex = 0,
+        .indexCount = static_cast<std::uint32_t>(model.mesh.indices.size()),
+        .materialIndex = 0,
+    });
+    return model;
+}
+
+ModelData MakeGeneratedProcCityStreetLightModel()
+{
+    ModelData model = MakeSolidColorModelData(212, 214, 218, "generated_proc_city_street_light");
+    AppendBox(model, Vec3Make(0.08f, 2.65f, 0.08f), Vec3Make(0.0f, 2.65f, 0.0f), 0);
+    AppendBox(model, Vec3Make(0.06f, 0.06f, 0.55f), Vec3Make(0.0f, 5.05f, 0.48f), 0);
+    AppendBox(model, Vec3Make(0.10f, 0.12f, 0.16f), Vec3Make(0.0f, 4.95f, 0.98f), 0);
+    AppendBox(model, Vec3Make(0.16f, 0.04f, 0.16f), Vec3Make(0.0f, 0.04f, 0.0f), 0);
     return model;
 }

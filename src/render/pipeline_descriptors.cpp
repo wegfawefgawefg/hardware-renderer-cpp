@@ -42,8 +42,41 @@ void VulkanRenderer::CreateDescriptorObjects()
     normalBinding.descriptorCount = 1;
     normalBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
-    std::array<VkDescriptorSetLayoutBinding, 6> bindings = {
-        uniformBinding, samplerBinding, shadowBinding, paintBinding, effectBinding, normalBinding};
+    VkDescriptorSetLayoutBinding procCityLightBinding{};
+    procCityLightBinding.binding = 6;
+    procCityLightBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    procCityLightBinding.descriptorCount = 1;
+    procCityLightBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+    VkDescriptorSetLayoutBinding procCityLightIndexBinding{};
+    procCityLightIndexBinding.binding = 7;
+    procCityLightIndexBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    procCityLightIndexBinding.descriptorCount = 1;
+    procCityLightIndexBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+    VkDescriptorSetLayoutBinding procCityTileBinding{};
+    procCityTileBinding.binding = 8;
+    procCityTileBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    procCityTileBinding.descriptorCount = 1;
+    procCityTileBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+    VkDescriptorSetLayoutBinding procCityTileLightIndexBinding{};
+    procCityTileLightIndexBinding.binding = 9;
+    procCityTileLightIndexBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    procCityTileLightIndexBinding.descriptorCount = 1;
+    procCityTileLightIndexBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+    std::array<VkDescriptorSetLayoutBinding, 10> bindings = {
+        uniformBinding,
+        samplerBinding,
+        shadowBinding,
+        paintBinding,
+        effectBinding,
+        normalBinding,
+        procCityLightBinding,
+        procCityLightIndexBinding,
+        procCityTileBinding,
+        procCityTileLightIndexBinding};
     VkDescriptorSetLayoutCreateInfo layoutInfo{};
     layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
     layoutInfo.bindingCount = static_cast<std::uint32_t>(bindings.size());
@@ -51,7 +84,7 @@ void VulkanRenderer::CreateDescriptorObjects()
     CheckVk(vkCreateDescriptorSetLayout(m_device, &layoutInfo, nullptr, &m_descriptorSetLayout), "vkCreateDescriptorSetLayout");
 
     std::uint32_t descriptorCount = static_cast<std::uint32_t>(m_textureImages.size());
-    std::array<VkDescriptorPoolSize, 6> poolSizes =
+    std::array<VkDescriptorPoolSize, 10> poolSizes =
         {
             VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, descriptorCount},
             VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, descriptorCount},
@@ -59,6 +92,10 @@ void VulkanRenderer::CreateDescriptorObjects()
             VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, descriptorCount},
             VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, descriptorCount},
             VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, descriptorCount},
+            VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, descriptorCount},
+            VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, descriptorCount},
+            VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, descriptorCount},
+            VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, descriptorCount},
         };
 
     VkDescriptorPoolCreateInfo poolInfo{};

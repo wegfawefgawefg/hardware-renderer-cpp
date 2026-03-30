@@ -8,6 +8,25 @@
 
 #include "lighting/runtime_internal.h"
 
+namespace
+{
+float Fract(float v)
+{
+    return v - std::floor(v);
+}
+
+Vec3 ProcCityPalette(std::uint32_t index)
+{
+    float t = Fract(static_cast<float>(index) * 0.6180339f);
+    float a = t * 6.28318530718f;
+    return Vec3Make(
+        0.45f + 0.55f * (0.5f + 0.5f * std::sin(a + 0.0f)),
+        0.45f + 0.55f * (0.5f + 0.5f * std::sin(a + 2.0943951f)),
+        0.45f + 0.55f * (0.5f + 0.5f * std::sin(a + 4.1887902f))
+    );
+}
+}
+
 void ApplyRuntimeLighting(State& state, SceneUniforms& uniforms, float dtSeconds)
 {
     for (std::uint32_t i = 0; i < kMaxSceneSpotLights; ++i)
@@ -26,6 +45,7 @@ void ApplyRuntimeLighting(State& state, SceneUniforms& uniforms, float dtSeconds
         uniforms.shadowViewProj[kSunShadowCascadeCount + i] = Mat4Identity();
     }
     uniforms.sceneLightCounts = Vec4Make(0.0f, 0.0f, 0.0f, 0.0f);
+    state.lighting.procCityDynamicLights.clear();
 
     LightingState& lighting = state.lighting;
     CoreState& core = state.core;
@@ -324,18 +344,56 @@ void ApplyRuntimeLighting(State& state, SceneUniforms& uniforms, float dtSeconds
     if (lighting.enableSunShadows) shaderFeatureMask |= 1u << 3;
     if (lighting.enableLocalLights) shaderFeatureMask |= 1u << 4;
     if (lighting.enableLocalLightShadows) shaderFeatureMask |= 1u << 5;
+    if (lighting.enableProcCityDynamicLights) shaderFeatureMask |= 1u << 6;
+    if (lighting.useProcCityTiledLighting) shaderFeatureMask |= 1u << 7;
     uniforms.shadowParams = Vec4Make(
         lighting.shadowBlur ? 1.0f : 0.0f,
         splitDistance,
         cascadeBlendWidth,
         static_cast<float>(shaderFeatureMask));
 
+    if (lighting.sceneKind == SceneKind::ProcCity &&
+        lighting.enableProcCityDynamicLights)
+    {
+        std::uint32_t lightCount = std::min(lighting.procCityDynamicLightCount, kMaxProcCityDynamicLights);
+        state.lighting.procCityDynamicLights.reserve(lightCount);
+        float span = std::max(core.sceneBounds.radius, 24.0f) * 1.6f;
+        float baseY = core.sceneBounds.valid ? core.sceneBounds.center.y : 0.0f;
+        std::uint32_t grid = std::max<std::uint32_t>(1u, static_cast<std::uint32_t>(std::ceil(std::sqrt(static_cast<float>(lightCount)))));
+        for (std::uint32_t i = 0; i < lightCount; ++i)
+        {
+            std::uint32_t gx = i % grid;
+            std::uint32_t gz = i / grid;
+            float nx = grid > 1 ? static_cast<float>(gx) / static_cast<float>(grid - 1) : 0.5f;
+            float nz = grid > 1 ? static_cast<float>(gz) / static_cast<float>(grid - 1) : 0.5f;
+            float baseX = center.x + (nx * 2.0f - 1.0f) * span;
+            float baseZ = center.z + (nz * 2.0f - 1.0f) * span;
+            float seed = static_cast<float>(i);
+            float t = runtime.elapsedSeconds;
+            float ax = t * (0.55f + 0.013f * seed) + seed * 1.37f;
+            float az = t * (0.47f + 0.011f * seed) + seed * 0.91f;
+            Vec3 color = ProcCityPalette(i);
+            state.lighting.procCityDynamicLights.push_back(DynamicPointLightGpu{
+                .positionRange = Vec4Make(
+                    baseX + std::cos(ax) * lighting.procCityDynamicLightMotionRadius,
+                    baseY + lighting.procCityDynamicLightHeight + std::sin(ax * 0.7f + az * 0.3f) * 0.75f,
+                    baseZ + std::sin(az) * lighting.procCityDynamicLightMotionRadius,
+                    lighting.procCityDynamicLightRange),
+                .colorIntensity = Vec4Make(
+                    color.x,
+                    color.y,
+                    color.z,
+                    lighting.procCityDynamicLightIntensity),
+            });
+        }
+    }
+
     if (PopulateVehicleLightTestLighting(state, uniforms))
     {
         return;
     }
 
-    if (lighting.sceneKind != SceneKind::City)
+    if (lighting.sceneKind != SceneKind::City && lighting.sceneKind != SceneKind::ProcCity)
     {
         PopulateFallbackOrbitPointLights(state, uniforms, center);
     }

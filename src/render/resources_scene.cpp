@@ -1,8 +1,10 @@
 #include "render/internal.h"
+#include "render/render_batches.h"
 
 #include <algorithm>
 #include <array>
 #include <cstring>
+#include <unordered_map>
 
 using namespace vulkan_renderer_internal;
 
@@ -41,6 +43,7 @@ BoundsSphere ComputeMeshBounds(const MeshData& mesh)
     }
     return BoundsSphere{center, radius};
 }
+
 }
 
 void VulkanRenderer::CreateSceneBuffers(const SceneData& scene)
@@ -54,6 +57,14 @@ void VulkanRenderer::CreateSceneBuffers(const SceneData& scene)
     }
     m_drawItems.clear();
     m_visibleDrawItems.clear();
+    m_staticBatches.clear();
+    m_visibleStaticBatchDrawItems.clear();
+    m_visibleStaticInstances.clear();
+    m_staticBatchFirstInstance.clear();
+    m_shadowVisibleStaticBatchDrawItems.clear();
+    m_shadowVisibleStaticInstances.clear();
+    m_shadowStaticBatchFirstInstance.clear();
+    std::unordered_map<std::uint64_t, std::uint32_t> staticBatchMap;
 
     for (const EntityData& entity : scene.entities)
     {
@@ -92,8 +103,34 @@ void VulkanRenderer::CreateSceneBuffers(const SceneData& scene)
                 {
                     item.materialFlags |= 4u;
                 }
+                if (model.materials[primitive.materialIndex].leanShading)
+                {
+                    item.materialFlags |= 8u;
+                }
             }
             m_drawItems.push_back(item);
+            DrawItem& storedItem = m_drawItems.back();
+            std::uint64_t batchKey = MakeStaticBatchKey(entity.modelIndex, storedItem.primitiveIndex);
+            auto foundBatch = staticBatchMap.find(batchKey);
+            if (foundBatch == staticBatchMap.end())
+            {
+                std::uint32_t batchIndex = static_cast<std::uint32_t>(m_staticBatches.size());
+                staticBatchMap.emplace(batchKey, batchIndex);
+                m_staticBatches.push_back(StaticBatch{
+                    .firstIndex = storedItem.firstIndex,
+                    .indexCount = storedItem.indexCount,
+                    .descriptorIndex = storedItem.descriptorIndex,
+                    .flipNormalY = storedItem.flipNormalY,
+                });
+                m_visibleStaticBatchDrawItems.emplace_back();
+                m_shadowVisibleStaticBatchDrawItems.emplace_back();
+                storedItem.staticBatchIndex = batchIndex;
+            }
+            else
+            {
+                storedItem.staticBatchIndex = foundBatch->second;
+            }
+            storedItem.batchedStatic = true;
         }
     }
     m_visibleDrawItems.reserve(m_drawItems.size());
@@ -118,6 +155,63 @@ void VulkanRenderer::CreateSceneBuffers(const SceneData& scene)
         m_device,
         indexSize > 0 ? indexSize : sizeof(std::uint32_t),
         VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        true
+    );
+    m_staticInstanceBuffer = CreateBuffer(
+        m_physicalDevice,
+        m_device,
+        sizeof(StaticInstanceGpu) * std::max<std::size_t>(1, m_drawItems.size()),
+        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        true
+    );
+    m_shadowStaticInstanceBuffer = CreateBuffer(
+        m_physicalDevice,
+        m_device,
+        sizeof(StaticInstanceGpu) * std::max<std::size_t>(1, m_drawItems.size()),
+        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        true
+    );
+    m_nullInstanceBuffer = CreateBuffer(
+        m_physicalDevice,
+        m_device,
+        sizeof(StaticInstanceGpu),
+        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        true
+    );
+    std::memset(m_nullInstanceBuffer.mapped, 0, sizeof(StaticInstanceGpu));
+    m_procCityDynamicLightBuffer = CreateBuffer(
+        m_physicalDevice,
+        m_device,
+        sizeof(DynamicPointLightGpu) * kMaxProcCityDynamicLights,
+        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        true
+    );
+    m_procCityDynamicLightIndexBuffer = CreateBuffer(
+        m_physicalDevice,
+        m_device,
+        sizeof(std::uint32_t) * std::max<std::size_t>(1, m_drawItems.size() * kMaxProcCityLightRefsPerInstance),
+        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        true
+    );
+    m_procCityLightTileBuffer = CreateBuffer(
+        m_physicalDevice,
+        m_device,
+        sizeof(ProcCityLightTileGpu) * kMaxProcCityLightTiles,
+        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        true
+    );
+    m_procCityTileLightIndexBuffer = CreateBuffer(
+        m_physicalDevice,
+        m_device,
+        sizeof(std::uint32_t) * kMaxProcCityTileLightRefs,
+        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
         true
     );
@@ -221,6 +315,9 @@ bool VulkanRenderer::UpdateSceneGeometry(const SceneData& scene)
 
     std::vector<DrawItem> newDrawItems;
     newDrawItems.reserve(m_drawItems.size());
+    std::vector<StaticBatch> newStaticBatches;
+    std::vector<std::vector<std::uint32_t>> newVisibleStaticBatchDrawItems;
+    std::unordered_map<std::uint64_t, std::uint32_t> staticBatchMap;
     for (const EntityData& entity : scene.entities)
     {
         if (entity.modelIndex >= scene.models.size())
@@ -257,8 +354,33 @@ bool VulkanRenderer::UpdateSceneGeometry(const SceneData& scene)
                 {
                     item.materialFlags |= 4u;
                 }
+                if (model.materials[primitive.materialIndex].leanShading)
+                {
+                    item.materialFlags |= 8u;
+                }
             }
             newDrawItems.push_back(item);
+            DrawItem& storedItem = newDrawItems.back();
+            std::uint64_t batchKey = MakeStaticBatchKey(entity.modelIndex, storedItem.primitiveIndex);
+            auto foundBatch = staticBatchMap.find(batchKey);
+            if (foundBatch == staticBatchMap.end())
+            {
+                std::uint32_t batchIndex = static_cast<std::uint32_t>(newStaticBatches.size());
+                staticBatchMap.emplace(batchKey, batchIndex);
+                newStaticBatches.push_back(StaticBatch{
+                    .firstIndex = storedItem.firstIndex,
+                    .indexCount = storedItem.indexCount,
+                    .descriptorIndex = storedItem.descriptorIndex,
+                    .flipNormalY = storedItem.flipNormalY,
+                });
+                newVisibleStaticBatchDrawItems.emplace_back();
+                storedItem.staticBatchIndex = batchIndex;
+            }
+            else
+            {
+                storedItem.staticBatchIndex = foundBatch->second;
+            }
+            storedItem.batchedStatic = true;
         }
     }
 
@@ -279,6 +401,13 @@ bool VulkanRenderer::UpdateSceneGeometry(const SceneData& scene)
     }
 
     m_drawItems = std::move(newDrawItems);
+    m_staticBatches = std::move(newStaticBatches);
+    m_visibleStaticBatchDrawItems = std::move(newVisibleStaticBatchDrawItems);
+    m_visibleStaticInstances.clear();
+    m_staticBatchFirstInstance.clear();
+    m_shadowVisibleStaticBatchDrawItems = std::vector<std::vector<std::uint32_t>>(m_staticBatches.size());
+    m_shadowVisibleStaticInstances.clear();
+    m_shadowStaticBatchFirstInstance.clear();
     return true;
 }
 

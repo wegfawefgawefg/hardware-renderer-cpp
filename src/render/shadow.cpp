@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstddef>
+#include <cstring>
 
 using namespace vulkan_renderer_internal;
 
@@ -60,12 +61,15 @@ void VulkanRenderer::CreateShadowPipeline()
     vertStage.module = m_shadowVertShaderModule;
     vertStage.pName = "main";
 
-    VkVertexInputBindingDescription bindingDesc{};
-    bindingDesc.binding = 0;
-    bindingDesc.stride = sizeof(Vertex);
-    bindingDesc.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+    std::array<VkVertexInputBindingDescription, 2> bindingDescs{};
+    bindingDescs[0].binding = 0;
+    bindingDescs[0].stride = sizeof(Vertex);
+    bindingDescs[0].inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+    bindingDescs[1].binding = 1;
+    bindingDescs[1].stride = sizeof(StaticInstanceGpu);
+    bindingDescs[1].inputRate = VK_VERTEX_INPUT_RATE_INSTANCE;
 
-    std::array<VkVertexInputAttributeDescription, 5> attributes{};
+    std::array<VkVertexInputAttributeDescription, 10> attributes{};
     attributes[0].location = 0;
     attributes[0].binding = 0;
     attributes[0].format = VK_FORMAT_R32G32B32_SFLOAT;
@@ -86,11 +90,31 @@ void VulkanRenderer::CreateShadowPipeline()
     attributes[4].binding = 0;
     attributes[4].format = VK_FORMAT_R32G32B32A32_SFLOAT;
     attributes[4].offset = offsetof(Vertex, jointWeights);
+    attributes[5].location = 5;
+    attributes[5].binding = 1;
+    attributes[5].format = VK_FORMAT_R32G32B32A32_SFLOAT;
+    attributes[5].offset = offsetof(StaticInstanceGpu, model) + sizeof(Vec4) * 0;
+    attributes[6].location = 6;
+    attributes[6].binding = 1;
+    attributes[6].format = VK_FORMAT_R32G32B32A32_SFLOAT;
+    attributes[6].offset = offsetof(StaticInstanceGpu, model) + sizeof(Vec4) * 1;
+    attributes[7].location = 7;
+    attributes[7].binding = 1;
+    attributes[7].format = VK_FORMAT_R32G32B32A32_SFLOAT;
+    attributes[7].offset = offsetof(StaticInstanceGpu, model) + sizeof(Vec4) * 2;
+    attributes[8].location = 8;
+    attributes[8].binding = 1;
+    attributes[8].format = VK_FORMAT_R32G32B32A32_SFLOAT;
+    attributes[8].offset = offsetof(StaticInstanceGpu, model) + sizeof(Vec4) * 3;
+    attributes[9].location = 9;
+    attributes[9].binding = 1;
+    attributes[9].format = VK_FORMAT_R32G32B32A32_UINT;
+    attributes[9].offset = offsetof(StaticInstanceGpu, pointLightMask);
 
     VkPipelineVertexInputStateCreateInfo vertexInput{};
     vertexInput.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    vertexInput.vertexBindingDescriptionCount = 1;
-    vertexInput.pVertexBindingDescriptions = &bindingDesc;
+    vertexInput.vertexBindingDescriptionCount = static_cast<std::uint32_t>(bindingDescs.size());
+    vertexInput.pVertexBindingDescriptions = bindingDescs.data();
     vertexInput.vertexAttributeDescriptionCount = static_cast<std::uint32_t>(attributes.size());
     vertexInput.pVertexAttributeDescriptions = attributes.data();
 
@@ -194,9 +218,57 @@ void VulkanRenderer::RecordShadowPass(VkCommandBuffer commandBuffer, std::uint32
     vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
     vkCmdBindIndexBuffer(commandBuffer, m_indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 
-    for (const DrawItem& drawItem : m_drawItems)
+    BuildShadowVisibleStaticInstances(cascadeIndex);
+    if (!m_shadowVisibleStaticInstances.empty())
     {
+        VkBuffer instancedBuffers[] = {m_vertexBuffer.buffer, m_shadowStaticInstanceBuffer.buffer};
+        VkDeviceSize instanceOffsets[] = {0, 0};
+        vkCmdBindVertexBuffers(commandBuffer, 0, 2, instancedBuffers, instanceOffsets);
+        for (std::size_t batchIndex = 0; batchIndex < m_staticBatches.size(); ++batchIndex)
+        {
+            const std::vector<std::uint32_t>& visibleItems = m_shadowVisibleStaticBatchDrawItems[batchIndex];
+            if (visibleItems.empty())
+            {
+                continue;
+            }
+            const StaticBatch& batch = m_staticBatches[batchIndex];
+            DrawPushConstants pushConstants{};
+            pushConstants.model = Mat4Identity();
+            pushConstants.shadowCascade = cascadeIndex;
+            vkCmdPushConstants(commandBuffer, m_shadowPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pushConstants), &pushConstants);
+            vkCmdBindDescriptorSets(
+                commandBuffer,
+                VK_PIPELINE_BIND_POINT_GRAPHICS,
+                m_shadowPipelineLayout,
+                0,
+                1,
+                &m_descriptorSets[batch.descriptorIndex],
+                0,
+                nullptr
+            );
+            vkCmdDrawIndexed(
+                commandBuffer,
+                batch.indexCount,
+                static_cast<std::uint32_t>(visibleItems.size()),
+                batch.firstIndex,
+                0,
+                m_shadowStaticBatchFirstInstance[batchIndex]);
+        }
+    }
+
+    VkBuffer singleDrawBuffers[] = {m_vertexBuffer.buffer, m_nullInstanceBuffer.buffer};
+    VkDeviceSize singleDrawOffsets[] = {0, 0};
+    vkCmdBindVertexBuffers(commandBuffer, 0, 2, singleDrawBuffers, singleDrawOffsets);
+
+    for (std::uint32_t drawIndex = 0; drawIndex < m_drawItems.size(); ++drawIndex)
+    {
+        const DrawItem& drawItem = m_drawItems[drawIndex];
         if (!drawItem.castsShadows)
+        {
+            continue;
+        }
+        bool hasUniquePaint = drawIndex < m_paintLayers.size() && m_paintLayers[drawIndex].allocated;
+        if (drawItem.batchedStatic && !hasUniquePaint)
         {
             continue;
         }
@@ -228,9 +300,9 @@ void VulkanRenderer::RecordShadowPass(VkCommandBuffer commandBuffer, std::uint32
         pushConstants.model = m_characterState.model;
         pushConstants.skinned = 1;
         pushConstants.shadowCascade = cascadeIndex;
-        VkBuffer characterBuffers[] = {m_characterVertexBuffer.buffer};
-        VkDeviceSize characterOffsets[] = {0};
-        vkCmdBindVertexBuffers(commandBuffer, 0, 1, characterBuffers, characterOffsets);
+        VkBuffer characterBuffers[] = {m_characterVertexBuffer.buffer, m_nullInstanceBuffer.buffer};
+        VkDeviceSize characterOffsets[] = {0, 0};
+        vkCmdBindVertexBuffers(commandBuffer, 0, 2, characterBuffers, characterOffsets);
         vkCmdBindIndexBuffer(commandBuffer, m_characterIndexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
         vkCmdPushConstants(commandBuffer, m_shadowPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pushConstants), &pushConstants);
         vkCmdBindDescriptorSets(

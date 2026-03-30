@@ -136,10 +136,14 @@ void App::ReloadScene()
             fracture.damageDecalTemplateNames[slot] = decalSpec.name;
         }
     }
-    else if (lighting.sceneKind == SceneKind::City)
+    else if (lighting.sceneKind == SceneKind::City || lighting.sceneKind == SceneKind::ProcCity)
     {
         CitySceneConfig config{};
         config.buildingQuadSize = city.buildingQuadSize;
+        config.buildingMode = lighting.sceneKind == SceneKind::ProcCity
+            ? CitySceneConfig::BuildingMode::Procedural
+            : CitySceneConfig::BuildingMode::Kenney;
+        config.roadLightStride = lighting.sceneKind == SceneKind::ProcCity ? 2 : 1;
         core.scene = BuildSampleCity(core.assetRegistry, config);
     }
     else

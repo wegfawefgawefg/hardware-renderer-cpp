@@ -27,6 +27,10 @@ constexpr std::uint32_t kPaintTextureSize = 64;
 constexpr std::uint32_t kSunShadowCascadeCount = 2;
 constexpr std::uint32_t kTotalShadowMaps = kSunShadowCascadeCount + kMaxShadowedSpotLights;
 constexpr std::uint32_t kGpuTimestampCount = 6;
+constexpr std::uint32_t kMaxProcCityDynamicLights = 1024;
+constexpr std::uint32_t kMaxProcCityLightRefsPerInstance = 32;
+constexpr std::uint32_t kMaxProcCityLightTiles = 4096;
+constexpr std::uint32_t kMaxProcCityTileLightRefs = 4 * 1024 * 1024;
 
 struct alignas(16) SceneUniforms
 {
@@ -92,6 +96,33 @@ struct LightMarkerVertex
     Vec3 color;
 };
 
+struct alignas(16) StaticInstanceGpu
+{
+    Mat4 model;
+    std::uint32_t pointLightMask = 0;
+    std::uint32_t spotLightMask = 0;
+    std::uint32_t shadowedSpotLightMask = 0;
+    std::uint32_t materialFlags = 0;
+    std::uint32_t localLightListOffset = 0;
+    std::uint32_t localLightCount = 0;
+    std::uint32_t reserved0 = 0;
+    std::uint32_t reserved1 = 0;
+};
+
+struct alignas(16) DynamicPointLightGpu
+{
+    Vec4 positionRange;
+    Vec4 colorIntensity;
+};
+
+struct alignas(16) ProcCityLightTileGpu
+{
+    std::uint32_t lightOffset = 0;
+    std::uint32_t lightCount = 0;
+    std::uint32_t reserved0 = 0;
+    std::uint32_t reserved1 = 0;
+};
+
 struct DebugRenderOptions
 {
     static constexpr std::uint32_t kMaxSelectionSpheres = 16;
@@ -102,6 +133,8 @@ struct DebugRenderOptions
     bool drawLightDirections = false;
     bool drawLightVolumes = false;
     bool drawActivationVolumes = false;
+    bool useProcCityPipeline = false;
+    bool useProcCityTiledLighting = false;
     float mainDrawDistance = 160.0f;
     float shadowDrawDistance = 200.0f;
     Vec4 activationVolumeA = {};
@@ -149,8 +182,44 @@ struct VulkanRenderer
     void ShutdownImGuiBackend();
     ImTextureID GetShadowDebugTexture(std::uint32_t cascadeIndex) const;
     const RenderProfilingStats& GetProfilingStats() const { return m_profilingStats; }
-    std::uint32_t GetVisibleDrawItemCount() const { return static_cast<std::uint32_t>(m_visibleDrawItems.size()); }
-    std::uint32_t GetDrawItemCount() const { return static_cast<std::uint32_t>(m_drawItems.size()); }
+    std::uint32_t GetVisibleDrawItemCount() const
+    {
+        std::uint32_t count = static_cast<std::uint32_t>(m_visibleDrawItems.size());
+        for (const std::vector<std::uint32_t>& batchItems : m_visibleStaticBatchDrawItems)
+        {
+            if (!batchItems.empty())
+            {
+                ++count;
+            }
+        }
+        return count;
+    }
+    std::uint32_t GetDrawItemCount() const
+    {
+        std::uint32_t count = 0;
+        std::vector<bool> countedBatches(m_staticBatches.size(), false);
+        for (std::size_t drawIndex = 0; drawIndex < m_drawItems.size(); ++drawIndex)
+        {
+            const DrawItem& drawItem = m_drawItems[drawIndex];
+            bool hasUniquePaint = drawIndex < m_paintLayers.size() && m_paintLayers[drawIndex].allocated;
+            if (!drawItem.batchedStatic || drawItem.staticBatchIndex >= countedBatches.size())
+            {
+                ++count;
+                continue;
+            }
+            if (hasUniquePaint)
+            {
+                ++count;
+                continue;
+            }
+            if (!countedBatches[drawItem.staticBatchIndex])
+            {
+                countedBatches[drawItem.staticBatchIndex] = true;
+                ++count;
+            }
+        }
+        return count;
+    }
     void Render(
         const SceneUniforms& uniforms,
         const text::System& text,
@@ -172,6 +241,7 @@ struct VulkanRenderer
     void CreateSyncObjects();
     void CreateDescriptorObjects();
     void CreatePipeline();
+    void CreateProcCityPipeline();
     void CreateFlatDecalPipeline();
     void CreateOverlayDescriptorObjects();
     void CreatePostDescriptorObjects();
@@ -182,6 +252,11 @@ struct VulkanRenderer
     void CreateLightSolidPipeline();
     void UpdateMainPassVisibility(const SceneUniforms& uniforms);
     void UpdateDrawLightMasks(const SceneUniforms& uniforms);
+    void ClearStaticBatchVisibility();
+    void BuildVisibleStaticInstances();
+    void BuildShadowVisibleStaticInstances(std::uint32_t cascadeIndex);
+    void BuildProcCityTiledLightLists(const SceneUniforms& uniforms);
+    void SetProcCityDynamicLights(std::span<const DynamicPointLightGpu> lights);
     void AppendPersistentPaint(const PaintSplatSpawn& splat);
     void ResetAccumulatedPaint();
     std::uint32_t GetAccumulatedPaintHitCount() const;
@@ -246,9 +321,12 @@ struct VulkanRenderer
     std::vector<VkDescriptorSet> m_descriptorSets;
     VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
     VkPipeline m_pipeline = VK_NULL_HANDLE;
+    VkPipeline m_procCityPipeline = VK_NULL_HANDLE;
     VkPipeline m_flatDecalPipeline = VK_NULL_HANDLE;
     VkShaderModule m_vertShaderModule = VK_NULL_HANDLE;
     VkShaderModule m_fragShaderModule = VK_NULL_HANDLE;
+    VkShaderModule m_procCityVertShaderModule = VK_NULL_HANDLE;
+    VkShaderModule m_procCityFragShaderModule = VK_NULL_HANDLE;
     VkDescriptorSetLayout m_overlayDescriptorSetLayout = VK_NULL_HANDLE;
     VkDescriptorSetLayout m_postDescriptorSetLayout = VK_NULL_HANDLE;
     VkDescriptorPool m_overlayDescriptorPool = VK_NULL_HANDLE;
@@ -288,6 +366,13 @@ struct VulkanRenderer
 
     BufferResource m_vertexBuffer;
     BufferResource m_indexBuffer;
+    BufferResource m_staticInstanceBuffer;
+    BufferResource m_shadowStaticInstanceBuffer;
+    BufferResource m_nullInstanceBuffer;
+    BufferResource m_procCityDynamicLightBuffer;
+    BufferResource m_procCityDynamicLightIndexBuffer;
+    BufferResource m_procCityLightTileBuffer;
+    BufferResource m_procCityTileLightIndexBuffer;
     BufferResource m_uniformBuffer;
     BufferResource m_overlayUploadBuffer;
     BufferResource m_overlayVertexBuffer;
@@ -332,7 +417,17 @@ struct VulkanRenderer
         std::uint32_t entityIndex = 0;
         std::uint32_t primitiveIndex = 0;
         std::uint32_t materialFlags = 0;
+        std::uint32_t staticBatchIndex = std::numeric_limits<std::uint32_t>::max();
         bool castsShadows = true;
+        bool flipNormalY = true;
+        bool batchedStatic = false;
+    };
+
+    struct StaticBatch
+    {
+        std::uint32_t firstIndex = 0;
+        std::uint32_t indexCount = 0;
+        std::uint32_t descriptorIndex = 0;
         bool flipNormalY = true;
     };
 
@@ -364,6 +459,17 @@ struct VulkanRenderer
 
     std::vector<DrawItem> m_drawItems;
     std::vector<std::uint32_t> m_visibleDrawItems;
+    std::vector<StaticBatch> m_staticBatches;
+    std::vector<std::vector<std::uint32_t>> m_visibleStaticBatchDrawItems;
+    std::vector<StaticInstanceGpu> m_visibleStaticInstances;
+    std::vector<std::uint32_t> m_staticBatchFirstInstance;
+    std::vector<std::vector<std::uint32_t>> m_shadowVisibleStaticBatchDrawItems;
+    std::vector<StaticInstanceGpu> m_shadowVisibleStaticInstances;
+    std::vector<std::uint32_t> m_shadowStaticBatchFirstInstance;
+    std::vector<DynamicPointLightGpu> m_procCityDynamicLights;
+    std::vector<std::uint32_t> m_visibleProcCityDynamicLightIndices;
+    std::vector<ProcCityLightTileGpu> m_procCityLightTiles;
+    std::vector<std::uint32_t> m_procCityTileLightIndices;
     std::vector<FlatDecalTemplateGpu> m_flatDecalTemplates;
     std::vector<FlatDecalDraw> m_flatDecalDraws;
     std::vector<PaintLayer> m_paintLayers;
@@ -394,6 +500,8 @@ struct VulkanRenderer
     RenderProfilingStats m_profilingStats = {};
     bool m_sunShadowsEnabled = true;
     bool m_localLightShadowsEnabled = true;
+    bool m_useProcCityPipeline = false;
+    bool m_useProcCityTiledLighting = false;
     bool m_imguiInitialized = false;
     bool m_initialized = false;
 };

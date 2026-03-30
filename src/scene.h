@@ -45,6 +45,7 @@ struct MaterialData
     bool castsShadows = true;
     bool flipNormalY = true;
     bool generatedQuadMaterialUv = false;
+    bool leanShading = false;
 };
 
 struct SpotLightData
@@ -113,6 +114,7 @@ enum class SceneKind
 {
     PlayerMaskTest,
     City,
+    ProcCity,
     ShadowTest,
     SpotShadowTest,
     VehicleLightTest,

@@ -16,6 +16,7 @@ bool SpheresOverlap(Vec3 aCenter, float aRadius, Vec3 bCenter, float bRadius)
 void VulkanRenderer::UpdateMainPassVisibility(const SceneUniforms& uniforms)
 {
     m_visibleDrawItems.clear();
+    ClearStaticBatchVisibility();
     if (m_drawItems.empty())
     {
         return;
@@ -39,7 +40,17 @@ void VulkanRenderer::UpdateMainPassVisibility(const SceneUniforms& uniforms)
         }
         if (SphereIntersectsFrustum(frustum, worldCenter, worldRadius))
         {
-            m_visibleDrawItems.push_back(drawIndex);
+            bool hasUniquePaint = drawIndex < m_paintLayers.size() && m_paintLayers[drawIndex].allocated;
+            if (drawItem.batchedStatic &&
+                !hasUniquePaint &&
+                drawItem.staticBatchIndex < m_visibleStaticBatchDrawItems.size())
+            {
+                m_visibleStaticBatchDrawItems[drawItem.staticBatchIndex].push_back(drawIndex);
+            }
+            else
+            {
+                m_visibleDrawItems.push_back(drawIndex);
+            }
         }
     }
 }
@@ -114,6 +125,11 @@ bool VulkanRenderer::ShadowDrawItemVisible(const DrawItem& drawItem, std::uint32
     Vec3 delta = Vec3Sub(worldCenter, m_cameraCullPosition);
     float distance2 = Vec3Dot(delta, delta);
     float maxDistance = m_shadowCullDistance;
+    bool procCityBuilding = m_useProcCityPipeline && (drawItem.materialFlags & 8u) != 0u;
+    if (procCityBuilding)
+    {
+        maxDistance = std::min(maxDistance, cascadeIndex < kSunShadowCascadeCount ? 42.0f : 24.0f);
+    }
     if (cascadeIndex == 0)
     {
         maxDistance *= 0.75f;

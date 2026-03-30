@@ -55,6 +55,7 @@ void VulkanRenderer::Initialize(
     CreateSceneRenderPass();
     CreateRenderPass();
     CreatePipeline();
+    CreateProcCityPipeline();
     CreateFlatDecalPipeline();
     CreateShadowPipeline();
     CreateLightPipeline();
@@ -152,6 +153,13 @@ void VulkanRenderer::Shutdown()
     DestroyBuffer(m_device, m_characterVertexBuffer);
     DestroyBuffer(m_device, m_flatDecalIndexBuffer);
     DestroyBuffer(m_device, m_flatDecalVertexBuffer);
+    DestroyBuffer(m_device, m_staticInstanceBuffer);
+    DestroyBuffer(m_device, m_shadowStaticInstanceBuffer);
+    DestroyBuffer(m_device, m_nullInstanceBuffer);
+    DestroyBuffer(m_device, m_procCityDynamicLightBuffer);
+    DestroyBuffer(m_device, m_procCityDynamicLightIndexBuffer);
+    DestroyBuffer(m_device, m_procCityLightTileBuffer);
+    DestroyBuffer(m_device, m_procCityTileLightIndexBuffer);
     DestroyBuffer(m_device, m_uniformBuffer);
     DestroyBuffer(m_device, m_indexBuffer);
     DestroyBuffer(m_device, m_vertexBuffer);
@@ -160,6 +168,11 @@ void VulkanRenderer::Shutdown()
     {
         vkDestroyPipeline(m_device, m_pipeline, nullptr);
         m_pipeline = VK_NULL_HANDLE;
+    }
+    if (m_procCityPipeline != VK_NULL_HANDLE)
+    {
+        vkDestroyPipeline(m_device, m_procCityPipeline, nullptr);
+        m_procCityPipeline = VK_NULL_HANDLE;
     }
     if (m_flatDecalPipeline != VK_NULL_HANDLE)
     {
@@ -190,6 +203,16 @@ void VulkanRenderer::Shutdown()
     {
         vkDestroyShaderModule(m_device, m_fragShaderModule, nullptr);
         m_fragShaderModule = VK_NULL_HANDLE;
+    }
+    if (m_procCityFragShaderModule != VK_NULL_HANDLE)
+    {
+        vkDestroyShaderModule(m_device, m_procCityFragShaderModule, nullptr);
+        m_procCityFragShaderModule = VK_NULL_HANDLE;
+    }
+    if (m_procCityVertShaderModule != VK_NULL_HANDLE)
+    {
+        vkDestroyShaderModule(m_device, m_procCityVertShaderModule, nullptr);
+        m_procCityVertShaderModule = VK_NULL_HANDLE;
     }
     if (m_descriptorPool != VK_NULL_HANDLE)
     {

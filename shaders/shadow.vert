@@ -3,6 +3,10 @@
 layout(location = 0) in vec3 inPosition;
 layout(location = 3) in uvec4 inJointIndices;
 layout(location = 4) in vec4 inJointWeights;
+layout(location = 5) in vec4 inModelRow0;
+layout(location = 6) in vec4 inModelRow1;
+layout(location = 7) in vec4 inModelRow2;
+layout(location = 8) in vec4 inModelRow3;
 
 layout(binding = 0) uniform SceneUniforms
 {
@@ -50,6 +54,8 @@ layout(push_constant) uniform DrawPushConstants
 
 void main()
 {
+    mat4 instanceModel = mat4(inModelRow0, inModelRow1, inModelRow2, inModelRow3);
+    bool instanced = inModelRow0 != vec4(0.0) || inModelRow1 != vec4(0.0) || inModelRow2 != vec4(0.0) || inModelRow3 != vec4(0.0);
     vec4 localPosition = vec4(inPosition, 1.0);
     if (drawPush.skinned != 0u)
     {
@@ -61,5 +67,6 @@ void main()
         localPosition = skinMatrix * localPosition;
     }
 
-    gl_Position = uniforms.shadowViewProj[drawPush.shadowCascade] * drawPush.model * localPosition;
+    mat4 model = instanced ? instanceModel : drawPush.model;
+    gl_Position = uniforms.shadowViewProj[drawPush.shadowCascade] * model * localPosition;
 }

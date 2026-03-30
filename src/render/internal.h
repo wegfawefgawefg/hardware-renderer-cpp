@@ -12,6 +12,8 @@ namespace vulkan_renderer_internal
 {
 constexpr std::string_view kVertShaderPath = HARDWARE_RENDERER_VERT_SHADER_PATH;
 constexpr std::string_view kFragShaderPath = HARDWARE_RENDERER_FRAG_SHADER_PATH;
+constexpr std::string_view kProcCityVertShaderPath = HARDWARE_RENDERER_PROC_CITY_VERT_SHADER_PATH;
+constexpr std::string_view kProcCityFragShaderPath = HARDWARE_RENDERER_PROC_CITY_FRAG_SHADER_PATH;
 constexpr std::string_view kOverlayVertShaderPath = HARDWARE_RENDERER_OVERLAY_VERT_SHADER_PATH;
 constexpr std::string_view kOverlayFragShaderPath = HARDWARE_RENDERER_OVERLAY_FRAG_SHADER_PATH;
 constexpr std::string_view kBloomFragShaderPath = HARDWARE_RENDERER_BLOOM_FRAG_SHADER_PATH;

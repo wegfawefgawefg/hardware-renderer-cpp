@@ -411,6 +411,13 @@ SceneData LoadSampleScene(const AssetRegistry& assetRegistry, SceneKind kind)
     {
         return BuildFractureTestScene(assetRegistry, FractureSceneConfig{});
     }
+    if (kind == SceneKind::ProcCity)
+    {
+        CitySceneConfig config{};
+        config.buildingMode = CitySceneConfig::BuildingMode::Procedural;
+        config.roadLightStride = 2;
+        return BuildSampleCity(assetRegistry, config);
+    }
     if (kind == SceneKind::ShadowTest)
     {
         return BuildShadowTestScene(assetRegistry);
@@ -423,5 +430,7 @@ SceneData LoadSampleScene(const AssetRegistry& assetRegistry, SceneKind kind)
     {
         return BuildVehicleLightTestScene(assetRegistry);
     }
-    return BuildSampleCity(assetRegistry, CitySceneConfig{});
+    CitySceneConfig config{};
+    config.buildingMode = CitySceneConfig::BuildingMode::Kenney;
+    return BuildSampleCity(assetRegistry, config);
 }

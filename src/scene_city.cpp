@@ -5,6 +5,6 @@
 SceneData BuildSampleCity(const AssetRegistry& assetRegistry, const CitySceneConfig& config)
 {
     SceneData scene{};
-    city_internal::AddStreetWorld(scene, assetRegistry, config.buildingQuadSize);
+    city_internal::AddStreetWorld(scene, assetRegistry, config);
     return scene;
 }

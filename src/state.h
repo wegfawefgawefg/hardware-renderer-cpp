@@ -109,14 +109,23 @@ struct LightingState
     bool enableSunShadows = true;
     bool enableLocalLights = true;
     bool enableLocalLightShadows = true;
+    bool enableProcCityDynamicLights = true;
+    bool useProcCityTiledLighting = false;
     float uvDebugScale = 8.0f;
     std::uint32_t uvDebugMode = 0;
     std::uint32_t materialDebugMode = 0;
+    std::uint32_t procCityDynamicLightCount = 512;
+    float procCityDynamicLightRange = 8.0f;
+    float procCityDynamicLightIntensity = 1.25f;
+    float procCityDynamicLightHeight = 2.4f;
+    float procCityDynamicLightMotionRadius = 2.8f;
+    std::uint32_t procCityLightTileSize = 32;
     Vec3 sunWorldPosition = {};
     Vec3 moonWorldPosition = {};
     Vec3 spotLightSourceOffset = {};
     Vec3 shadowTestSpotTargetWorld = {};
     Vec3 shadowTestSpotTargetOffset = {};
+    std::vector<DynamicPointLightGpu> procCityDynamicLights;
 };
 
 struct VehicleLightEditorState
