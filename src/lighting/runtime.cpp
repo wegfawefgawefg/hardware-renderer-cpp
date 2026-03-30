@@ -358,7 +358,7 @@ void ApplyRuntimeLighting(State& state, SceneUniforms& uniforms, float dtSeconds
         std::uint32_t lightCount = std::min(lighting.procCityDynamicLightCount, kMaxProcCityDynamicLights);
         state.lighting.procCityDynamicLights.reserve(lightCount);
         float span = std::max(core.sceneBounds.radius, 24.0f) * 1.6f;
-        float baseY = core.sceneBounds.valid ? core.sceneBounds.center.y : 0.0f;
+        float baseY = core.sceneBounds.valid ? core.sceneBounds.min.y : 0.0f;
         std::uint32_t grid = std::max<std::uint32_t>(1u, static_cast<std::uint32_t>(std::ceil(std::sqrt(static_cast<float>(lightCount)))));
         for (std::uint32_t i = 0; i < lightCount; ++i)
         {

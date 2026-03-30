@@ -85,6 +85,16 @@ So the bug is not explained by:
 
 This strongly suggests the failure is still in screen-space tile mapping or tile coverage, not in world-space light simulation.
 
+### 2. The seam appears on the top side of lit regions
+
+Observed behavior from in-engine testing:
+
+- the missing-light seam is seen above the lit area
+- not below it
+- looking up/down moves the seam with the view
+
+That points more toward asymmetric undercoverage in the CPU light-to-tile bounds, especially the top/min-Y edge, than toward random tile corruption.
+
 ### 2. The seam is hard, not noisy
 
 This suggests:
@@ -94,6 +104,19 @@ This suggests:
 ### 3. Tiled mode is much faster than naive mode
 
 That is expected, but the seam may also indicate the tiled path is still under-lighting large parts of the screen, which would artificially improve perf.
+
+### 4. Y-flip was investigated but did not fully solve it
+
+The CPU/GPU Y convention mismatch was a strong source-level suspect and was tested explicitly.
+
+Both forms were tried in [`src/render/render_batches.cpp`](/home/vega/Coding/Graphics/hardware-renderer-cpp/src/render/render_batches.cpp):
+
+- `screenY = (ndcY * 0.5f + 0.5f) * height`
+- `screenY = (ndcY * -0.5f + 0.5f) * height`
+
+The seam persisted in both cases.
+
+So Y convention may still be part of the story, but it is not the whole bug by itself.
 
 ## Most Likely Remaining Causes
 
@@ -110,6 +133,7 @@ That can still be wrong for perspective projection, especially for:
 - elongated visible influence on walls
 
 This is currently the top suspected correctness issue.
+The user-observed “top edge only” cutoff makes the top/min-Y side of that bound especially suspect.
 
 ### Better version
 
@@ -149,6 +173,7 @@ Visualize at least one of:
 - tile grid lines
 - light count per tile as a heatmap
 - selected tile index under cursor
+- assigned tile rectangle for one or more nearby proc lights
 
 This will immediately show whether the seam lines up with missing tile populations.
 

@@ -212,6 +212,19 @@ vec3 visualizeUv(vec2 uv)
     return uvColor;
 }
 
+vec3 heatmapColor(float t)
+{
+    t = clamp(t, 0.0, 1.0);
+    vec3 cold = vec3(0.05, 0.10, 0.45);
+    vec3 mid = vec3(0.20, 0.80, 0.35);
+    vec3 hot = vec3(1.00, 0.85, 0.10);
+    if (t < 0.5)
+    {
+        return mix(cold, mid, t * 2.0);
+    }
+    return mix(mid, hot, (t - 0.5) * 2.0);
+}
+
 vec4 procCityLightColorIntensity(uint lightIndex)
 {
     return procCityLightPositions.positionRange[lightIndex * 2u + 1u];
@@ -239,6 +252,31 @@ void main()
     if (materialDebugMode == 2)
     {
         outColor = vec4(visualizeUv(materialUv), 1.0);
+        return;
+    }
+    if (materialDebugMode == 3)
+    {
+        if (shaderFeatureEnabled(kFeatureProcCityTiledLights))
+        {
+            const uint tileSize = 32u;
+            uvec2 tileCoord = uvec2(gl_FragCoord.xy) / tileSize;
+            uint tileCountX = max(uint(uniforms.surfaceMaskParamsB.z + 0.5), 1u);
+            uint tileCountY = max(uint(uniforms.surfaceMaskParamsB.w + 0.5), 1u);
+            tileCoord.x = min(tileCoord.x, tileCountX - 1u);
+            tileCoord.y = min(tileCoord.y, tileCountY - 1u);
+            uint tileIndex = tileCoord.y * tileCountX + tileCoord.x;
+            uvec4 header = procCityTileHeader(tileIndex);
+            float normalizedCount = clamp(float(header.y) / 32.0, 0.0, 1.0);
+            vec2 tileUv = fract(gl_FragCoord.xy / float(tileSize));
+            float grid = max(
+                1.0 - smoothstep(0.94, 0.98, tileUv.x),
+                1.0 - smoothstep(0.94, 0.98, tileUv.y));
+            vec3 color = heatmapColor(normalizedCount);
+            color = mix(color, vec3(1.0), grid * 0.55);
+            outColor = vec4(color, 1.0);
+            return;
+        }
+        outColor = vec4(vec3(0.05), 1.0);
         return;
     }
 

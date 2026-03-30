@@ -29,7 +29,7 @@ constexpr std::uint32_t kTotalShadowMaps = kSunShadowCascadeCount + kMaxShadowed
 constexpr std::uint32_t kGpuTimestampCount = 6;
 constexpr std::uint32_t kMaxProcCityDynamicLights = 1024;
 constexpr std::uint32_t kMaxProcCityLightRefsPerInstance = 32;
-constexpr std::uint32_t kMaxProcCityLightTiles = 4096;
+constexpr std::uint32_t kMaxProcCityLightTiles = 16384;
 constexpr std::uint32_t kMaxProcCityTileLightRefs = 4 * 1024 * 1024;
 
 struct alignas(16) SceneUniforms

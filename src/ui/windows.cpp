@@ -55,9 +55,9 @@ void App::BuildLightingWindow(bool& debugSettingsChanged)
         debugSettingsChanged |= ImGui::SliderFloat("Cycle speed", &lighting.dayNightSpeed, 0.0f, 0.20f, "%.3f");
         debugSettingsChanged |= ImGui::Checkbox("Animate azimuth", &lighting.animateSunAzimuth);
         debugSettingsChanged |= ImGui::SliderFloat("Sun azimuth", &lighting.sunAzimuthDegrees, -180.0f, 180.0f, "%.1f deg");
-        static const char* materialViewNames[] = {"Lit", "Albedo", "UV"};
+        static const char* materialViewNames[] = {"Lit", "Albedo", "UV", "Tile Heat"};
         int materialView = static_cast<int>(lighting.materialDebugMode);
-        debugSettingsChanged |= ImGui::Combo("Material view", &materialView, materialViewNames, 3);
+        debugSettingsChanged |= ImGui::Combo("Material view", &materialView, materialViewNames, 4);
         lighting.materialDebugMode = static_cast<std::uint32_t>(materialView);
         lighting.debugVisualizeUv = lighting.materialDebugMode == 2;
         static const char* uvModeNames[] = {"Checker", "U", "V", "UV Color", "Gradient U", "Gradient V", "Out of 0..1"};
