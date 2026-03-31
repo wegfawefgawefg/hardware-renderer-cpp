@@ -115,6 +115,7 @@ enum class SceneKind
     PlayerMaskTest,
     City,
     ProcCity,
+    LightTileTest,
     ShadowTest,
     SpotShadowTest,
     VehicleLightTest,

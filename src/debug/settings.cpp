@@ -129,6 +129,15 @@ void App::LoadDebugSettings()
     if (ExtractFloat(text, "\"enable_sun_shadows\"", boolValue)) lighting.enableSunShadows = boolValue != 0.0f;
     if (ExtractFloat(text, "\"enable_local_lights\"", boolValue)) lighting.enableLocalLights = boolValue != 0.0f;
     if (ExtractFloat(text, "\"enable_local_light_shadows\"", boolValue)) lighting.enableLocalLightShadows = boolValue != 0.0f;
+    if (ExtractFloat(text, "\"enable_proc_city_dynamic_lights\"", boolValue)) lighting.enableProcCityDynamicLights = boolValue != 0.0f;
+    if (ExtractFloat(text, "\"use_proc_city_tiled_lighting\"", boolValue)) lighting.useProcCityTiledLighting = boolValue != 0.0f;
+    ExtractUInt(text, "\"proc_city_dynamic_light_count\"", lighting.procCityDynamicLightCount);
+    ExtractFloat(text, "\"proc_city_dynamic_light_range\"", lighting.procCityDynamicLightRange);
+    ExtractFloat(text, "\"proc_city_dynamic_light_intensity\"", lighting.procCityDynamicLightIntensity);
+    ExtractFloat(text, "\"proc_city_tile_contribution_cutoff\"", lighting.procCityTileContributionCutoff);
+    ExtractFloat(text, "\"proc_city_dynamic_light_height\"", lighting.procCityDynamicLightHeight);
+    ExtractFloat(text, "\"proc_city_dynamic_light_depth\"", lighting.procCityDynamicLightDepth);
+    ExtractFloat(text, "\"proc_city_dynamic_light_motion_radius\"", lighting.procCityDynamicLightMotionRadius);
     if (ExtractFloat(text, "\"debug_draw_vehicle_volumes\"", boolValue)) vehicle.debugDrawVehicleVolumes = boolValue != 0.0f;
     if (ExtractFloat(text, "\"debug_draw_vehicle_light_ranges\"", boolValue)) vehicle.debugDrawVehicleLightRanges = boolValue != 0.0f;
     ExtractUInt(text, "\"paint_ball_bounce_limit\"", paint.ballSettings.bounceLimit);
@@ -233,6 +242,15 @@ void App::SaveDebugSettings() const
         "  \"enable_sun_shadows\": %d,\n"
         "  \"enable_local_lights\": %d,\n"
         "  \"enable_local_light_shadows\": %d,\n"
+        "  \"enable_proc_city_dynamic_lights\": %d,\n"
+        "  \"use_proc_city_tiled_lighting\": %d,\n"
+        "  \"proc_city_dynamic_light_count\": %u,\n"
+        "  \"proc_city_dynamic_light_range\": %.6f,\n"
+        "  \"proc_city_dynamic_light_intensity\": %.6f,\n"
+        "  \"proc_city_tile_contribution_cutoff\": %.6f,\n"
+        "  \"proc_city_dynamic_light_height\": %.6f,\n"
+        "  \"proc_city_dynamic_light_depth\": %.6f,\n"
+        "  \"proc_city_dynamic_light_motion_radius\": %.6f,\n"
         "  \"debug_draw_vehicle_volumes\": %d,\n"
         "  \"debug_draw_vehicle_light_ranges\": %d,\n"
         "  \"paint_ball_bounce_limit\": %u,\n"
@@ -311,6 +329,15 @@ void App::SaveDebugSettings() const
         lighting.enableSunShadows ? 1 : 0,
         lighting.enableLocalLights ? 1 : 0,
         lighting.enableLocalLightShadows ? 1 : 0,
+        lighting.enableProcCityDynamicLights ? 1 : 0,
+        lighting.useProcCityTiledLighting ? 1 : 0,
+        lighting.procCityDynamicLightCount,
+        lighting.procCityDynamicLightRange,
+        lighting.procCityDynamicLightIntensity,
+        lighting.procCityTileContributionCutoff,
+        lighting.procCityDynamicLightHeight,
+        lighting.procCityDynamicLightDepth,
+        lighting.procCityDynamicLightMotionRadius,
         vehicle.debugDrawVehicleVolumes ? 1 : 0,
         vehicle.debugDrawVehicleLightRanges ? 1 : 0,
         paint.ballSettings.bounceLimit,

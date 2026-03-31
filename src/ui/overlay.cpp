@@ -2,6 +2,7 @@
 
 #include "imgui.h"
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstdio>
@@ -13,6 +14,15 @@
 
 namespace
 {
+constexpr std::uint32_t kTileHeatMaterialMode = 3;
+
+float ProcCityEffectiveTileRadius(float range, float intensity, float contributionCutoff)
+{
+    float safeIntensity = std::max(intensity, 1e-4f);
+    float normalizedThreshold = std::clamp(contributionCutoff / safeIntensity, 0.0f, 1.0f);
+    return range * (1.0f - std::sqrt(normalizedThreshold));
+}
+
 void AppendOverlayLabel(App& app, float x, float y, ImU32 color, const char* text)
 {
     if (text == nullptr)
@@ -76,6 +86,45 @@ bool ProjectWorldToScreen(const App& app, Vec3 world, ImVec2& outScreen)
 
     outScreen.x = (ndcX * 0.5f + 0.5f) * static_cast<float>(app.m_state.runtime.windowWidth);
     outScreen.y = (ndcY * 0.5f + 0.5f) * static_cast<float>(app.m_state.runtime.windowHeight);
+    return true;
+}
+
+bool ProjectSphereToScreen(const App& app, Vec3 center, float radius, ImVec2& outCenter, float& outRadiusPixels)
+{
+    if (!ProjectWorldToScreen(app, center, outCenter))
+    {
+        return false;
+    }
+
+    const std::array<Vec3, 6> offsets = {
+        Vec3Make(radius, 0.0f, 0.0f),
+        Vec3Make(-radius, 0.0f, 0.0f),
+        Vec3Make(0.0f, radius, 0.0f),
+        Vec3Make(0.0f, -radius, 0.0f),
+        Vec3Make(0.0f, 0.0f, radius),
+        Vec3Make(0.0f, 0.0f, -radius),
+    };
+
+    float maxRadiusPixels = 0.0f;
+    std::uint32_t projectedCount = 0;
+    for (const Vec3& offset : offsets)
+    {
+        ImVec2 sample{};
+        if (!ProjectWorldToScreen(app, Vec3Add(center, offset), sample))
+        {
+            continue;
+        }
+        float dx = sample.x - outCenter.x;
+        float dy = sample.y - outCenter.y;
+        maxRadiusPixels = std::max(maxRadiusPixels, std::sqrt(dx * dx + dy * dy));
+        ++projectedCount;
+    }
+
+    if (projectedCount == 0)
+    {
+        return false;
+    }
+    outRadiusPixels = maxRadiusPixels;
     return true;
 }
 
@@ -168,6 +217,61 @@ void App::DrawLightDebugOverlay()
     auto& lighting = m_state.lighting;
     auto& vehicle = m_state.vehicleLights;
     ImDrawList* drawList = ImGui::GetForegroundDrawList();
+    if ((lighting.sceneKind == SceneKind::ProcCity || lighting.sceneKind == SceneKind::LightTileTest) &&
+        lighting.useProcCityTiledLighting &&
+        lighting.materialDebugMode == kTileHeatMaterialMode &&
+        m_state.runtime.windowWidth > 0 &&
+        m_state.runtime.windowHeight > 0)
+    {
+        ImDrawList* tileDrawList = ImGui::GetBackgroundDrawList();
+        const std::span<const ProcCityLightTileGpu> tiles = core.renderer.GetProcCityLightTiles();
+        const std::uint32_t tileSize = std::max<std::uint32_t>(lighting.procCityLightTileSize, 1u);
+        const std::uint32_t tileCountX =
+            std::max<std::uint32_t>(1u, (m_state.runtime.windowWidth + tileSize - 1u) / tileSize);
+        const std::uint32_t tileCountY =
+            std::max<std::uint32_t>(1u, (m_state.runtime.windowHeight + tileSize - 1u) / tileSize);
+        const std::uint32_t totalTiles =
+            std::min<std::uint32_t>(static_cast<std::uint32_t>(tiles.size()), tileCountX * tileCountY);
+        const float maxTileCount =
+            static_cast<float>(std::max(core.renderer.GetProcCityMaxTileLightCount(), 1u));
+
+        tileDrawList->AddRectFilled(
+            ImVec2(0.0f, 0.0f),
+            ImVec2(static_cast<float>(m_state.runtime.windowWidth), static_cast<float>(m_state.runtime.windowHeight)),
+            IM_COL32(8, 10, 14, 208));
+
+        for (std::uint32_t tileIndex = 0; tileIndex < totalTiles; ++tileIndex)
+        {
+            const std::uint32_t tx = tileIndex % tileCountX;
+            const std::uint32_t ty = tileIndex / tileCountX;
+            const float minX = static_cast<float>(tx * tileSize);
+            const float minY = static_cast<float>(ty * tileSize);
+            const float maxX = std::min(minX + static_cast<float>(tileSize), static_cast<float>(m_state.runtime.windowWidth));
+            const float maxY = std::min(minY + static_cast<float>(tileSize), static_cast<float>(m_state.runtime.windowHeight));
+            const ProcCityLightTileGpu& tile = tiles[tileIndex];
+            const bool occupied = tile.lightCount > 0;
+            const float norm = occupied
+                ? std::clamp(static_cast<float>(tile.lightCount) / maxTileCount, 0.0f, 1.0f)
+                : 0.0f;
+
+            if (occupied)
+            {
+                const float heat = std::sqrt(norm);
+                const ImU32 fillColor = IM_COL32(
+                    static_cast<int>(40.0f + 215.0f * heat),
+                    static_cast<int>(60.0f + 170.0f * heat),
+                    static_cast<int>(70.0f + 110.0f * heat),
+                    static_cast<int>(80.0f + 150.0f * heat));
+                tileDrawList->AddRectFilled(ImVec2(minX, minY), ImVec2(maxX, maxY), fillColor);
+            }
+
+            const ImU32 lineColor = occupied
+                ? IM_COL32(255, 255, 255, 44)
+                : IM_COL32(110, 130, 170, 26);
+            tileDrawList->AddRect(ImVec2(minX, minY), ImVec2(maxX, maxY), lineColor);
+        }
+    }
+
     if (lighting.sceneKind == SceneKind::VehicleLightTest)
     {
         int activeVehicle = FindActiveVehicleLightIndex();
@@ -208,6 +312,72 @@ void App::DrawLightDebugOverlay()
                 {
                     AppendOverlayLabel(*this, sourceScreen.x + 8.0f, sourceScreen.y - 10.0f, light.color, light.label);
                 }
+            }
+        }
+        return;
+    }
+
+    if ((lighting.sceneKind == SceneKind::ProcCity || lighting.sceneKind == SceneKind::LightTileTest) &&
+        lighting.enableProcCityDynamicLights &&
+        lighting.debugDrawLightVolumes)
+    {
+        struct ProcLightCandidate
+        {
+            float dist2 = std::numeric_limits<float>::max();
+            std::uint32_t index = std::numeric_limits<std::uint32_t>::max();
+        };
+
+        std::array<ProcLightCandidate, 8> nearest{};
+        for (ProcLightCandidate& candidate : nearest)
+        {
+            candidate = ProcLightCandidate{};
+        }
+        std::uint32_t count = 0;
+        for (std::uint32_t i = 0; i < m_state.lighting.procCityDynamicLights.size(); ++i)
+        {
+            const DynamicPointLightGpu& light = m_state.lighting.procCityDynamicLights[i];
+            Vec3 center = Vec3Make(light.positionRange.x, light.positionRange.y, light.positionRange.z);
+            Vec3 delta = Vec3Sub(center, m_state.core.camera.position);
+            float dist2 = Vec3Dot(delta, delta);
+            std::uint32_t insertIndex = std::min<std::uint32_t>(count, static_cast<std::uint32_t>(nearest.size() - 1));
+            while (insertIndex > 0 && dist2 < nearest[insertIndex - 1].dist2)
+            {
+                nearest[insertIndex] = nearest[insertIndex - 1];
+                --insertIndex;
+            }
+            nearest[insertIndex] = ProcLightCandidate{dist2, i};
+            count = std::min<std::uint32_t>(count + 1u, static_cast<std::uint32_t>(nearest.size()));
+        }
+
+        for (std::uint32_t i = 0; i < count; ++i)
+        {
+            const DynamicPointLightGpu& light = m_state.lighting.procCityDynamicLights[nearest[i].index];
+            Vec3 worldCenter = Vec3Make(light.positionRange.x, light.positionRange.y, light.positionRange.z);
+            float effectiveRadius = ProcCityEffectiveTileRadius(
+                light.positionRange.w,
+                light.colorIntensity.w,
+                m_state.lighting.procCityTileContributionCutoff);
+            ImVec2 centerScreen{};
+            float radiusPixels = 0.0f;
+            if (!ProjectSphereToScreen(*this, worldCenter, effectiveRadius, centerScreen, radiusPixels))
+            {
+                continue;
+            }
+
+            ImU32 color = IM_COL32(
+                static_cast<int>(std::clamp(light.colorIntensity.x, 0.0f, 1.0f) * 255.0f),
+                static_cast<int>(std::clamp(light.colorIntensity.y, 0.0f, 1.0f) * 255.0f),
+                static_cast<int>(std::clamp(light.colorIntensity.z, 0.0f, 1.0f) * 255.0f),
+                255);
+            drawList->AddCircle(centerScreen, radiusPixels + 2.0f, IM_COL32(0, 0, 0, 220), 48, 2.0f);
+            drawList->AddCircle(centerScreen, radiusPixels, IM_COL32(255, 255, 255, 235), 48, 2.0f);
+            drawList->AddCircle(centerScreen, std::max(radiusPixels - 2.0f, 0.0f), IM_COL32(0, 0, 0, 220), 48, 2.0f);
+            drawList->AddCircleFilled(centerScreen, 3.0f, color, 12);
+            if (lighting.debugDrawLightLabels)
+            {
+                char label[32];
+                std::snprintf(label, sizeof(label), "L%u  r=%.1f", nearest[i].index, effectiveRadius);
+                AppendOverlayLabel(*this, centerScreen.x + 8.0f, centerScreen.y - 10.0f, color, label);
             }
         }
         return;

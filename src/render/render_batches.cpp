@@ -7,6 +7,13 @@
 
 namespace
 {
+float ProcCityEffectiveTileRadius(float range, float intensity, float contributionCutoff)
+{
+    float safeIntensity = std::max(intensity, 1e-4f);
+    float normalizedThreshold = std::clamp(contributionCutoff / safeIntensity, 0.0f, 1.0f);
+    return range * (1.0f - std::sqrt(normalizedThreshold));
+}
+
 Vec3 TransformPointLocal(Mat4 m, Vec3 p)
 {
     Vec4 out = Mat4MulVec4(m, Vec4Make(p.x, p.y, p.z, 1.0f));
@@ -186,7 +193,8 @@ void VulkanRenderer::BuildProcCityTiledLightLists(const SceneUniforms& uniforms)
 {
     m_procCityLightTiles.clear();
     m_procCityTileLightIndices.clear();
-    if (!m_useProcCityPipeline || !m_useProcCityTiledLighting || m_procCityDynamicLights.empty())
+    m_procCityMaxTileLightCount = 0;
+    if (!m_useProcCityPipeline || !m_useProcCityTiledLighting)
     {
         return;
     }
@@ -196,12 +204,26 @@ void VulkanRenderer::BuildProcCityTiledLightLists(const SceneUniforms& uniforms)
     std::uint32_t tileCountY = std::max<std::uint32_t>(1u, (m_swapchainExtent.height + kTileSize - 1u) / kTileSize);
     std::uint32_t totalTiles = std::min<std::uint32_t>(tileCountX * tileCountY, kMaxProcCityLightTiles);
     m_procCityLightTiles.resize(totalTiles);
+    if (m_procCityDynamicLights.empty())
+    {
+        if (!m_procCityLightTiles.empty())
+        {
+            std::memset(
+                m_procCityLightTileBuffer.mapped,
+                0,
+                sizeof(ProcCityLightTileGpu) * m_procCityLightTiles.size());
+        }
+        return;
+    }
     std::vector<std::vector<std::uint32_t>> tileBuckets(totalTiles);
 
     for (std::uint32_t lightIndex = 0; lightIndex < m_procCityDynamicLights.size(); ++lightIndex)
     {
         const DynamicPointLightGpu& light = m_procCityDynamicLights[lightIndex];
-        float lightRange = light.positionRange.w;
+        float lightRange = ProcCityEffectiveTileRadius(
+            light.positionRange.w,
+            light.colorIntensity.w,
+            m_debugTileContributionCutoff);
         Vec4 world = Vec4Make(light.positionRange.x, light.positionRange.y, light.positionRange.z, 1.0f);
         Vec4 view = Mat4MulVec4(uniforms.view, world);
         float depth = -view.z;
@@ -215,6 +237,11 @@ void VulkanRenderer::BuildProcCityTiledLightLists(const SceneUniforms& uniforms)
         {
             continue;
         }
+        float invW = 1.0f / clip.w;
+        float ndcCenterX = clip.x * invW;
+        float ndcCenterY = clip.y * invW;
+        float screenCenterX = (ndcCenterX * 0.5f + 0.5f) * static_cast<float>(m_swapchainExtent.width);
+        float screenCenterY = (ndcCenterY * 0.5f + 0.5f) * static_cast<float>(m_swapchainExtent.height);
         constexpr float kNearPlaneDepth = 0.1f;
         constexpr float kScreenPadPixels = 2.0f;
         const std::array<Vec3, 15> sampleOffsets = {
@@ -239,6 +266,7 @@ void VulkanRenderer::BuildProcCityTiledLightLists(const SceneUniforms& uniforms)
         float minScreenY = static_cast<float>(m_swapchainExtent.height);
         float maxScreenX = 0.0f;
         float maxScreenY = 0.0f;
+        float radiusPixels = 0.0f;
         bool anyProjected = false;
         for (const Vec3& offset : sampleOffsets)
         {
@@ -263,10 +291,13 @@ void VulkanRenderer::BuildProcCityTiledLightLists(const SceneUniforms& uniforms)
             float ndcY = sampleClip.y * sampleInvW;
             float screenX = (ndcX * 0.5f + 0.5f) * static_cast<float>(m_swapchainExtent.width);
             float screenY = (ndcY * 0.5f + 0.5f) * static_cast<float>(m_swapchainExtent.height);
+            float dx = screenX - screenCenterX;
+            float dy = screenY - screenCenterY;
             minScreenX = std::min(minScreenX, screenX);
             minScreenY = std::min(minScreenY, screenY);
             maxScreenX = std::max(maxScreenX, screenX);
             maxScreenY = std::max(maxScreenY, screenY);
+            radiusPixels = std::max(radiusPixels, std::sqrt(dx * dx + dy * dy));
             anyProjected = true;
         }
         if (!anyProjected)
@@ -292,6 +323,18 @@ void VulkanRenderer::BuildProcCityTiledLightLists(const SceneUniforms& uniforms)
         {
             for (int tx = minTileX; tx <= maxTileX; ++tx)
             {
+                float tileMinX = static_cast<float>(tx) * static_cast<float>(kTileSize);
+                float tileMinY = static_cast<float>(ty) * static_cast<float>(kTileSize);
+                float tileMaxX = tileMinX + static_cast<float>(kTileSize);
+                float tileMaxY = tileMinY + static_cast<float>(kTileSize);
+                float nearestX = std::clamp(screenCenterX, tileMinX, tileMaxX);
+                float nearestY = std::clamp(screenCenterY, tileMinY, tileMaxY);
+                float dx = nearestX - screenCenterX;
+                float dy = nearestY - screenCenterY;
+                if (dx * dx + dy * dy > radiusPixels * radiusPixels)
+                {
+                    continue;
+                }
                 std::uint32_t tileIndex = static_cast<std::uint32_t>(ty) * tileCountX + static_cast<std::uint32_t>(tx);
                 if (tileIndex >= m_procCityLightTiles.size())
                 {
@@ -316,6 +359,7 @@ void VulkanRenderer::BuildProcCityTiledLightLists(const SceneUniforms& uniforms)
             m_procCityTileLightIndices.push_back(lightIndex);
             ++tile.lightCount;
         }
+        m_procCityMaxTileLightCount = std::max(m_procCityMaxTileLightCount, tile.lightCount);
     }
 
     if (!m_procCityLightTiles.empty())

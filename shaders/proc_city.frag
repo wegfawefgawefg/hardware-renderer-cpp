@@ -266,7 +266,17 @@ void main()
             tileCoord.y = min(tileCoord.y, tileCountY - 1u);
             uint tileIndex = tileCoord.y * tileCountX + tileCoord.x;
             uvec4 header = procCityTileHeader(tileIndex);
-            float normalizedCount = clamp(float(header.y) / 32.0, 0.0, 1.0);
+            float maxTileCount = max(uniforms.surfaceMaskParamsA.x, 1.0);
+            float normalizedCount = 0.0;
+            if (maxTileCount <= 1.5)
+            {
+                normalizedCount = header.y > 0u ? 1.0 : 0.0;
+            }
+            else
+            {
+                normalizedCount = clamp(float(header.y) / maxTileCount, 0.0, 1.0);
+                normalizedCount = sqrt(normalizedCount);
+            }
             vec2 tileUv = fract(gl_FragCoord.xy / float(tileSize));
             float grid = max(
                 1.0 - smoothstep(0.94, 0.98, tileUv.x),

@@ -291,14 +291,15 @@ void VulkanRenderer::RecordCommandBuffer(std::uint32_t imageIndex)
     vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
     vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
+    float bloomStrength = m_useProcCityPipeline ? 0.0f : 1.0f;
     std::array<OverlayVertex, 6> fullscreenQuad =
         {
-            OverlayVertex{Vec2Make(-1.0f, -1.0f), Vec2Make(0.0f, 1.0f), Vec4Make(1.0f, 1.0f, 1.0f, 1.0f)},
-            OverlayVertex{Vec2Make(-1.0f, 1.0f), Vec2Make(0.0f, 0.0f), Vec4Make(1.0f, 1.0f, 1.0f, 1.0f)},
-            OverlayVertex{Vec2Make(1.0f, 1.0f), Vec2Make(1.0f, 0.0f), Vec4Make(1.0f, 1.0f, 1.0f, 1.0f)},
-            OverlayVertex{Vec2Make(-1.0f, -1.0f), Vec2Make(0.0f, 1.0f), Vec4Make(1.0f, 1.0f, 1.0f, 1.0f)},
-            OverlayVertex{Vec2Make(1.0f, 1.0f), Vec2Make(1.0f, 0.0f), Vec4Make(1.0f, 1.0f, 1.0f, 1.0f)},
-            OverlayVertex{Vec2Make(1.0f, -1.0f), Vec2Make(1.0f, 1.0f), Vec4Make(1.0f, 1.0f, 1.0f, 1.0f)},
+            OverlayVertex{Vec2Make(-1.0f, -1.0f), Vec2Make(0.0f, 1.0f), Vec4Make(1.0f, 1.0f, 1.0f, bloomStrength)},
+            OverlayVertex{Vec2Make(-1.0f, 1.0f), Vec2Make(0.0f, 0.0f), Vec4Make(1.0f, 1.0f, 1.0f, bloomStrength)},
+            OverlayVertex{Vec2Make(1.0f, 1.0f), Vec2Make(1.0f, 0.0f), Vec4Make(1.0f, 1.0f, 1.0f, bloomStrength)},
+            OverlayVertex{Vec2Make(-1.0f, -1.0f), Vec2Make(0.0f, 1.0f), Vec4Make(1.0f, 1.0f, 1.0f, bloomStrength)},
+            OverlayVertex{Vec2Make(1.0f, 1.0f), Vec2Make(1.0f, 0.0f), Vec4Make(1.0f, 1.0f, 1.0f, bloomStrength)},
+            OverlayVertex{Vec2Make(1.0f, -1.0f), Vec2Make(1.0f, 1.0f), Vec4Make(1.0f, 1.0f, 1.0f, bloomStrength)},
         };
     std::memcpy(m_postVertexBuffer.mapped, fullscreenQuad.data(), sizeof(fullscreenQuad));
 

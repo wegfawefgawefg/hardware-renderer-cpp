@@ -117,7 +117,9 @@ struct LightingState
     std::uint32_t procCityDynamicLightCount = 512;
     float procCityDynamicLightRange = 8.0f;
     float procCityDynamicLightIntensity = 1.25f;
+    float procCityTileContributionCutoff = 0.06f;
     float procCityDynamicLightHeight = 2.4f;
+    float procCityDynamicLightDepth = 9.25f;
     float procCityDynamicLightMotionRadius = 2.8f;
     std::uint32_t procCityLightTileSize = 32;
     Vec3 sunWorldPosition = {};

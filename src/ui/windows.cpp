@@ -34,8 +34,8 @@ void App::BuildLightingWindow(bool& debugSettingsChanged)
     if (ImGui::Begin("Lighting"))
     {
         int sceneKind = static_cast<int>(lighting.sceneKind);
-        const char* sceneNames[] = {"Player Mask Test", "City", "Proc City", "Shadow Test", "Spot Shadow Test", "Vehicle Light Test", "Fracture Test"};
-        if (ImGui::Combo("Scene", &sceneKind, sceneNames, 7))
+        const char* sceneNames[] = {"Player Mask Test", "City", "Proc City", "Light Tile Test", "Shadow Test", "Spot Shadow Test", "Vehicle Light Test", "Fracture Test"};
+        if (ImGui::Combo("Scene", &sceneKind, sceneNames, 8))
         {
             lighting.sceneKind = static_cast<SceneKind>(sceneKind);
             runtime.reloadSceneRequested = true;
@@ -397,7 +397,7 @@ void App::BuildCityWindow(bool& debugSettingsChanged)
     auto& lighting = m_state.lighting;
     auto& city = m_state.city;
     auto& runtime = m_state.runtime;
-    if (lighting.sceneKind != SceneKind::ProcCity)
+    if (lighting.sceneKind != SceneKind::ProcCity && lighting.sceneKind != SceneKind::LightTileTest)
     {
         return;
     }
@@ -409,26 +409,46 @@ void App::BuildCityWindow(bool& debugSettingsChanged)
     );
     ImGui::SetNextWindowPos(pos, ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(300.0f, 246.0f), ImGuiCond_FirstUseEver);
-    if (ImGui::Begin("Proc City"))
+    if (ImGui::Begin(lighting.sceneKind == SceneKind::ProcCity ? "Proc City" : "Light Tile Test"))
     {
-        debugSettingsChanged |= ImGui::SliderFloat("Quad size", &city.buildingQuadSize, 0.25f, 4.0f, "%.3f");
-        city.buildingQuadSize = std::max(city.buildingQuadSize, 0.05f);
+        if (lighting.sceneKind == SceneKind::ProcCity)
+        {
+            debugSettingsChanged |= ImGui::SliderFloat("Quad size", &city.buildingQuadSize, 0.25f, 4.0f, "%.3f");
+            city.buildingQuadSize = std::max(city.buildingQuadSize, 0.05f);
+        }
         debugSettingsChanged |= ImGui::Checkbox("Dynamic proc lights", &lighting.enableProcCityDynamicLights);
         debugSettingsChanged |= ImGui::Checkbox("Tiled proc lights", &lighting.useProcCityTiledLighting);
         int dynamicLightCount = static_cast<int>(lighting.procCityDynamicLightCount);
-        debugSettingsChanged |= ImGui::SliderInt("Light count", &dynamicLightCount, 0, static_cast<int>(kMaxProcCityDynamicLights));
+        int maxLightCount = lighting.sceneKind == SceneKind::LightTileTest ? 8 : static_cast<int>(kMaxProcCityDynamicLights);
+        debugSettingsChanged |= ImGui::SliderInt("Light count", &dynamicLightCount, 0, maxLightCount);
         lighting.procCityDynamicLightCount = static_cast<std::uint32_t>(dynamicLightCount);
         debugSettingsChanged |= ImGui::SliderFloat("Light range", &lighting.procCityDynamicLightRange, 1.0f, 20.0f, "%.1f");
         debugSettingsChanged |= ImGui::SliderFloat("Light intensity", &lighting.procCityDynamicLightIntensity, 0.0f, 4.0f, "%.2f");
+        debugSettingsChanged |= ImGui::SliderFloat("Tile cutoff", &lighting.procCityTileContributionCutoff, 0.001f, 4.00f, "%.3f", ImGuiSliderFlags_Logarithmic);
         debugSettingsChanged |= ImGui::SliderFloat("Light height", &lighting.procCityDynamicLightHeight, 0.5f, 8.0f, "%.1f");
+        if (lighting.sceneKind == SceneKind::LightTileTest)
+        {
+            debugSettingsChanged |= ImGui::SliderFloat("Light depth", &lighting.procCityDynamicLightDepth, 8.0f, 10.0f, "%.3f");
+        }
         debugSettingsChanged |= ImGui::SliderFloat("Motion radius", &lighting.procCityDynamicLightMotionRadius, 0.0f, 8.0f, "%.1f");
         ImGui::Text("Active proc lights: %zu", lighting.procCityDynamicLights.size());
-        ImGui::TextUnformatted("Proc City uses sparse street lights and no vehicle lighting.");
-        ImGui::TextUnformatted("Quad size controls facade texture tiling for generated buildings.");
-        ImGui::TextUnformatted("Building sizes stay stable; proc-city geometry stays low poly.");
-        if (ImGui::Button("Regenerate city buildings"))
+        if (lighting.sceneKind == SceneKind::ProcCity)
         {
-            runtime.reloadSceneRequested = true;
+            ImGui::TextUnformatted("Proc City uses sparse street lights and no vehicle lighting.");
+            ImGui::TextUnformatted("Quad size controls facade texture tiling for generated buildings.");
+            ImGui::TextUnformatted("Building sizes stay stable; proc-city geometry stays low poly.");
+            if (ImGui::Button("Regenerate city buildings"))
+            {
+                runtime.reloadSceneRequested = true;
+            }
+        }
+        else
+        {
+            ImGui::TextUnformatted("Light Tile Test is a minimal proc-light debug scene.");
+            ImGui::TextUnformatted("It uses one camera-facing quad and fly camera controls.");
+            debugSettingsChanged |= ImGui::Checkbox("Show light volumes", &lighting.debugDrawLightVolumes);
+            debugSettingsChanged |= ImGui::Checkbox("Show labels", &lighting.debugDrawLightLabels);
+            ImGui::TextUnformatted("Show light volumes draws projected screen-space circles and 3D bounds.");
         }
     }
     ImGui::End();

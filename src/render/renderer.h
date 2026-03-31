@@ -182,6 +182,8 @@ struct VulkanRenderer
     void ShutdownImGuiBackend();
     ImTextureID GetShadowDebugTexture(std::uint32_t cascadeIndex) const;
     const RenderProfilingStats& GetProfilingStats() const { return m_profilingStats; }
+    std::uint32_t GetProcCityMaxTileLightCount() const { return m_procCityMaxTileLightCount; }
+    std::span<const ProcCityLightTileGpu> GetProcCityLightTiles() const { return m_procCityLightTiles; }
     std::uint32_t GetVisibleDrawItemCount() const
     {
         std::uint32_t count = static_cast<std::uint32_t>(m_visibleDrawItems.size());
@@ -257,6 +259,7 @@ struct VulkanRenderer
     void BuildShadowVisibleStaticInstances(std::uint32_t cascadeIndex);
     void BuildProcCityTiledLightLists(const SceneUniforms& uniforms);
     void SetProcCityDynamicLights(std::span<const DynamicPointLightGpu> lights);
+    void SetProcCityTileContributionCutoff(float cutoff) { m_debugTileContributionCutoff = cutoff; }
     void AppendPersistentPaint(const PaintSplatSpawn& splat);
     void ResetAccumulatedPaint();
     std::uint32_t GetAccumulatedPaintHitCount() const;
@@ -470,6 +473,7 @@ struct VulkanRenderer
     std::vector<std::uint32_t> m_visibleProcCityDynamicLightIndices;
     std::vector<ProcCityLightTileGpu> m_procCityLightTiles;
     std::vector<std::uint32_t> m_procCityTileLightIndices;
+    std::uint32_t m_procCityMaxTileLightCount = 0;
     std::vector<FlatDecalTemplateGpu> m_flatDecalTemplates;
     std::vector<FlatDecalDraw> m_flatDecalDraws;
     std::vector<PaintLayer> m_paintLayers;
@@ -502,6 +506,7 @@ struct VulkanRenderer
     bool m_localLightShadowsEnabled = true;
     bool m_useProcCityPipeline = false;
     bool m_useProcCityTiledLighting = false;
+    float m_debugTileContributionCutoff = 0.06f;
     bool m_imguiInitialized = false;
     bool m_initialized = false;
 };

@@ -271,6 +271,20 @@ void App::ReloadScene()
         core.camera.pitchRadians = DegreesToRadians(-10.0f);
         PlayerSyncCamera(core.player, core.worldCollider, core.camera);
     }
+    else if (lighting.sceneKind == SceneKind::LightTileTest)
+    {
+        lighting.shadowTestSpotTargetValid = false;
+        lighting.cycleDayNight = false;
+        lighting.sunAzimuthDegrees = -35.0f;
+        lighting.sunIntensity = 0.0f;
+        lighting.moonIntensity = 0.0f;
+        lighting.ambientIntensity = 0.02f;
+        lighting.pointLightIntensity = 0.0f;
+        lighting.shadowCascadeSplit = 16.0f;
+        core.camera.position = Vec3Make(0.0f, 4.0f, -2.5f);
+        core.camera.yawRadians = DegreesToRadians(0.0f);
+        core.camera.pitchRadians = DegreesToRadians(0.0f);
+    }
     else
     {
         lighting.shadowTestSpotTargetValid = false;

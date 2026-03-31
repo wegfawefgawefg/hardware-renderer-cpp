@@ -109,6 +109,54 @@ ModelData MakePlaneModel(float halfExtent, std::uint8_t r, std::uint8_t g, std::
     return model;
 }
 
+ModelData MakeVerticalQuadModel(float halfWidth, float halfHeight, std::uint8_t r, std::uint8_t g, std::uint8_t b)
+{
+    ModelData model{};
+    model.textures.push_back(MakeSolidTextureData(r, g, b));
+    model.materials.push_back(MaterialData{.name = "solid", .textureIndex = 0, .flipNormalY = false});
+
+    model.mesh.vertices.push_back(Vertex{
+        .position = Vec3Make(-halfWidth, -halfHeight, 0.0f),
+        .normal = Vec3Make(0.0f, 0.0f, -1.0f),
+        .uv = Vec2Make(0.0f, 0.0f),
+    });
+    model.mesh.vertices.push_back(Vertex{
+        .position = Vec3Make(halfWidth, -halfHeight, 0.0f),
+        .normal = Vec3Make(0.0f, 0.0f, -1.0f),
+        .uv = Vec2Make(1.0f, 0.0f),
+    });
+    model.mesh.vertices.push_back(Vertex{
+        .position = Vec3Make(halfWidth, halfHeight, 0.0f),
+        .normal = Vec3Make(0.0f, 0.0f, -1.0f),
+        .uv = Vec2Make(1.0f, 1.0f),
+    });
+    model.mesh.vertices.push_back(Vertex{
+        .position = Vec3Make(-halfWidth, halfHeight, 0.0f),
+        .normal = Vec3Make(0.0f, 0.0f, -1.0f),
+        .uv = Vec2Make(0.0f, 1.0f),
+    });
+    model.mesh.indices.insert(model.mesh.indices.end(), {0, 2, 1, 0, 3, 2});
+    model.primitives.push_back(PrimitiveData{
+        .firstIndex = 0,
+        .indexCount = static_cast<std::uint32_t>(model.mesh.indices.size()),
+        .materialIndex = 0,
+    });
+    return model;
+}
+
+SceneData BuildLightTileTestScene(const AssetRegistry&)
+{
+    SceneData scene{};
+    scene.models.push_back(MakeVerticalQuadModel(7.0f, 5.0f, 220, 220, 220));
+    scene.entities.push_back(EntityData{
+        .modelIndex = 0,
+        .transform = Mat4Translate(Vec3Make(0.0f, 4.0f, 10.0f)),
+        .assetPath = "generated/light_tile_test_quad",
+        .collidable = false,
+    });
+    return scene;
+}
+
 float ComputeModelFootprint(const ModelData& model)
 {
     if (model.mesh.vertices.empty())
@@ -417,6 +465,10 @@ SceneData LoadSampleScene(const AssetRegistry& assetRegistry, SceneKind kind)
         config.buildingMode = CitySceneConfig::BuildingMode::Procedural;
         config.roadLightStride = 2;
         return BuildSampleCity(assetRegistry, config);
+    }
+    if (kind == SceneKind::LightTileTest)
+    {
+        return BuildLightTileTestScene(assetRegistry);
     }
     if (kind == SceneKind::ShadowTest)
     {

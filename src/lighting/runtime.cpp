@@ -352,39 +352,69 @@ void ApplyRuntimeLighting(State& state, SceneUniforms& uniforms, float dtSeconds
         cascadeBlendWidth,
         static_cast<float>(shaderFeatureMask));
 
-    if (lighting.sceneKind == SceneKind::ProcCity &&
+    if ((lighting.sceneKind == SceneKind::ProcCity || lighting.sceneKind == SceneKind::LightTileTest) &&
         lighting.enableProcCityDynamicLights)
     {
         std::uint32_t lightCount = std::min(lighting.procCityDynamicLightCount, kMaxProcCityDynamicLights);
         state.lighting.procCityDynamicLights.reserve(lightCount);
-        float span = std::max(core.sceneBounds.radius, 24.0f) * 1.6f;
-        float baseY = core.sceneBounds.valid ? core.sceneBounds.min.y : 0.0f;
-        std::uint32_t grid = std::max<std::uint32_t>(1u, static_cast<std::uint32_t>(std::ceil(std::sqrt(static_cast<float>(lightCount)))));
-        for (std::uint32_t i = 0; i < lightCount; ++i)
+        if (lighting.sceneKind == SceneKind::LightTileTest)
         {
-            std::uint32_t gx = i % grid;
-            std::uint32_t gz = i / grid;
-            float nx = grid > 1 ? static_cast<float>(gx) / static_cast<float>(grid - 1) : 0.5f;
-            float nz = grid > 1 ? static_cast<float>(gz) / static_cast<float>(grid - 1) : 0.5f;
-            float baseX = center.x + (nx * 2.0f - 1.0f) * span;
-            float baseZ = center.z + (nz * 2.0f - 1.0f) * span;
-            float seed = static_cast<float>(i);
-            float t = runtime.elapsedSeconds;
-            float ax = t * (0.55f + 0.013f * seed) + seed * 1.37f;
-            float az = t * (0.47f + 0.011f * seed) + seed * 0.91f;
-            Vec3 color = ProcCityPalette(i);
-            state.lighting.procCityDynamicLights.push_back(DynamicPointLightGpu{
-                .positionRange = Vec4Make(
-                    baseX + std::cos(ax) * lighting.procCityDynamicLightMotionRadius,
-                    baseY + lighting.procCityDynamicLightHeight + std::sin(ax * 0.7f + az * 0.3f) * 0.75f,
-                    baseZ + std::sin(az) * lighting.procCityDynamicLightMotionRadius,
-                    lighting.procCityDynamicLightRange),
-                .colorIntensity = Vec4Make(
-                    color.x,
-                    color.y,
-                    color.z,
-                    lighting.procCityDynamicLightIntensity),
-            });
+            std::uint32_t columns = std::max<std::uint32_t>(1u, lightCount);
+            float verticalMotion = lighting.procCityDynamicLightMotionRadius * 0.25f;
+            for (std::uint32_t i = 0; i < lightCount; ++i)
+            {
+                float u = columns > 1 ? static_cast<float>(i) / static_cast<float>(columns - 1) : 0.5f;
+                float baseX = (u * 2.0f - 1.0f) * 5.0f;
+                float seed = static_cast<float>(i);
+                float t = runtime.elapsedSeconds;
+                float phase = t * (0.6f + 0.07f * seed) + seed * 0.9f;
+                Vec3 color = ProcCityPalette(i);
+                state.lighting.procCityDynamicLights.push_back(DynamicPointLightGpu{
+                    .positionRange = Vec4Make(
+                        baseX + std::cos(phase) * lighting.procCityDynamicLightMotionRadius * 0.35f,
+                        lighting.procCityDynamicLightHeight + std::sin(phase * 0.8f) * verticalMotion,
+                        lighting.procCityDynamicLightDepth + std::sin(phase * 0.5f) * lighting.procCityDynamicLightMotionRadius * 0.10f,
+                        lighting.procCityDynamicLightRange),
+                    .colorIntensity = Vec4Make(
+                        color.x,
+                        color.y,
+                        color.z,
+                        lighting.procCityDynamicLightIntensity),
+                });
+            }
+        }
+        else
+        {
+            float span = std::max(core.sceneBounds.radius, 24.0f) * 1.6f;
+            float baseY = core.sceneBounds.valid ? core.sceneBounds.min.y : 0.0f;
+            std::uint32_t grid = std::max<std::uint32_t>(1u, static_cast<std::uint32_t>(std::ceil(std::sqrt(static_cast<float>(lightCount)))));
+            float verticalMotion = lighting.procCityDynamicLightMotionRadius * 0.25f;
+            for (std::uint32_t i = 0; i < lightCount; ++i)
+            {
+                std::uint32_t gx = i % grid;
+                std::uint32_t gz = i / grid;
+                float nx = grid > 1 ? static_cast<float>(gx) / static_cast<float>(grid - 1) : 0.5f;
+                float nz = grid > 1 ? static_cast<float>(gz) / static_cast<float>(grid - 1) : 0.5f;
+                float baseX = center.x + (nx * 2.0f - 1.0f) * span;
+                float baseZ = center.z + (nz * 2.0f - 1.0f) * span;
+                float seed = static_cast<float>(i);
+                float t = runtime.elapsedSeconds;
+                float ax = t * (0.55f + 0.013f * seed) + seed * 1.37f;
+                float az = t * (0.47f + 0.011f * seed) + seed * 0.91f;
+                Vec3 color = ProcCityPalette(i);
+                state.lighting.procCityDynamicLights.push_back(DynamicPointLightGpu{
+                    .positionRange = Vec4Make(
+                        baseX + std::cos(ax) * lighting.procCityDynamicLightMotionRadius,
+                        baseY + lighting.procCityDynamicLightHeight + std::sin(ax * 0.7f + az * 0.3f) * verticalMotion,
+                        baseZ + std::sin(az) * lighting.procCityDynamicLightMotionRadius,
+                        lighting.procCityDynamicLightRange),
+                    .colorIntensity = Vec4Make(
+                        color.x,
+                        color.y,
+                        color.z,
+                        lighting.procCityDynamicLightIntensity),
+                });
+            }
         }
     }
 

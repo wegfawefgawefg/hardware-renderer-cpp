@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <limits>
 #include <string_view>
 
 #include "imgui.h"
@@ -152,7 +153,9 @@ void App::Update(float dtSeconds)
         kGameplayMaxCatchupSeconds);
     while (runtime.gameplayAccumulatorSeconds >= kGameplayFixedStepSeconds)
     {
-        if (lighting.sceneKind == SceneKind::PlayerMaskTest || lighting.sceneKind == SceneKind::FractureTest)
+        if (lighting.sceneKind == SceneKind::PlayerMaskTest ||
+            lighting.sceneKind == SceneKind::FractureTest ||
+            lighting.sceneKind == SceneKind::LightTileTest)
         {
             PlayerFlyUpdate(core.camera, kGameplayFixedStepSeconds, runtime.mouseCaptured && !imguiCapturingKeyboard);
         }
@@ -238,7 +241,9 @@ void App::Update(float dtSeconds)
         static_cast<float>(m_state.lighting.uvDebugMode)
     );
     uniforms.surfaceMaskParamsA = Vec4Make(
-        paint.vanishSplitStrength,
+        (lighting.sceneKind == SceneKind::ProcCity || lighting.sceneKind == SceneKind::LightTileTest)
+            ? static_cast<float>(std::max(core.renderer.GetProcCityMaxTileLightCount(), 1u))
+            : paint.vanishSplitStrength,
         paint.vanishJitterStrength,
         paint.vanishStaticStrength,
         paint.vanishEdgeGlowStrength
@@ -248,10 +253,10 @@ void App::Update(float dtSeconds)
         (lighting.sceneKind == SceneKind::City || lighting.sceneKind == SceneKind::ProcCity)
             ? m_state.city.buildingQuadSize
             : fracture.prism.quadSize,
-        lighting.sceneKind == SceneKind::ProcCity && lighting.useProcCityTiledLighting
+        (lighting.sceneKind == SceneKind::ProcCity || lighting.sceneKind == SceneKind::LightTileTest) && lighting.useProcCityTiledLighting
             ? static_cast<float>((runtime.windowWidth + 31u) / 32u)
             : 0.0f,
-        lighting.sceneKind == SceneKind::ProcCity && lighting.useProcCityTiledLighting
+        (lighting.sceneKind == SceneKind::ProcCity || lighting.sceneKind == SceneKind::LightTileTest) && lighting.useProcCityTiledLighting
             ? static_cast<float>((runtime.windowHeight + 31u) / 32u)
             : 0.0f
     );
@@ -329,8 +334,9 @@ void App::Update(float dtSeconds)
     debugOptions.drawLightDirections = lighting.debugDrawLightDirections;
     debugOptions.drawLightVolumes = lighting.debugDrawLightVolumes;
     debugOptions.drawActivationVolumes = lighting.debugDrawActivationVolumes;
-    debugOptions.useProcCityPipeline = lighting.sceneKind == SceneKind::ProcCity;
-    debugOptions.useProcCityTiledLighting = lighting.sceneKind == SceneKind::ProcCity && lighting.useProcCityTiledLighting;
+    debugOptions.useProcCityPipeline =
+        lighting.sceneKind == SceneKind::ProcCity || lighting.sceneKind == SceneKind::LightTileTest;
+    debugOptions.useProcCityTiledLighting = debugOptions.useProcCityPipeline && lighting.useProcCityTiledLighting;
     debugOptions.mainDrawDistance = lighting.mainDrawDistance;
     debugOptions.shadowDrawDistance = lighting.shadowDrawDistance;
     Vec3 forward = CameraForward(core.camera);
@@ -402,6 +408,78 @@ void App::Update(float dtSeconds)
         }
     }
     debugOptions.customCubeCount = cubeIndex;
+    if ((lighting.sceneKind == SceneKind::ProcCity || lighting.sceneKind == SceneKind::LightTileTest) &&
+        lighting.enableProcCityDynamicLights &&
+        lighting.debugDrawLightVolumes)
+    {
+        struct ProcLightCandidate
+        {
+            float dist2 = std::numeric_limits<float>::max();
+            std::uint32_t lightIndex = 0;
+        };
+        std::array<ProcLightCandidate, DebugRenderOptions::kMaxSelectionSpheres> nearestProcLights{};
+        std::uint32_t procLightCount = 0;
+        for (std::uint32_t lightIndex = 0; lightIndex < static_cast<std::uint32_t>(lighting.procCityDynamicLights.size()); ++lightIndex)
+        {
+            const DynamicPointLightGpu& light = lighting.procCityDynamicLights[lightIndex];
+            Vec3 lightPos = Vec3Make(light.positionRange.x, light.positionRange.y, light.positionRange.z);
+            Vec3 delta = Vec3Sub(lightPos, core.camera.position);
+            float dist2 = Vec3Dot(delta, delta);
+            std::uint32_t insertIndex = std::min(procLightCount, DebugRenderOptions::kMaxSelectionSpheres - 1u);
+            while (insertIndex > 0 && dist2 < nearestProcLights[insertIndex - 1].dist2)
+            {
+                if (insertIndex < DebugRenderOptions::kMaxSelectionSpheres)
+                {
+                    nearestProcLights[insertIndex] = nearestProcLights[insertIndex - 1];
+                }
+                --insertIndex;
+            }
+            nearestProcLights[insertIndex] = ProcLightCandidate{dist2, lightIndex};
+            procLightCount = std::min(procLightCount + 1u, DebugRenderOptions::kMaxSelectionSpheres);
+        }
+
+        for (std::uint32_t i = 0; i < procLightCount; ++i)
+        {
+            const DynamicPointLightGpu& light = lighting.procCityDynamicLights[nearestProcLights[i].lightIndex];
+            Vec3 color = Vec3Make(light.colorIntensity.x, light.colorIntensity.y, light.colorIntensity.z);
+            if (debugOptions.selectionSphereCount < DebugRenderOptions::kMaxSelectionSpheres)
+            {
+                std::uint32_t sphereIndex = debugOptions.selectionSphereCount++;
+                debugOptions.selectionSpheres[sphereIndex] = Vec4Make(
+                    light.positionRange.x,
+                    light.positionRange.y,
+                    light.positionRange.z,
+                    light.positionRange.w
+                );
+                debugOptions.selectionSphereColors[sphereIndex] = Vec4Make(color.x, color.y, color.z, 1.0f);
+            }
+            if (debugOptions.customLineCount + 12u <= DebugRenderOptions::kMaxCustomLines)
+            {
+                Vec3 c = Vec3Make(light.positionRange.x, light.positionRange.y, light.positionRange.z);
+                float r = light.positionRange.w;
+                Vec3 p000 = Vec3Add(c, Vec3Make(-r, -r, -r));
+                Vec3 p001 = Vec3Add(c, Vec3Make(-r, -r, r));
+                Vec3 p010 = Vec3Add(c, Vec3Make(-r, r, -r));
+                Vec3 p011 = Vec3Add(c, Vec3Make(-r, r, r));
+                Vec3 p100 = Vec3Add(c, Vec3Make(r, -r, -r));
+                Vec3 p101 = Vec3Add(c, Vec3Make(r, -r, r));
+                Vec3 p110 = Vec3Add(c, Vec3Make(r, r, -r));
+                Vec3 p111 = Vec3Add(c, Vec3Make(r, r, r));
+                const std::array<std::pair<Vec3, Vec3>, 12> edges = {{
+                    {p000, p001}, {p001, p011}, {p011, p010}, {p010, p000},
+                    {p100, p101}, {p101, p111}, {p111, p110}, {p110, p100},
+                    {p000, p100}, {p001, p101}, {p010, p110}, {p011, p111},
+                }};
+                for (const auto& edge : edges)
+                {
+                    std::uint32_t lineIndex = debugOptions.customLineCount++;
+                    debugOptions.customLineStarts[lineIndex] = Vec4Make(edge.first.x, edge.first.y, edge.first.z, 1.0f);
+                    debugOptions.customLineEnds[lineIndex] = Vec4Make(edge.second.x, edge.second.y, edge.second.z, 1.0f);
+                    debugOptions.customLineColors[lineIndex] = Vec4Make(color.x, color.y, color.z, 1.0f);
+                }
+            }
+        }
+    }
     if (lighting.sceneKind == SceneKind::FractureTest || lighting.sceneKind == SceneKind::City)
     {
         if (fracture.hitValid && debugOptions.selectionSphereCount < DebugRenderOptions::kMaxSelectionSpheres)
@@ -511,6 +589,7 @@ void App::Update(float dtSeconds)
 
     auto renderStart = Clock::now();
     core.renderer.SetProcCityDynamicLights(m_state.lighting.procCityDynamicLights);
+    core.renderer.SetProcCityTileContributionCutoff(m_state.lighting.procCityTileContributionCutoff);
     core.renderer.Render(
         uniforms,
         text,
