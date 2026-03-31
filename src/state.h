@@ -208,6 +208,7 @@ struct VirtualGeomState
     bool showBounds = true;
     bool showTriangles = true;
     bool showBaseMesh = false;
+    bool showClusterColors = false;
     bool freezeLod = false;
     std::vector<std::uint32_t> triangleOrder;
     std::vector<VirtualGeomCluster> clusters;

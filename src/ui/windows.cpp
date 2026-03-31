@@ -569,9 +569,10 @@ void App::BuildVirtualGeomWindow(bool& debugSettingsChanged)
             debugSettingsChanged = true;
         }
         debugSettingsChanged |= ImGui::SliderFloat("Screen error", &virtualGeom.screenErrorPixels, 2.0f, 200.0f, "%.1f px");
-        debugSettingsChanged |= ImGui::Checkbox("Show base mesh", &virtualGeom.showBaseMesh);
+        debugSettingsChanged |= ImGui::Checkbox("Show raw mesh", &virtualGeom.showBaseMesh);
         debugSettingsChanged |= ImGui::Checkbox("Show bounds", &virtualGeom.showBounds);
-        debugSettingsChanged |= ImGui::Checkbox("Show triangles", &virtualGeom.showTriangles);
+        debugSettingsChanged |= ImGui::Checkbox("Show virtualized mesh", &virtualGeom.showTriangles);
+        debugSettingsChanged |= ImGui::Checkbox("Show cluster colors", &virtualGeom.showClusterColors);
         debugSettingsChanged |= ImGui::Checkbox("Freeze LOD", &virtualGeom.freezeLod);
         if (ImGui::Button("Rebuild virtual geom"))
         {
@@ -581,7 +582,7 @@ void App::BuildVirtualGeomWindow(bool& debugSettingsChanged)
         ImGui::Text("Clusters: %u", static_cast<std::uint32_t>(virtualGeom.clusters.size()));
         ImGui::Text("Leaf clusters: %u", virtualGeom.leafClusterCount);
         ImGui::Text("Active clusters: %u", virtualGeom.activeClusterCount);
-        ImGui::TextUnformatted("Raw mesh uses the normal renderer. Virtualized draws selected cluster faces only.");
+        ImGui::TextUnformatted("Virtualized mesh uses the normal renderer with selected clusters only.");
     }
     ImGui::End();
 }

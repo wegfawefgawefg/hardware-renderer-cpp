@@ -80,7 +80,8 @@ std::uint32_t PopulateVirtualGeomAggregateModel(
     const SceneData& scene,
     const std::vector<VirtualGeomCluster>& clusters,
     const std::vector<std::uint32_t>& triangleOrder,
-    const std::vector<VirtualGeomActiveDraw>& activeDraws)
+    const std::vector<VirtualGeomActiveDraw>& activeDraws,
+    bool showClusterColors)
 {
     ResetVirtualGeomAggregateModel(aggregateModel);
     std::size_t dstVertex = 0;
@@ -95,6 +96,9 @@ std::uint32_t PopulateVirtualGeomAggregateModel(
 
         const Mat4 transform = scene.entities[activeDraw.entityIndex].transform;
         const VirtualGeomCluster& node = clusters[activeDraw.clusterIndex];
+        const float paletteU = showClusterColors
+            ? (static_cast<float>((activeDraw.clusterIndex % 255u) + 1u) + 0.5f) / 256.0f
+            : 0.5f / 256.0f;
         for (std::uint32_t triOffset = 0; triOffset < node.triangleCount; ++triOffset)
         {
             if (dstVertex + 3u > aggregateModel.mesh.vertices.size())
@@ -117,6 +121,7 @@ std::uint32_t PopulateVirtualGeomAggregateModel(
                 v.position = TransformPoint(transform, v.position);
                 Vec4 n4 = Mat4MulVec4(transform, Vec4Make(v.normal.x, v.normal.y, v.normal.z, 0.0f));
                 v.normal = NormalizeOrFallback(Vec3Make(n4.x, n4.y, n4.z), Vec3Make(0.0f, 1.0f, 0.0f));
+                v.uv = Vec2Make(paletteU, 0.5f);
                 aggregateModel.mesh.vertices[dstVertex++] = v;
             }
         }
@@ -755,7 +760,8 @@ void App::Update(float dtSeconds)
                 core.scene,
                 virtualGeom.clusters,
                 virtualGeom.triangleOrder,
-                virtualGeom.activeDraws);
+                virtualGeom.activeDraws,
+                virtualGeom.showClusterColors);
             if (!core.renderer.UpdateSceneGeometry(core.scene))
             {
                 RebuildCurrentSceneResources();

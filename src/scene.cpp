@@ -262,16 +262,35 @@ struct VirtualGeomSource
 ModelData MakeVirtualGeomAggregateModel(const ModelData& sourceModel, std::uint32_t instanceCount)
 {
     ModelData model{};
-    model.textures = sourceModel.textures;
-    model.materials = sourceModel.materials;
-    if (model.textures.empty())
+    TextureData palette{};
+    palette.width = 256;
+    palette.height = 1;
+    palette.pixels.resize(static_cast<std::size_t>(palette.width) * 4u);
+    for (std::uint32_t i = 0; i < palette.width; ++i)
     {
-        model.textures.push_back(MakeSolidTextureData(220, 220, 220));
+        std::uint8_t r = 214;
+        std::uint8_t g = 176;
+        std::uint8_t b = 104;
+        if (i > 0u)
+        {
+            float t = std::fmod(static_cast<float>(i - 1u) * 0.6180339f, 1.0f);
+            float a = t * 6.28318530718f;
+            auto channel = [a](float phase) -> std::uint8_t {
+                float v = 0.35f + 0.55f * (0.5f + 0.5f * std::sin(a + phase));
+                return static_cast<std::uint8_t>(std::clamp(v, 0.0f, 1.0f) * 255.0f);
+            };
+            r = channel(0.0f);
+            g = channel(2.0943951f);
+            b = channel(4.1887902f);
+        }
+        const std::size_t base = static_cast<std::size_t>(i) * 4u;
+        palette.pixels[base + 0u] = r;
+        palette.pixels[base + 1u] = g;
+        palette.pixels[base + 2u] = b;
+        palette.pixels[base + 3u] = 255;
     }
-    if (model.materials.empty())
-    {
-        model.materials.push_back(MaterialData{.name = "virtual_geom", .textureIndex = 0, .flipNormalY = false});
-    }
+    model.textures.push_back(std::move(palette));
+    model.materials.push_back(MaterialData{.name = "virtual_geom_palette", .textureIndex = 0, .flipNormalY = false});
 
     const std::uint32_t sourceTriangleCount = static_cast<std::uint32_t>(sourceModel.mesh.indices.size() / 3u);
     const std::uint32_t maxTriangleCount = std::max(1u, sourceTriangleCount * std::max(1u, instanceCount));
