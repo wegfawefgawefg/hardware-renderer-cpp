@@ -34,8 +34,8 @@ void App::BuildLightingWindow(bool& debugSettingsChanged)
     if (ImGui::Begin("Lighting"))
     {
         int sceneKind = static_cast<int>(lighting.sceneKind);
-        const char* sceneNames[] = {"Player Mask Test", "City", "Proc City", "Light Tile Test", "Many Lights", "Shadow Test", "Spot Shadow Test", "Vehicle Light Test", "Fracture Test"};
-        if (ImGui::Combo("Scene", &sceneKind, sceneNames, 9))
+        const char* sceneNames[] = {"Player Mask Test", "City", "Proc City", "Light Tile Test", "Many Lights", "Virtual Geom Test", "Shadow Test", "Spot Shadow Test", "Vehicle Light Test", "Fracture Test"};
+        if (ImGui::Combo("Scene", &sceneKind, sceneNames, 10))
         {
             lighting.sceneKind = static_cast<SceneKind>(sceneKind);
             runtime.reloadSceneRequested = true;
@@ -480,6 +480,108 @@ void App::BuildCityWindow(bool& debugSettingsChanged)
             debugSettingsChanged |= ImGui::Checkbox("Show light volumes", &lighting.debugDrawLightVolumes);
             debugSettingsChanged |= ImGui::Checkbox("Show labels", &lighting.debugDrawLightLabels);
         }
+    }
+    ImGui::End();
+}
+
+void App::BuildVirtualGeomWindow(bool& debugSettingsChanged)
+{
+    auto& runtime = m_state.runtime;
+    auto& lighting = m_state.lighting;
+    auto& virtualGeom = m_state.virtualGeom;
+    if (lighting.sceneKind != SceneKind::VirtualGeomTest)
+    {
+        return;
+    }
+
+    ImGuiViewport* viewport = ImGui::GetMainViewport();
+    ImVec2 pos(
+        viewport->WorkPos.x + viewport->WorkSize.x - kRightColumnWindowSize.x - kWindowPad,
+        viewport->WorkPos.y + kRightColumnWindowSize.y + 132.0f + 252.0f + kWindowPad * 4.0f
+    );
+    ImGui::SetNextWindowPos(pos, ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(320.0f, 280.0f), ImGuiCond_FirstUseEver);
+    if (ImGui::Begin("Virtual Geom"))
+    {
+        int renderMode = static_cast<int>(virtualGeom.renderMode);
+        const char* renderModeNames[] = {"Raw mesh", "Virtualized", "Both"};
+        if (ImGui::Combo("Render mode", &renderMode, renderModeNames, IM_ARRAYSIZE(renderModeNames)))
+        {
+            virtualGeom.renderMode = static_cast<VirtualGeomRenderMode>(renderMode);
+            debugSettingsChanged = true;
+        }
+        int meshKind = static_cast<int>(virtualGeom.meshKind);
+        const char* meshNames[] = {"UV Sphere", "Cube", "Dragon"};
+        if (ImGui::Combo("Mesh", &meshKind, meshNames, IM_ARRAYSIZE(meshNames)))
+        {
+            virtualGeom.meshKind = static_cast<VirtualGeomMeshKind>(meshKind);
+            runtime.reloadSceneRequested = true;
+            debugSettingsChanged = true;
+        }
+        if (virtualGeom.meshKind == VirtualGeomMeshKind::UvSphere)
+        {
+            int lon = static_cast<int>(virtualGeom.sphereLongitudeSegments);
+            int lat = static_cast<int>(virtualGeom.sphereLatitudeSegments);
+            if (ImGui::SliderInt("Longitude", &lon, 6, 128))
+            {
+                virtualGeom.sphereLongitudeSegments = static_cast<std::uint32_t>(lon);
+                runtime.reloadSceneRequested = true;
+                debugSettingsChanged = true;
+            }
+            if (ImGui::SliderInt("Latitude", &lat, 4, 64))
+            {
+                virtualGeom.sphereLatitudeSegments = static_cast<std::uint32_t>(lat);
+                runtime.reloadSceneRequested = true;
+                debugSettingsChanged = true;
+            }
+        }
+        int gridX = static_cast<int>(virtualGeom.gridCountX);
+        int gridZ = static_cast<int>(virtualGeom.gridCountZ);
+        if (ImGui::SliderInt("Grid X", &gridX, 1, 128))
+        {
+            virtualGeom.gridCountX = static_cast<std::uint32_t>(gridX);
+            runtime.reloadSceneRequested = true;
+            debugSettingsChanged = true;
+        }
+        if (ImGui::SliderInt("Grid Z", &gridZ, 1, 128))
+        {
+            virtualGeom.gridCountZ = static_cast<std::uint32_t>(gridZ);
+            runtime.reloadSceneRequested = true;
+            debugSettingsChanged = true;
+        }
+        if (ImGui::SliderFloat("Spacing", &virtualGeom.gridSpacing, 0.5f, 32.0f, "%.2f"))
+        {
+            runtime.reloadSceneRequested = true;
+            debugSettingsChanged = true;
+        }
+        int maxClusterTriangles = static_cast<int>(virtualGeom.maxClusterTriangles);
+        if (ImGui::SliderInt("Max cluster tris", &maxClusterTriangles, 8, 256))
+        {
+            virtualGeom.maxClusterTriangles = static_cast<std::uint32_t>(maxClusterTriangles);
+            runtime.reloadSceneRequested = true;
+            debugSettingsChanged = true;
+        }
+        int maxDepth = static_cast<int>(virtualGeom.maxDepth);
+        if (ImGui::SliderInt("Max depth", &maxDepth, 1, 16))
+        {
+            virtualGeom.maxDepth = static_cast<std::uint32_t>(maxDepth);
+            runtime.reloadSceneRequested = true;
+            debugSettingsChanged = true;
+        }
+        debugSettingsChanged |= ImGui::SliderFloat("Screen error", &virtualGeom.screenErrorPixels, 2.0f, 200.0f, "%.1f px");
+        debugSettingsChanged |= ImGui::Checkbox("Show base mesh", &virtualGeom.showBaseMesh);
+        debugSettingsChanged |= ImGui::Checkbox("Show bounds", &virtualGeom.showBounds);
+        debugSettingsChanged |= ImGui::Checkbox("Show triangles", &virtualGeom.showTriangles);
+        debugSettingsChanged |= ImGui::Checkbox("Freeze LOD", &virtualGeom.freezeLod);
+        if (ImGui::Button("Rebuild virtual geom"))
+        {
+            runtime.reloadSceneRequested = true;
+            debugSettingsChanged = true;
+        }
+        ImGui::Text("Clusters: %u", static_cast<std::uint32_t>(virtualGeom.clusters.size()));
+        ImGui::Text("Leaf clusters: %u", virtualGeom.leafClusterCount);
+        ImGui::Text("Active clusters: %u", virtualGeom.activeClusterCount);
+        ImGui::TextUnformatted("Raw mesh uses the normal renderer. Virtualized draws selected cluster faces only.");
     }
     ImGui::End();
 }

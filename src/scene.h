@@ -117,6 +117,7 @@ enum class SceneKind
     ProcCity,
     LightTileTest,
     ManyLights,
+    VirtualGeomTest,
     ShadowTest,
     SpotShadowTest,
     VehicleLightTest,
@@ -129,8 +130,33 @@ enum class ManyLightsHeroModel : std::uint32_t
     Sponza = 1,
 };
 
+enum class VirtualGeomMeshKind : std::uint32_t
+{
+    UvSphere = 0,
+    Cube = 1,
+    Dragon = 2,
+};
+
+enum class VirtualGeomRenderMode : std::uint32_t
+{
+    RawMesh = 0,
+    Virtualized = 1,
+    Both = 2,
+};
+
+struct VirtualGeomSceneConfig
+{
+    VirtualGeomMeshKind meshKind = VirtualGeomMeshKind::UvSphere;
+    std::uint32_t sphereLongitudeSegments = 32;
+    std::uint32_t sphereLatitudeSegments = 16;
+    std::uint32_t gridCountX = 1;
+    std::uint32_t gridCountZ = 1;
+    float gridSpacing = 8.0f;
+};
+
 SceneBounds ComputeSceneBounds(const SceneData& scene);
 std::uint32_t CountSceneTriangles(const SceneData& scene);
 SceneData BuildFractureTestScene(const AssetRegistry& assetRegistry, const FractureSceneConfig& config);
 SceneData BuildVehicleLightTestScene(const AssetRegistry& assetRegistry);
+SceneData BuildVirtualGeomTestScene(const AssetRegistry& assetRegistry, const VirtualGeomSceneConfig& config);
 SceneData LoadSampleScene(const AssetRegistry& assetRegistry, SceneKind kind, ManyLightsHeroModel manyLightsHeroModel);

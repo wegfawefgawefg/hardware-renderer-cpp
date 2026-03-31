@@ -128,6 +128,7 @@ struct DebugRenderOptions
     static constexpr std::uint32_t kMaxSelectionSpheres = 16;
     static constexpr std::uint32_t kMaxCustomCubes = 1024;
     static constexpr std::uint32_t kMaxCustomLines = 32768;
+    static constexpr std::uint32_t kMaxCustomSolidVertices = 262144;
     bool drawLightProxies = true;
     bool drawLightMarkers = true;
     bool drawLightDirections = false;
@@ -149,6 +150,9 @@ struct DebugRenderOptions
     std::array<Vec4, kMaxCustomLines> customLineStarts = {};
     std::array<Vec4, kMaxCustomLines> customLineEnds = {};
     std::array<Vec4, kMaxCustomLines> customLineColors = {};
+    std::uint32_t customSolidVertexCount = 0;
+    std::array<Vec4, kMaxCustomSolidVertices> customSolidVertices = {};
+    std::array<Vec4, kMaxCustomSolidVertices> customSolidColors = {};
 };
 
 struct RenderProfilingStats
@@ -261,6 +265,12 @@ struct VulkanRenderer
     void SetProcCityDynamicLights(std::span<const DynamicPointLightGpu> lights);
     void SetProcCityTileContributionCutoff(float cutoff) { m_debugTileContributionCutoff = cutoff; }
     void SetProcCityTiledOccupancyMode(std::uint32_t mode) { m_procCityTiledOccupancyMode = mode; }
+    void SetHideSceneMesh(bool hide) { m_hideSceneMesh = hide; }
+    void SetHiddenModelIndices(std::uint32_t primary, std::uint32_t secondary = std::numeric_limits<std::uint32_t>::max())
+    {
+        m_hiddenModelIndex = primary;
+        m_hiddenModelIndexSecondary = secondary;
+    }
     void AppendPersistentPaint(const PaintSplatSpawn& splat);
     void ResetAccumulatedPaint();
     std::uint32_t GetAccumulatedPaintHitCount() const;
@@ -338,6 +348,9 @@ struct VulkanRenderer
     std::array<VkDescriptorSet, text::kMaxAtlases> m_overlayDescriptorSets = {};
     VkDescriptorSet m_postDescriptorSet = VK_NULL_HANDLE;
     VkPipelineLayout m_overlayPipelineLayout = VK_NULL_HANDLE;
+    bool m_hideSceneMesh = false;
+    std::uint32_t m_hiddenModelIndex = std::numeric_limits<std::uint32_t>::max();
+    std::uint32_t m_hiddenModelIndexSecondary = std::numeric_limits<std::uint32_t>::max();
     VkPipelineLayout m_postPipelineLayout = VK_NULL_HANDLE;
     VkPipeline m_overlayPipeline = VK_NULL_HANDLE;
     VkPipeline m_postPipeline = VK_NULL_HANDLE;
@@ -418,6 +431,7 @@ struct VulkanRenderer
         std::uint32_t indexCount = 0;
         std::uint32_t descriptorIndex = 0;
         std::uint32_t skinned = 0;
+        std::uint32_t modelIndex = 0;
         std::uint32_t entityIndex = 0;
         std::uint32_t primitiveIndex = 0;
         std::uint32_t materialFlags = 0;
@@ -432,6 +446,7 @@ struct VulkanRenderer
         std::uint32_t firstIndex = 0;
         std::uint32_t indexCount = 0;
         std::uint32_t descriptorIndex = 0;
+        std::uint32_t modelIndex = 0;
         bool flipNormalY = true;
     };
 

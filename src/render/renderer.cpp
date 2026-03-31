@@ -5,6 +5,11 @@
 #include <cmath>
 #include <cstring>
 
+namespace
+{
+const DebugRenderOptions kDefaultDebugRenderOptions{};
+}
+
 void VulkanRenderer::Render(
     const SceneUniforms& uniforms,
     const text::System& text,
@@ -65,7 +70,7 @@ void VulkanRenderer::Render(
         ? std::min<std::uint32_t>(static_cast<std::uint32_t>(uniforms.sceneLightCounts.y), kMaxShadowedSpotLights)
         : 0u;
     m_activeShadowMapCount = activeSunShadowCascades + m_activeShadowedSpotCount;
-    DebugRenderOptions debug = debugOptions != nullptr ? *debugOptions : DebugRenderOptions{};
+    const DebugRenderOptions& debug = debugOptions != nullptr ? *debugOptions : kDefaultDebugRenderOptions;
     m_useProcCityPipeline = debug.useProcCityPipeline;
     m_useProcCityTiledLighting = debug.useProcCityTiledLighting;
     m_mainCullDistance = std::max(debug.mainDrawDistance, 1.0f);

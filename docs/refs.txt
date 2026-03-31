@@ -2,3 +2,4 @@ https://gpuopen.com/learn/rdna-performance-guide/
 
 https://www.vulkanprogrammingguide.com/
 https://github.khronos.org/Vulkan-Site/guide/latest/shader_memory_layout.html
+https://lxjk.github.io/2018/03/25/Improve-Tile-based-Light-Culling-with-Spherical-sliced-Cone.html

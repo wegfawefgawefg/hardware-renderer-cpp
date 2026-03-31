@@ -14,6 +14,7 @@ namespace
 constexpr std::string_view kCharacterModelAsset = "kenney/animated-characters-1/Model/characterMedium.fbx";
 constexpr std::string_view kCharacterTextureAsset = "kenney/animated-characters-1/Skins/survivorMaleB.png";
 constexpr std::string_view kSponzaGltfAsset = "sponza_optimized/Sponza.gltf";
+constexpr std::string_view kDragonGltfAsset = "dragon_attenuation/DragonAttenuation.gltf";
 
 Vec3 TransformPoint(Mat4 m, Vec3 p)
 {
@@ -146,6 +147,207 @@ ModelData MakeVerticalQuadModel(float halfWidth, float halfHeight, std::uint8_t 
     return model;
 }
 
+ModelData MakeUvSphereModel(
+    float radius,
+    std::uint32_t longitudeSegments,
+    std::uint32_t latitudeSegments,
+    std::uint8_t r,
+    std::uint8_t g,
+    std::uint8_t b)
+{
+    ModelData model{};
+    model.textures.push_back(MakeSolidTextureData(r, g, b));
+    model.materials.push_back(MaterialData{.name = "solid", .textureIndex = 0, .flipNormalY = false});
+
+    longitudeSegments = std::max<std::uint32_t>(longitudeSegments, 3u);
+    latitudeSegments = std::max<std::uint32_t>(latitudeSegments, 2u);
+
+    for (std::uint32_t lat = 0; lat <= latitudeSegments; ++lat)
+    {
+        float v = static_cast<float>(lat) / static_cast<float>(latitudeSegments);
+        float theta = v * 3.14159265359f;
+        float sinTheta = std::sin(theta);
+        float cosTheta = std::cos(theta);
+        for (std::uint32_t lon = 0; lon <= longitudeSegments; ++lon)
+        {
+            float u = static_cast<float>(lon) / static_cast<float>(longitudeSegments);
+            float phi = u * 6.28318530718f;
+            float sinPhi = std::sin(phi);
+            float cosPhi = std::cos(phi);
+            Vec3 normal = Vec3Make(cosPhi * sinTheta, cosTheta, sinPhi * sinTheta);
+            model.mesh.vertices.push_back(Vertex{
+                .position = Vec3Scale(normal, radius),
+                .normal = normal,
+                .uv = Vec2Make(u, v),
+            });
+        }
+    }
+
+    const std::uint32_t stride = longitudeSegments + 1u;
+    for (std::uint32_t lat = 0; lat < latitudeSegments; ++lat)
+    {
+        for (std::uint32_t lon = 0; lon < longitudeSegments; ++lon)
+        {
+            std::uint32_t i0 = lat * stride + lon;
+            std::uint32_t i1 = i0 + 1u;
+            std::uint32_t i2 = i0 + stride;
+            std::uint32_t i3 = i2 + 1u;
+            if (lat != 0u)
+            {
+                model.mesh.indices.insert(model.mesh.indices.end(), {i0, i1, i2});
+            }
+            if (lat + 1u != latitudeSegments)
+            {
+                model.mesh.indices.insert(model.mesh.indices.end(), {i1, i3, i2});
+            }
+        }
+    }
+
+    model.primitives.push_back(PrimitiveData{
+        .firstIndex = 0,
+        .indexCount = static_cast<std::uint32_t>(model.mesh.indices.size()),
+        .materialIndex = 0,
+    });
+    return model;
+}
+
+ModelData MakeVirtualGeomCubeModel(float halfExtent, std::uint8_t r, std::uint8_t g, std::uint8_t b)
+{
+    ModelData model = MakeBoxModel(Vec3Make(halfExtent, halfExtent, halfExtent), r, g, b);
+    model.materials[0].flipNormalY = false;
+    return model;
+}
+
+float ComputeModelMinY(const ModelData& model, Mat4 transform)
+{
+    if (model.mesh.vertices.empty())
+    {
+        return 0.0f;
+    }
+    float minY = 1e30f;
+    for (const Vertex& vertex : model.mesh.vertices)
+    {
+        minY = std::min(minY, TransformPoint(transform, vertex.position).y);
+    }
+    return minY;
+}
+
+float ComputeModelFootprintTransformed(const ModelData& model, Mat4 transform)
+{
+    if (model.mesh.vertices.empty())
+    {
+        return 1.0f;
+    }
+
+    Vec3 mn = TransformPoint(transform, model.mesh.vertices.front().position);
+    Vec3 mx = mn;
+    for (const Vertex& vertex : model.mesh.vertices)
+    {
+        Vec3 p = TransformPoint(transform, vertex.position);
+        mn.x = std::min(mn.x, p.x);
+        mn.z = std::min(mn.z, p.z);
+        mx.x = std::max(mx.x, p.x);
+        mx.z = std::max(mx.z, p.z);
+    }
+    return std::max(std::max(mx.x - mn.x, mx.z - mn.z), 0.001f);
+}
+
+struct VirtualGeomSource
+{
+    ModelData model;
+    Mat4 baseTransform = Mat4Identity();
+    std::string assetPath;
+};
+
+ModelData MakeVirtualGeomAggregateModel(const ModelData& sourceModel, std::uint32_t instanceCount)
+{
+    ModelData model{};
+    model.textures = sourceModel.textures;
+    model.materials = sourceModel.materials;
+    if (model.textures.empty())
+    {
+        model.textures.push_back(MakeSolidTextureData(220, 220, 220));
+    }
+    if (model.materials.empty())
+    {
+        model.materials.push_back(MaterialData{.name = "virtual_geom", .textureIndex = 0, .flipNormalY = false});
+    }
+
+    const std::uint32_t sourceTriangleCount = static_cast<std::uint32_t>(sourceModel.mesh.indices.size() / 3u);
+    const std::uint32_t maxTriangleCount = std::max(1u, sourceTriangleCount * std::max(1u, instanceCount));
+    model.mesh.vertices.resize(static_cast<std::size_t>(maxTriangleCount) * 3u);
+    model.mesh.indices.resize(static_cast<std::size_t>(maxTriangleCount) * 3u);
+    for (std::uint32_t i = 0; i < maxTriangleCount * 3u; ++i)
+    {
+        model.mesh.indices[static_cast<std::size_t>(i)] = i;
+    }
+    model.primitives.push_back(PrimitiveData{
+        .firstIndex = 0,
+        .indexCount = static_cast<std::uint32_t>(model.mesh.indices.size()),
+        .materialIndex = 0,
+    });
+    return model;
+}
+
+float ComputeModelFootprint(const ModelData& model);
+Vec3 ComputeModelMin(const ModelData& model);
+
+void ForceSolidBenchmarkMaterial(ModelData& model, std::uint8_t r, std::uint8_t g, std::uint8_t b)
+{
+    model.textures.clear();
+    model.textures.push_back(MakeSolidTextureData(r, g, b));
+    if (model.materials.empty())
+    {
+        model.materials.push_back(MaterialData{.name = "benchmark_solid", .textureIndex = 0, .flipNormalY = false});
+    }
+    for (MaterialData& material : model.materials)
+    {
+        material.textureIndex = 0;
+        material.normalTextureIndex = -1;
+        material.flipNormalY = false;
+        material.leanShading = false;
+    }
+}
+
+VirtualGeomSource MakeVirtualGeomSource(const AssetRegistry& assetRegistry, const VirtualGeomSceneConfig& config)
+{
+    if (config.meshKind == VirtualGeomMeshKind::Dragon)
+    {
+        const std::filesystem::path* dragonPath = assetRegistry.FindByRelativePath(kDragonGltfAsset);
+        if (dragonPath != nullptr)
+        {
+            SceneData scene = LoadGltfScene(dragonPath->string());
+            if (scene.models.size() >= 2 && scene.entities.size() >= 2)
+            {
+                VirtualGeomSource source{};
+                source.model = scene.models[1];
+                source.assetPath = std::string(kDragonGltfAsset);
+                source.baseTransform = Mat4Identity();
+                ForceSolidBenchmarkMaterial(source.model, 214, 176, 104);
+                float footprint = ComputeModelFootprint(source.model);
+                float scale = 8.0f / std::max(footprint, 0.001f);
+                source.baseTransform = Mat4Scale(scale);
+                return source;
+            }
+        }
+    }
+
+    VirtualGeomSource source{};
+    source.model = config.meshKind == VirtualGeomMeshKind::Cube
+        ? MakeVirtualGeomCubeModel(3.0f, 220, 220, 220)
+        : MakeUvSphereModel(
+            3.0f,
+            config.sphereLongitudeSegments,
+            config.sphereLatitudeSegments,
+            220,
+            220,
+            220);
+    source.assetPath = config.meshKind == VirtualGeomMeshKind::Cube
+        ? "generated/virtual_geom_cube"
+        : "generated/virtual_geom_subject";
+    return source;
+}
+
 SceneData BuildLightTileTestScene(const AssetRegistry&)
 {
     SceneData scene{};
@@ -248,6 +450,56 @@ SceneData BuildManyLightsScene(const AssetRegistry& assetRegistry, ManyLightsHer
         .modelIndex = 1,
         .transform = Mat4Translate(Vec3Make(0.0f, 4.0f, 10.0f)),
         .assetPath = "generated/many_lights_hero_box",
+        .collidable = false,
+    });
+    return scene;
+}
+
+SceneData MakeVirtualGeomTestScene(const AssetRegistry& assetRegistry, const VirtualGeomSceneConfig& config)
+{
+    SceneData scene{};
+    VirtualGeomSource source = MakeVirtualGeomSource(assetRegistry, config);
+    float gridWidth = std::max(1.0f, static_cast<float>(std::max(1u, config.gridCountX) - 1u) * config.gridSpacing);
+    float gridDepth = std::max(1.0f, static_cast<float>(std::max(1u, config.gridCountZ) - 1u) * config.gridSpacing);
+    float planeHalfExtent = std::max(12.0f, std::max(gridWidth, gridDepth) * 0.75f + 8.0f);
+    scene.models.push_back(std::move(source.model));
+    scene.models.push_back(MakePlaneModel(planeHalfExtent, 52, 52, 56));
+    scene.models.push_back(MakeVirtualGeomAggregateModel(
+        scene.models[0],
+        std::max(1u, config.gridCountX) * std::max(1u, config.gridCountZ)));
+
+    scene.entities.push_back(EntityData{
+        .modelIndex = 1,
+        .transform = Mat4Identity(),
+        .assetPath = "generated/virtual_geom_floor",
+        .collidable = false,
+    });
+
+    const std::uint32_t gridCountX = std::max(1u, config.gridCountX);
+    const std::uint32_t gridCountZ = std::max(1u, config.gridCountZ);
+    const float startX = -0.5f * static_cast<float>(gridCountX - 1u) * config.gridSpacing;
+    const float startZ = -0.5f * static_cast<float>(gridCountZ - 1u) * config.gridSpacing;
+    const float modelMinY = ComputeModelMinY(scene.models[0], source.baseTransform);
+    for (std::uint32_t z = 0; z < gridCountZ; ++z)
+    {
+        for (std::uint32_t x = 0; x < gridCountX; ++x)
+        {
+            Vec3 pos = Vec3Make(
+                startX + static_cast<float>(x) * config.gridSpacing,
+                -modelMinY,
+                startZ + static_cast<float>(z) * config.gridSpacing);
+            scene.entities.push_back(EntityData{
+                .modelIndex = 0,
+                .transform = Mat4Mul(Mat4Translate(pos), source.baseTransform),
+                .assetPath = source.assetPath,
+                .collidable = false,
+            });
+        }
+    }
+    scene.entities.push_back(EntityData{
+        .modelIndex = 2,
+        .transform = Mat4Identity(),
+        .assetPath = "generated/virtual_geom_aggregate",
         .collidable = false,
     });
     return scene;
@@ -570,6 +822,10 @@ SceneData LoadSampleScene(const AssetRegistry& assetRegistry, SceneKind kind, Ma
     {
         return BuildManyLightsScene(assetRegistry, manyLightsHeroModel);
     }
+    if (kind == SceneKind::VirtualGeomTest)
+    {
+        return MakeVirtualGeomTestScene(assetRegistry, VirtualGeomSceneConfig{});
+    }
     if (kind == SceneKind::ShadowTest)
     {
         return BuildShadowTestScene(assetRegistry);
@@ -585,4 +841,9 @@ SceneData LoadSampleScene(const AssetRegistry& assetRegistry, SceneKind kind, Ma
     CitySceneConfig config{};
     config.buildingMode = CitySceneConfig::BuildingMode::Kenney;
     return BuildSampleCity(assetRegistry, config);
+}
+
+SceneData BuildVirtualGeomTestScene(const AssetRegistry& assetRegistry, const VirtualGeomSceneConfig& config)
+{
+    return MakeVirtualGeomTestScene(assetRegistry, config);
 }

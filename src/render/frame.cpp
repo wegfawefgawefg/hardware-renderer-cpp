@@ -10,6 +10,14 @@
 
 using namespace vulkan_renderer_internal;
 
+namespace
+{
+bool ModelHidden(const VulkanRenderer& renderer, std::uint32_t modelIndex)
+{
+    return modelIndex == renderer.m_hiddenModelIndex || modelIndex == renderer.m_hiddenModelIndexSecondary;
+}
+}
+
 void VulkanRenderer::RecordCommandBuffer(std::uint32_t imageIndex)
 {
     VkCommandBuffer commandBuffer = m_commandBuffers[imageIndex];
@@ -68,31 +76,38 @@ void VulkanRenderer::RecordCommandBuffer(std::uint32_t imageIndex)
     VkBuffer instancedBuffers[] = {m_vertexBuffer.buffer, m_staticInstanceBuffer.buffer};
     VkDeviceSize instanceOffsets[] = {0, 0};
     vkCmdBindVertexBuffers(commandBuffer, 0, 2, instancedBuffers, instanceOffsets);
-    for (std::size_t batchIndex = 0; batchIndex < m_staticBatches.size(); ++batchIndex)
+    if (!m_hideSceneMesh)
     {
-        const std::vector<std::uint32_t>& visibleItems = m_visibleStaticBatchDrawItems[batchIndex];
-        if (visibleItems.empty())
+        for (std::size_t batchIndex = 0; batchIndex < m_staticBatches.size(); ++batchIndex)
         {
-            continue;
+            const std::vector<std::uint32_t>& visibleItems = m_visibleStaticBatchDrawItems[batchIndex];
+            if (visibleItems.empty())
+            {
+                continue;
+            }
+            const StaticBatch& batch = m_staticBatches[batchIndex];
+            if (ModelHidden(*this, batch.modelIndex))
+            {
+                continue;
+            }
+            vkCmdBindDescriptorSets(
+                commandBuffer,
+                VK_PIPELINE_BIND_POINT_GRAPHICS,
+                m_pipelineLayout,
+                0,
+                1,
+                &m_descriptorSets[batch.descriptorIndex],
+                0,
+                nullptr
+            );
+            vkCmdDrawIndexed(
+                commandBuffer,
+                batch.indexCount,
+                static_cast<std::uint32_t>(visibleItems.size()),
+                batch.firstIndex,
+                0,
+                m_staticBatchFirstInstance[batchIndex]);
         }
-        const StaticBatch& batch = m_staticBatches[batchIndex];
-        vkCmdBindDescriptorSets(
-            commandBuffer,
-            VK_PIPELINE_BIND_POINT_GRAPHICS,
-            m_pipelineLayout,
-            0,
-            1,
-            &m_descriptorSets[batch.descriptorIndex],
-            0,
-            nullptr
-        );
-        vkCmdDrawIndexed(
-            commandBuffer,
-            batch.indexCount,
-            static_cast<std::uint32_t>(visibleItems.size()),
-            batch.firstIndex,
-            0,
-            m_staticBatchFirstInstance[batchIndex]);
     }
 
     VkBuffer singleDrawBuffers[] = {m_vertexBuffer.buffer, m_nullInstanceBuffer.buffer};
@@ -102,39 +117,46 @@ void VulkanRenderer::RecordCommandBuffer(std::uint32_t imageIndex)
     {
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline);
     }
-    for (std::uint32_t visibleIndex : m_visibleDrawItems)
+    if (!m_hideSceneMesh)
     {
-        const DrawItem& drawItem = m_drawItems[visibleIndex];
-        DrawPushConstants pushConstants{};
-        pushConstants.model = drawItem.model;
-        pushConstants.skinned = drawItem.skinned;
-        pushConstants.pointLightMask = drawItem.pointLightMask;
-        pushConstants.spotLightMask = drawItem.spotLightMask;
-        pushConstants.shadowedSpotLightMask = drawItem.shadowedSpotLightMask;
-        pushConstants.materialFlags = drawItem.materialFlags;
-        if (drawItem.flipNormalY)
+        for (std::uint32_t visibleIndex : m_visibleDrawItems)
         {
-            pushConstants.materialFlags |= 1u;
+            const DrawItem& drawItem = m_drawItems[visibleIndex];
+            if (ModelHidden(*this, drawItem.modelIndex))
+            {
+                continue;
+            }
+            DrawPushConstants pushConstants{};
+            pushConstants.model = drawItem.model;
+            pushConstants.skinned = drawItem.skinned;
+            pushConstants.pointLightMask = drawItem.pointLightMask;
+            pushConstants.spotLightMask = drawItem.spotLightMask;
+            pushConstants.shadowedSpotLightMask = drawItem.shadowedSpotLightMask;
+            pushConstants.materialFlags = drawItem.materialFlags;
+            if (drawItem.flipNormalY)
+            {
+                pushConstants.materialFlags |= 1u;
+            }
+            vkCmdPushConstants(
+                commandBuffer,
+                m_pipelineLayout,
+                VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                0,
+                sizeof(pushConstants),
+                &pushConstants
+            );
+            vkCmdBindDescriptorSets(
+                commandBuffer,
+                VK_PIPELINE_BIND_POINT_GRAPHICS,
+                m_pipelineLayout,
+                0,
+                1,
+                &m_descriptorSets[drawItem.descriptorIndex],
+                0,
+                nullptr
+            );
+            vkCmdDrawIndexed(commandBuffer, drawItem.indexCount, 1, drawItem.firstIndex, 0, 0);
         }
-        vkCmdPushConstants(
-            commandBuffer,
-            m_pipelineLayout,
-            VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-            0,
-            sizeof(pushConstants),
-            &pushConstants
-        );
-        vkCmdBindDescriptorSets(
-            commandBuffer,
-            VK_PIPELINE_BIND_POINT_GRAPHICS,
-            m_pipelineLayout,
-            0,
-            1,
-            &m_descriptorSets[drawItem.descriptorIndex],
-            0,
-            nullptr
-        );
-        vkCmdDrawIndexed(commandBuffer, drawItem.indexCount, 1, drawItem.firstIndex, 0, 0);
     }
 
     if (m_hasCharacter && m_characterState.visible && m_characterIndexCount > 0)

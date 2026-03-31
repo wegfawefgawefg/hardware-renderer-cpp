@@ -40,17 +40,7 @@ void VulkanRenderer::UpdateMainPassVisibility(const SceneUniforms& uniforms)
         }
         if (SphereIntersectsFrustum(frustum, worldCenter, worldRadius))
         {
-            bool hasUniquePaint = drawIndex < m_paintLayers.size() && m_paintLayers[drawIndex].allocated;
-            if (drawItem.batchedStatic &&
-                !hasUniquePaint &&
-                drawItem.staticBatchIndex < m_visibleStaticBatchDrawItems.size())
-            {
-                m_visibleStaticBatchDrawItems[drawItem.staticBatchIndex].push_back(drawIndex);
-            }
-            else
-            {
-                m_visibleDrawItems.push_back(drawIndex);
-            }
+            m_visibleDrawItems.push_back(drawIndex);
         }
     }
 }

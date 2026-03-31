@@ -93,6 +93,7 @@ void VulkanRenderer::CreateSceneBuffers(const SceneData& scene)
             item.firstIndex = baseIndex + primitive.firstIndex;
             item.indexCount = primitive.indexCount;
             item.descriptorIndex = static_cast<std::uint32_t>(m_drawItems.size());
+            item.modelIndex = entity.modelIndex;
             item.entityIndex = static_cast<std::uint32_t>(&entity - scene.entities.data());
             item.primitiveIndex = static_cast<std::uint32_t>(&primitive - model.primitives.data());
             if (primitive.materialIndex < model.materials.size())
@@ -120,6 +121,7 @@ void VulkanRenderer::CreateSceneBuffers(const SceneData& scene)
                     .firstIndex = storedItem.firstIndex,
                     .indexCount = storedItem.indexCount,
                     .descriptorIndex = storedItem.descriptorIndex,
+                    .modelIndex = storedItem.modelIndex,
                     .flipNormalY = storedItem.flipNormalY,
                 });
                 m_visibleStaticBatchDrawItems.emplace_back();
@@ -344,6 +346,7 @@ bool VulkanRenderer::UpdateSceneGeometry(const SceneData& scene)
             item.firstIndex = baseIndex + primitive.firstIndex;
             item.indexCount = primitive.indexCount;
             item.descriptorIndex = static_cast<std::uint32_t>(newDrawItems.size());
+            item.modelIndex = entity.modelIndex;
             item.entityIndex = static_cast<std::uint32_t>(&entity - scene.entities.data());
             item.primitiveIndex = static_cast<std::uint32_t>(&primitive - model.primitives.data());
             if (primitive.materialIndex < model.materials.size())
@@ -371,6 +374,7 @@ bool VulkanRenderer::UpdateSceneGeometry(const SceneData& scene)
                     .firstIndex = storedItem.firstIndex,
                     .indexCount = storedItem.indexCount,
                     .descriptorIndex = storedItem.descriptorIndex,
+                    .modelIndex = storedItem.modelIndex,
                     .flipNormalY = storedItem.flipNormalY,
                 });
                 newVisibleStaticBatchDrawItems.emplace_back();

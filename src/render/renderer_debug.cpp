@@ -357,4 +357,19 @@ void VulkanRenderer::BuildDebugLightGeometry(
             Vec3Make(end.x, end.y, end.z),
             Vec3Make(color.x, color.y, color.z));
     }
+
+    for (std::uint32_t i = 0; i + 2u < debug.customSolidVertexCount && i + 2u < DebugRenderOptions::kMaxCustomSolidVertices; i += 3u)
+    {
+        Vec4 a = debug.customSolidVertices[i + 0u];
+        Vec4 b = debug.customSolidVertices[i + 1u];
+        Vec4 c = debug.customSolidVertices[i + 2u];
+        Vec4 color = debug.customSolidColors[i];
+        AppendTriangle(
+            lightSolids,
+            m_lightSolidVertexCount,
+            Vec3Make(a.x, a.y, a.z),
+            Vec3Make(b.x, b.y, b.z),
+            Vec3Make(c.x, c.y, c.z),
+            Vec3Make(color.x, color.y, color.z));
+    }
 }

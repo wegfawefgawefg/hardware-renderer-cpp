@@ -6,6 +6,14 @@
 
 using namespace vulkan_renderer_internal;
 
+namespace
+{
+bool ModelHidden(const VulkanRenderer& renderer, std::uint32_t modelIndex)
+{
+    return modelIndex == renderer.m_hiddenModelIndex || modelIndex == renderer.m_hiddenModelIndexSecondary;
+}
+}
+
 void VulkanRenderer::CreateShadowRenderPass()
 {
     VkAttachmentDescription depthAttachment{};
@@ -232,6 +240,10 @@ void VulkanRenderer::RecordShadowPass(VkCommandBuffer commandBuffer, std::uint32
                 continue;
             }
             const StaticBatch& batch = m_staticBatches[batchIndex];
+            if (ModelHidden(*this, batch.modelIndex))
+            {
+                continue;
+            }
             DrawPushConstants pushConstants{};
             pushConstants.model = Mat4Identity();
             pushConstants.shadowCascade = cascadeIndex;
@@ -263,6 +275,10 @@ void VulkanRenderer::RecordShadowPass(VkCommandBuffer commandBuffer, std::uint32
     for (std::uint32_t drawIndex = 0; drawIndex < m_drawItems.size(); ++drawIndex)
     {
         const DrawItem& drawItem = m_drawItems[drawIndex];
+        if (ModelHidden(*this, drawItem.modelIndex))
+        {
+            continue;
+        }
         if (!drawItem.castsShadows)
         {
             continue;

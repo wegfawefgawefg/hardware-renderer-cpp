@@ -1,7 +1,9 @@
 #include "app.h"
 
+#include <algorithm>
 #include <array>
 #include <cmath>
+#include <numeric>
 #include <stdexcept>
 
 #include "decals/flat_decal_system.h"
@@ -86,6 +88,119 @@ float ComputeStaticModelMinY(const ModelData& model, Mat4 transform)
     }
     return minY;
 }
+
+void ComputeTriangleBounds(
+    const ModelData& model,
+    std::uint32_t triIndex,
+    Vec3& outMin,
+    Vec3& outMax,
+    Vec3& outCentroid)
+{
+    const std::uint32_t i0 = model.mesh.indices[triIndex * 3u + 0u];
+    const std::uint32_t i1 = model.mesh.indices[triIndex * 3u + 1u];
+    const std::uint32_t i2 = model.mesh.indices[triIndex * 3u + 2u];
+    const Vec3 p0 = model.mesh.vertices[i0].position;
+    const Vec3 p1 = model.mesh.vertices[i1].position;
+    const Vec3 p2 = model.mesh.vertices[i2].position;
+    outMin = Vec3Make(
+        std::min(std::min(p0.x, p1.x), p2.x),
+        std::min(std::min(p0.y, p1.y), p2.y),
+        std::min(std::min(p0.z, p1.z), p2.z));
+    outMax = Vec3Make(
+        std::max(std::max(p0.x, p1.x), p2.x),
+        std::max(std::max(p0.y, p1.y), p2.y),
+        std::max(std::max(p0.z, p1.z), p2.z));
+    outCentroid = Vec3Scale(Vec3Add(Vec3Add(p0, p1), p2), 1.0f / 3.0f);
+}
+
+std::int32_t BuildVirtualGeomClusterRecursive(
+    const ModelData& model,
+    VirtualGeomState& virtualGeom,
+    std::uint32_t begin,
+    std::uint32_t end,
+    std::uint32_t depth)
+{
+    VirtualGeomCluster node{};
+    node.firstTriangle = begin;
+    node.triangleCount = end - begin;
+    node.depth = depth;
+    node.min = Vec3Make(1e30f, 1e30f, 1e30f);
+    node.max = Vec3Make(-1e30f, -1e30f, -1e30f);
+
+    std::vector<Vec3> centroids;
+    centroids.reserve(end - begin);
+    for (std::uint32_t i = begin; i < end; ++i)
+    {
+        Vec3 triMin{}, triMax{}, centroid{};
+        ComputeTriangleBounds(model, virtualGeom.triangleOrder[i], triMin, triMax, centroid);
+        node.min.x = std::min(node.min.x, triMin.x);
+        node.min.y = std::min(node.min.y, triMin.y);
+        node.min.z = std::min(node.min.z, triMin.z);
+        node.max.x = std::max(node.max.x, triMax.x);
+        node.max.y = std::max(node.max.y, triMax.y);
+        node.max.z = std::max(node.max.z, triMax.z);
+        centroids.push_back(centroid);
+    }
+    node.center = Vec3Scale(Vec3Add(node.min, node.max), 0.5f);
+    node.radius = Vec3Length(Vec3Sub(node.max, node.center));
+
+    const std::int32_t nodeIndex = static_cast<std::int32_t>(virtualGeom.clusters.size());
+    virtualGeom.clusters.push_back(node);
+
+    if (node.triangleCount <= virtualGeom.maxClusterTriangles || depth >= virtualGeom.maxDepth)
+    {
+        ++virtualGeom.leafClusterCount;
+        return nodeIndex;
+    }
+
+    Vec3 size = Vec3Sub(node.max, node.min);
+    int axis = 0;
+    if (size.y > size.x && size.y >= size.z) axis = 1;
+    else if (size.z > size.x && size.z >= size.y) axis = 2;
+
+    const std::uint32_t mid = begin + (end - begin) / 2u;
+    auto axisValue = [&](std::uint32_t orderedTriIndex) {
+        Vec3 triMin{}, triMax{}, centroid{};
+        ComputeTriangleBounds(model, orderedTriIndex, triMin, triMax, centroid);
+        return axis == 0 ? centroid.x : (axis == 1 ? centroid.y : centroid.z);
+    };
+    std::nth_element(
+        virtualGeom.triangleOrder.begin() + begin,
+        virtualGeom.triangleOrder.begin() + mid,
+        virtualGeom.triangleOrder.begin() + end,
+        [&](std::uint32_t a, std::uint32_t b) {
+            return axisValue(a) < axisValue(b);
+        });
+
+    virtualGeom.clusters[static_cast<std::size_t>(nodeIndex)].leftChild =
+        BuildVirtualGeomClusterRecursive(model, virtualGeom, begin, mid, depth + 1u);
+    virtualGeom.clusters[static_cast<std::size_t>(nodeIndex)].rightChild =
+        BuildVirtualGeomClusterRecursive(model, virtualGeom, mid, end, depth + 1u);
+    return nodeIndex;
+}
+
+void RebuildVirtualGeomHierarchy(State& state)
+{
+    VirtualGeomState& virtualGeom = state.virtualGeom;
+    virtualGeom.triangleOrder.clear();
+    virtualGeom.clusters.clear();
+    virtualGeom.activeDraws.clear();
+    virtualGeom.activeClusterCount = 0;
+    virtualGeom.leafClusterCount = 0;
+
+    if (state.lighting.sceneKind != SceneKind::VirtualGeomTest ||
+        state.core.scene.models.empty() ||
+        state.core.scene.models[0].mesh.indices.size() < 3u)
+    {
+        return;
+    }
+
+    const ModelData& model = state.core.scene.models[0];
+    const std::uint32_t triangleCount = static_cast<std::uint32_t>(model.mesh.indices.size() / 3u);
+    virtualGeom.triangleOrder.resize(triangleCount);
+    std::iota(virtualGeom.triangleOrder.begin(), virtualGeom.triangleOrder.end(), 0u);
+    BuildVirtualGeomClusterRecursive(model, virtualGeom, 0u, triangleCount, 0u);
+}
 }
 
 void App::ReloadScene()
@@ -148,8 +263,23 @@ void App::ReloadScene()
     }
     else
     {
-        core.scene = LoadSampleScene(core.assetRegistry, lighting.sceneKind, lighting.manyLightsHeroModel);
+        if (lighting.sceneKind == SceneKind::VirtualGeomTest)
+        {
+            VirtualGeomSceneConfig config{};
+            config.meshKind = m_state.virtualGeom.meshKind;
+            config.sphereLongitudeSegments = m_state.virtualGeom.sphereLongitudeSegments;
+            config.sphereLatitudeSegments = m_state.virtualGeom.sphereLatitudeSegments;
+            config.gridCountX = m_state.virtualGeom.gridCountX;
+            config.gridCountZ = m_state.virtualGeom.gridCountZ;
+            config.gridSpacing = m_state.virtualGeom.gridSpacing;
+            core.scene = BuildVirtualGeomTestScene(core.assetRegistry, config);
+        }
+        else
+        {
+            core.scene = LoadSampleScene(core.assetRegistry, lighting.sceneKind, lighting.manyLightsHeroModel);
+        }
     }
+    RebuildVirtualGeomHierarchy(m_state);
     if (lighting.sceneKind == SceneKind::PlayerMaskTest && runtime.hasCharacter && core.scene.models.size() >= 2 && core.scene.entities.size() >= 2)
     {
         ModelData characterModel = BuildStaticCharacterModel(core.characterSet.asset);
@@ -312,6 +442,30 @@ void App::ReloadScene()
             core.camera.pitchRadians = DegreesToRadians(-6.0f);
         }
         lighting.procCityDynamicLightMotionRadius = 0.0f;
+    }
+    else if (lighting.sceneKind == SceneKind::VirtualGeomTest)
+    {
+        lighting.shadowTestSpotTargetValid = false;
+        lighting.cycleDayNight = false;
+        lighting.sunAzimuthDegrees = -35.0f;
+        lighting.sunIntensity = 0.0f;
+        lighting.moonIntensity = 0.0f;
+        lighting.ambientIntensity = 0.85f;
+        lighting.pointLightIntensity = 0.0f;
+        lighting.shadowCascadeSplit = 16.0f;
+        float gridWidth = static_cast<float>(std::max(1u, m_state.virtualGeom.gridCountX) - 1u) * m_state.virtualGeom.gridSpacing;
+        float gridDepth = static_cast<float>(std::max(1u, m_state.virtualGeom.gridCountZ) - 1u) * m_state.virtualGeom.gridSpacing;
+        Vec3 focus = Vec3Make(0.0f, 3.0f, 0.0f);
+        float sceneRadius = std::max(std::max(gridWidth, gridDepth) * 0.5f + 6.0f, 8.0f);
+        core.camera.position = Vec3Make(
+            focus.x,
+            focus.y + std::max(2.5f, sceneRadius * 0.22f),
+            focus.z - sceneRadius * 1.35f);
+        core.camera.yawRadians = DegreesToRadians(0.0f);
+        float pitch = std::atan2(
+            focus.y - core.camera.position.y,
+            std::max(0.001f, focus.z - core.camera.position.z));
+        core.camera.pitchRadians = pitch;
     }
     else
     {

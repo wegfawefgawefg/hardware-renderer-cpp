@@ -174,6 +174,48 @@ struct CityGenerationState
     float buildingQuadSize = 0.625f;
 };
 
+struct VirtualGeomCluster
+{
+    Vec3 min = {};
+    Vec3 max = {};
+    Vec3 center = {};
+    float radius = 0.0f;
+    std::uint32_t firstTriangle = 0;
+    std::uint32_t triangleCount = 0;
+    std::int32_t leftChild = -1;
+    std::int32_t rightChild = -1;
+    std::uint32_t depth = 0;
+};
+
+struct VirtualGeomActiveDraw
+{
+    std::uint32_t entityIndex = 0;
+    std::uint32_t clusterIndex = 0;
+};
+
+struct VirtualGeomState
+{
+    VirtualGeomMeshKind meshKind = VirtualGeomMeshKind::UvSphere;
+    VirtualGeomRenderMode renderMode = VirtualGeomRenderMode::Virtualized;
+    std::uint32_t sphereLongitudeSegments = 32;
+    std::uint32_t sphereLatitudeSegments = 16;
+    std::uint32_t gridCountX = 1;
+    std::uint32_t gridCountZ = 1;
+    float gridSpacing = 8.0f;
+    std::uint32_t maxClusterTriangles = 64;
+    std::uint32_t maxDepth = 8;
+    float screenErrorPixels = 40.0f;
+    bool showBounds = true;
+    bool showTriangles = true;
+    bool showBaseMesh = false;
+    bool freezeLod = false;
+    std::vector<std::uint32_t> triangleOrder;
+    std::vector<VirtualGeomCluster> clusters;
+    std::vector<VirtualGeomActiveDraw> activeDraws;
+    std::uint32_t activeClusterCount = 0;
+    std::uint32_t leafClusterCount = 0;
+};
+
 struct State
 {
     CoreState core;
@@ -183,5 +225,6 @@ struct State
     FractureSandboxState fracture;
     PaintState paint;
     CityGenerationState city;
+    VirtualGeomState virtualGeom;
     text::System text;
 };
