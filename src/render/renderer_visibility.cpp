@@ -40,7 +40,16 @@ void VulkanRenderer::UpdateMainPassVisibility(const SceneUniforms& uniforms)
         }
         if (SphereIntersectsFrustum(frustum, worldCenter, worldRadius))
         {
-            m_visibleDrawItems.push_back(drawIndex);
+            if (m_useProcCityPipeline &&
+                drawItem.batchedStatic &&
+                drawItem.staticBatchIndex < m_visibleStaticBatchDrawItems.size())
+            {
+                m_visibleStaticBatchDrawItems[drawItem.staticBatchIndex].push_back(drawIndex);
+            }
+            else
+            {
+                m_visibleDrawItems.push_back(drawIndex);
+            }
         }
     }
 }

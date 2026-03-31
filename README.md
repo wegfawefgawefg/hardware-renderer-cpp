@@ -1,8 +1,22 @@
 # hardware-renderer-cpp
 
-Clean educational Vulkan rasterizer in C++.
+Vulkan renderer sandbox in C++ with a growing pile of graphics experiments.
 
-This project plays the same role for the software rasterizers that `gpu-raytracer` plays for `raytrace-rs`: take the core ideas, drop the CPU-only constraints, and rebuild them around the GPU in a cleaner form instead of copying architecture blindly.
+This started as a clean educational hardware-rasterizer project. It has since
+diverged into a broader graphics playground with lighting experiments, scene
+tests, paint/deformation systems, batching work, and early virtualized-geometry
+prototypes.
+
+## Gallery
+
+| | |
+|---|---|
+| ![Screenshot 1](images/screenshot-01.png) | ![Screenshot 2](images/screenshot-02.png) |
+| ![Screenshot 3](images/screenshot-03.png) | ![Screenshot 4](images/screenshot-04.png) |
+| ![Screenshot 5](images/screenshot-05.png) | ![Screenshot 6](images/screenshot-06.png) |
+| ![Screenshot 7](images/screenshot-07.png) | ![Screenshot 8](images/screenshot-08.png) |
+| ![Screenshot 9](images/screenshot-09.png) | ![Screenshot 10](images/screenshot-10.png) |
+| ![Screenshot 11](images/screenshot-11.png) | |
 
 ## Current State
 
@@ -22,6 +36,22 @@ This project plays the same role for the software rasterizers that `gpu-raytrace
 - Kenney character load path with CPU clip evaluation and GPU skinning
 - Native-resolution SDL_ttf HUD overlay
 - Smoothed `ms / fps` in the window title
+- Tiled proc-light path that scales to large dynamic light counts
+- Dedicated light-tile and many-lights stress scenes
+- `Virtual Geom Test` for cluster-selection and virtualized-geometry experiments
+
+## Important Note
+
+The renderer currently has a known regression in the main static-batched scene
+mesh path.
+
+As a correctness fallback, some scenes are currently rendered through the
+single-draw path instead of the intended batched path. That keeps scenes
+visible, but it means some performance comparisons are not final yet.
+
+See:
+
+- [`docs/static-batching-regression.md`](/home/vega/Coding/Graphics/hardware-renderer-cpp/docs/static-batching-regression.md)
 
 ## Build
 
@@ -71,6 +101,14 @@ Small repo-owned assets that are not downloaded packs, such as
 [`assets/waterdrops.png`](/home/vega/Coding/Graphics/hardware-renderer-cpp/assets/waterdrops.png),
 are intended to stay checked into git.
 
+Larger demo assets are fetched on demand and ignored in git.
+
+Fetch helpers currently in the repo:
+
+- [`scripts/fetch_kenney_assets.sh`](/home/vega/Coding/Graphics/hardware-renderer-cpp/scripts/fetch_kenney_assets.sh)
+- [`scripts/fetch_sponza_optimized.sh`](/home/vega/Coding/Graphics/hardware-renderer-cpp/scripts/fetch_sponza_optimized.sh)
+- [`scripts/fetch_dragon_attenuation.sh`](/home/vega/Coding/Graphics/hardware-renderer-cpp/scripts/fetch_dragon_attenuation.sh)
+
 ## VS Code
 
 Open the `hardware-renderer-cpp` folder and press `F5`.
@@ -85,14 +123,18 @@ That configures, builds, and launches `build/debug/hardware-renderer-cpp` under 
 - `Shift`: sprint, fly down, or placement modifier depending on scene
 - `Escape`: release mouse first, then quit
 
-## Sample Scene
+## Scenes
 
-The current sandbox keeps the static world minimal:
+The repo now contains multiple scene and testbed types instead of one canonical
+sample scene:
 
-- a built-in ground plane
-- one controllable Kenney skinned character loaded from `assets/kenney/animated-characters-1`
+- character/world scenes
+- city and proc-city scenes
+- light-tile and many-lights stress scenes
+- vehicle-light test scenes
+- virtualized-geometry test scenes
 
-That keeps the repo focused on renderer structure instead of tying it to legacy sample assets.
+Some of these are “real” scenes and some are pure renderer/debug labs.
 
 ## What It Teaches
 
@@ -101,6 +143,8 @@ That keeps the repo focused on renderer structure instead of tying it to legacy 
 - how a hardware raster pipeline is split across CPU setup, vertex shader, fragment shader, and presentation
 - how a CPU-side static world collider can sit next to a GPU renderer without contaminating the render architecture
 - how to keep a renderer flat and explicit without dragging simulation/gameplay concerns into it
+- how renderer experiments can accumulate technical debt if they are not
+  separated back out again
 
 ## Docs
 
@@ -118,20 +162,26 @@ That keeps the repo focused on renderer structure instead of tying it to legacy 
 - `docs/flat-decal-system-spec.md`: spec for the dedicated flat quad decal system and its renderer constraints
 - `docs/module-cleanup-notes.md`: cleanup note for moving damage, decals, and sound out of `App` and into dedicated modules
 - `docs/ideas.md`: gameplay and renderer experiment backlog for this sandbox
+- `docs/static-batching-regression.md`: current bug note for the broken main static-batched mesh path
 
 ## Status
 
-This is now past the first “single mesh demo” stage and into a more useful migration baseline:
+This is no longer just a tiny starter renderer. It is now a mixed codebase with:
 
-- one clean Vulkan raster path
-- one static sandbox world path
-- one movable third-person camera
-- one lit animated character path
-- one CPU-side collision/query foundation
+- one real Vulkan scene renderer
+- several renderer stress scenes and debug scenes
+- lighting scalability experiments
+- paint/deformation/decal experiments
+- virtualized-geometry experiments
+- some known regressions and rough edges from moving fast
 
-If this repo continues later, the natural next topics are:
+That makes it more useful as a renderer lab, but less minimal than the original
+intent.
 
-- castle-scale static world rendering
-- shadowing and better material control
-- CPU-side collision and gameplay queries on top of the GPU renderer
- - broadening the one-character skinning path into a more general animation system
+If the repo keeps growing, the next valuable step is not only more features. It
+is also cleanup:
+
+- restore the broken static batching path
+- separate experimental systems more cleanly
+- make benchmark scenes reproducible
+- decide which experiments are permanent features and which are temporary labs
