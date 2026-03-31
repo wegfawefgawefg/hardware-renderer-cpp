@@ -18,9 +18,83 @@ constexpr std::uint32_t kTileHeatMaterialMode = 3;
 
 float ProcCityEffectiveTileRadius(float range, float intensity, float contributionCutoff)
 {
-    float safeIntensity = std::max(intensity, 1e-4f);
-    float normalizedThreshold = std::clamp(contributionCutoff / safeIntensity, 0.0f, 1.0f);
-    return range * (1.0f - std::sqrt(normalizedThreshold));
+    (void)intensity;
+    (void)contributionCutoff;
+    return std::max(range, 0.0f);
+}
+
+bool ProjectSphereToScreen(const App& app, Vec3 center, float radius, ImVec2& outCenter, float& outRadiusPixels)
+{
+    if (app.m_state.runtime.windowWidth == 0 || app.m_state.runtime.windowHeight == 0)
+    {
+        return false;
+    }
+
+    Mat4 viewMatrix = CameraViewMatrix(app.m_state.core.camera);
+    Mat4 projMatrix = Mat4Perspective(
+        DegreesToRadians(60.0f),
+        static_cast<float>(app.m_state.runtime.windowWidth) / static_cast<float>(app.m_state.runtime.windowHeight),
+        0.1f,
+        200.0f
+    );
+    projMatrix.m[5] *= -1.0f;
+
+    Vec4 world = Vec4Make(center.x, center.y, center.z, 1.0f);
+    Vec4 view = Mat4MulVec4(viewMatrix, world);
+    const float vz = -view.z;
+    if (radius <= 0.0f || vz <= radius + 1e-4f)
+    {
+        return false;
+    }
+
+    auto solveAxis = [vz, radius](float axis, float& outMinSlope, float& outMaxSlope) -> bool {
+        const float denom = vz * vz - radius * radius;
+        if (denom <= 1e-6f)
+        {
+            return false;
+        }
+        const float rootTerm = axis * axis + vz * vz - radius * radius;
+        if (rootTerm <= 1e-6f)
+        {
+            return false;
+        }
+        const float root = radius * std::sqrt(rootTerm);
+        outMinSlope = (axis * vz - root) / denom;
+        outMaxSlope = (axis * vz + root) / denom;
+        if (outMinSlope > outMaxSlope)
+        {
+            std::swap(outMinSlope, outMaxSlope);
+        }
+        return true;
+    };
+
+    float minSlopeX = 0.0f;
+    float maxSlopeX = 0.0f;
+    float minSlopeY = 0.0f;
+    float maxSlopeY = 0.0f;
+    if (!solveAxis(view.x, minSlopeX, maxSlopeX) ||
+        !solveAxis(view.y, minSlopeY, maxSlopeY))
+    {
+        return false;
+    }
+
+    const float ndcMinX = projMatrix.m[0] * minSlopeX;
+    const float ndcMaxX = projMatrix.m[0] * maxSlopeX;
+    const float ndcMinY = projMatrix.m[5] * minSlopeY;
+    const float ndcMaxY = projMatrix.m[5] * maxSlopeY;
+
+    const float minX =
+        (std::min(ndcMinX, ndcMaxX) * 0.5f + 0.5f) * static_cast<float>(app.m_state.runtime.windowWidth);
+    const float maxX =
+        (std::max(ndcMinX, ndcMaxX) * 0.5f + 0.5f) * static_cast<float>(app.m_state.runtime.windowWidth);
+    const float minY =
+        (std::min(ndcMinY, ndcMaxY) * 0.5f + 0.5f) * static_cast<float>(app.m_state.runtime.windowHeight);
+    const float maxY =
+        (std::max(ndcMinY, ndcMaxY) * 0.5f + 0.5f) * static_cast<float>(app.m_state.runtime.windowHeight);
+
+    outCenter = ImVec2(0.5f * (minX + maxX), 0.5f * (minY + maxY));
+    outRadiusPixels = 0.25f * ((maxX - minX) + (maxY - minY));
+    return outRadiusPixels > 0.0f;
 }
 
 void AppendOverlayLabel(App& app, float x, float y, ImU32 color, const char* text)
@@ -86,45 +160,6 @@ bool ProjectWorldToScreen(const App& app, Vec3 world, ImVec2& outScreen)
 
     outScreen.x = (ndcX * 0.5f + 0.5f) * static_cast<float>(app.m_state.runtime.windowWidth);
     outScreen.y = (ndcY * 0.5f + 0.5f) * static_cast<float>(app.m_state.runtime.windowHeight);
-    return true;
-}
-
-bool ProjectSphereToScreen(const App& app, Vec3 center, float radius, ImVec2& outCenter, float& outRadiusPixels)
-{
-    if (!ProjectWorldToScreen(app, center, outCenter))
-    {
-        return false;
-    }
-
-    const std::array<Vec3, 6> offsets = {
-        Vec3Make(radius, 0.0f, 0.0f),
-        Vec3Make(-radius, 0.0f, 0.0f),
-        Vec3Make(0.0f, radius, 0.0f),
-        Vec3Make(0.0f, -radius, 0.0f),
-        Vec3Make(0.0f, 0.0f, radius),
-        Vec3Make(0.0f, 0.0f, -radius),
-    };
-
-    float maxRadiusPixels = 0.0f;
-    std::uint32_t projectedCount = 0;
-    for (const Vec3& offset : offsets)
-    {
-        ImVec2 sample{};
-        if (!ProjectWorldToScreen(app, Vec3Add(center, offset), sample))
-        {
-            continue;
-        }
-        float dx = sample.x - outCenter.x;
-        float dy = sample.y - outCenter.y;
-        maxRadiusPixels = std::max(maxRadiusPixels, std::sqrt(dx * dx + dy * dy));
-        ++projectedCount;
-    }
-
-    if (projectedCount == 0)
-    {
-        return false;
-    }
-    outRadiusPixels = maxRadiusPixels;
     return true;
 }
 
@@ -217,7 +252,7 @@ void App::DrawLightDebugOverlay()
     auto& lighting = m_state.lighting;
     auto& vehicle = m_state.vehicleLights;
     ImDrawList* drawList = ImGui::GetForegroundDrawList();
-    if ((lighting.sceneKind == SceneKind::ProcCity || lighting.sceneKind == SceneKind::LightTileTest) &&
+    if ((lighting.sceneKind == SceneKind::ProcCity || lighting.sceneKind == SceneKind::LightTileTest || lighting.sceneKind == SceneKind::ManyLights) &&
         lighting.useProcCityTiledLighting &&
         lighting.materialDebugMode == kTileHeatMaterialMode &&
         m_state.runtime.windowWidth > 0 &&
@@ -317,7 +352,7 @@ void App::DrawLightDebugOverlay()
         return;
     }
 
-    if ((lighting.sceneKind == SceneKind::ProcCity || lighting.sceneKind == SceneKind::LightTileTest) &&
+    if ((lighting.sceneKind == SceneKind::ProcCity || lighting.sceneKind == SceneKind::LightTileTest || lighting.sceneKind == SceneKind::ManyLights) &&
         lighting.enableProcCityDynamicLights &&
         lighting.debugDrawLightVolumes)
     {

@@ -58,7 +58,7 @@ class RenderBin:
         return not self.key.skinned and len(self.items) > 1
 
 
-def build_render_items(scs: list[dict]) -> list[RenderItem]:
+def build_render_items(scene_objects: list[dict]) -> list[RenderItem]:
     items: list[RenderItem] = []
     for obj in scene_objects:
         key = RenderKey(

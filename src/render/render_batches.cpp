@@ -7,11 +7,141 @@
 
 namespace
 {
+struct TileFrustumPlane
+{
+    Vec3 normal = {};
+    float d = 0.0f;
+};
+
 float ProcCityEffectiveTileRadius(float range, float intensity, float contributionCutoff)
 {
-    float safeIntensity = std::max(intensity, 1e-4f);
-    float normalizedThreshold = std::clamp(contributionCutoff / safeIntensity, 0.0f, 1.0f);
-    return range * (1.0f - std::sqrt(normalizedThreshold));
+    (void)intensity;
+    (void)contributionCutoff;
+    return std::max(range, 0.0f);
+}
+
+bool ProjectSphereBoundsToScreen(
+    const Mat4& proj,
+    Vec4 viewCenter,
+    float radius,
+    std::uint32_t width,
+    std::uint32_t height,
+    float& outCenterX,
+    float& outCenterY,
+    float& outRadiusPixels,
+    float& outMinX,
+    float& outMinY,
+    float& outMaxX,
+    float& outMaxY)
+{
+    const float vz = -viewCenter.z;
+    if (radius <= 0.0f || vz <= radius + 1e-4f)
+    {
+        return false;
+    }
+
+    auto solveAxis = [vz, radius](float axis, float& outMinSlope, float& outMaxSlope) -> bool {
+        const float denom = vz * vz - radius * radius;
+        if (denom <= 1e-6f)
+        {
+            return false;
+        }
+        const float rootTerm = axis * axis + vz * vz - radius * radius;
+        if (rootTerm <= 1e-6f)
+        {
+            return false;
+        }
+        const float root = radius * std::sqrt(rootTerm);
+        outMinSlope = (axis * vz - root) / denom;
+        outMaxSlope = (axis * vz + root) / denom;
+        if (outMinSlope > outMaxSlope)
+        {
+            std::swap(outMinSlope, outMaxSlope);
+        }
+        return true;
+    };
+
+    float minSlopeX = 0.0f;
+    float maxSlopeX = 0.0f;
+    float minSlopeY = 0.0f;
+    float maxSlopeY = 0.0f;
+    if (!solveAxis(viewCenter.x, minSlopeX, maxSlopeX) ||
+        !solveAxis(viewCenter.y, minSlopeY, maxSlopeY))
+    {
+        return false;
+    }
+
+    const float ndcMinX = proj.m[0] * minSlopeX;
+    const float ndcMaxX = proj.m[0] * maxSlopeX;
+    const float ndcMinY = proj.m[5] * minSlopeY;
+    const float ndcMaxY = proj.m[5] * maxSlopeY;
+
+    outMinX = (std::min(ndcMinX, ndcMaxX) * 0.5f + 0.5f) * static_cast<float>(width);
+    outMaxX = (std::max(ndcMinX, ndcMaxX) * 0.5f + 0.5f) * static_cast<float>(width);
+    outMinY = (std::min(ndcMinY, ndcMaxY) * 0.5f + 0.5f) * static_cast<float>(height);
+    outMaxY = (std::max(ndcMinY, ndcMaxY) * 0.5f + 0.5f) * static_cast<float>(height);
+
+    outCenterX = 0.5f * (outMinX + outMaxX);
+    outCenterY = 0.5f * (outMinY + outMaxY);
+    const float radiusX = 0.5f * (outMaxX - outMinX);
+    const float radiusY = 0.5f * (outMaxY - outMinY);
+    outRadiusPixels = 0.5f * (radiusX + radiusY);
+    return outRadiusPixels > 0.0f;
+}
+
+TileFrustumPlane MakeTileFrustumPlane(Vec3 a, Vec3 b)
+{
+    return TileFrustumPlane{Vec3Normalize(Vec3Cross(a, b)), 0.0f};
+}
+
+bool SphereIntersectsTileFrustum(
+    const Mat4& proj,
+    Vec4 viewCenter,
+    float radius,
+    int tileX,
+    int tileY,
+    std::uint32_t tileSize,
+    std::uint32_t width,
+    std::uint32_t height)
+{
+    constexpr float kNearPlane = 0.1f;
+
+    auto pixelToNearPoint = [&](float px, float py) -> Vec3 {
+        float ndcX = (px / static_cast<float>(width)) * 2.0f - 1.0f;
+        float ndcY = (py / static_cast<float>(height)) * 2.0f - 1.0f;
+        return Vec3Make(
+            ndcX * kNearPlane / proj.m[0],
+            ndcY * kNearPlane / proj.m[5],
+            -kNearPlane);
+    };
+
+    float minPx = static_cast<float>(tileX) * static_cast<float>(tileSize);
+    float minPy = static_cast<float>(tileY) * static_cast<float>(tileSize);
+    float maxPx = std::min(minPx + static_cast<float>(tileSize), static_cast<float>(width));
+    float maxPy = std::min(minPy + static_cast<float>(tileSize), static_cast<float>(height));
+
+    Vec3 p00 = pixelToNearPoint(minPx, minPy);
+    Vec3 p10 = pixelToNearPoint(maxPx, minPy);
+    Vec3 p01 = pixelToNearPoint(minPx, maxPy);
+    Vec3 p11 = pixelToNearPoint(maxPx, maxPy);
+
+    const std::array<TileFrustumPlane, 4> planes = {
+        MakeTileFrustumPlane(p01, p00),
+        MakeTileFrustumPlane(p11, p10),
+        MakeTileFrustumPlane(p00, p10),
+        MakeTileFrustumPlane(p01, p11),
+    };
+
+    Vec3 center = Vec3Make(viewCenter.x, viewCenter.y, viewCenter.z);
+    for (const TileFrustumPlane& plane : planes)
+    {
+        float signedDistance = Vec3Dot(plane.normal, center) + plane.d;
+        if (signedDistance < -radius)
+        {
+            return false;
+        }
+    }
+    return true;
 }
 
 Vec3 TransformPointLocal(Mat4 m, Vec3 p)
@@ -216,14 +346,12 @@ void VulkanRenderer::BuildProcCityTiledLightLists(const SceneUniforms& uniforms)
         return;
     }
     std::vector<std::vector<std::uint32_t>> tileBuckets(totalTiles);
+    bool frustumMode = m_procCityTiledOccupancyMode == 1u;
 
     for (std::uint32_t lightIndex = 0; lightIndex < m_procCityDynamicLights.size(); ++lightIndex)
     {
         const DynamicPointLightGpu& light = m_procCityDynamicLights[lightIndex];
-        float lightRange = ProcCityEffectiveTileRadius(
-            light.positionRange.w,
-            light.colorIntensity.w,
-            m_debugTileContributionCutoff);
+        float lightRange = light.positionRange.w;
         Vec4 world = Vec4Make(light.positionRange.x, light.positionRange.y, light.positionRange.z, 1.0f);
         Vec4 view = Mat4MulVec4(uniforms.view, world);
         float depth = -view.z;
@@ -232,88 +360,58 @@ void VulkanRenderer::BuildProcCityTiledLightLists(const SceneUniforms& uniforms)
             continue;
         }
 
-        Vec4 clip = Mat4MulVec4(uniforms.proj, view);
-        if (std::fabs(clip.w) <= 1e-6f)
-        {
-            continue;
-        }
-        float invW = 1.0f / clip.w;
-        float ndcCenterX = clip.x * invW;
-        float ndcCenterY = clip.y * invW;
-        float screenCenterX = (ndcCenterX * 0.5f + 0.5f) * static_cast<float>(m_swapchainExtent.width);
-        float screenCenterY = (ndcCenterY * 0.5f + 0.5f) * static_cast<float>(m_swapchainExtent.height);
-        constexpr float kNearPlaneDepth = 0.1f;
-        constexpr float kScreenPadPixels = 2.0f;
-        const std::array<Vec3, 15> sampleOffsets = {
-            Vec3Make(0.0f, 0.0f, 0.0f),
-            Vec3Make( lightRange, 0.0f, 0.0f),
-            Vec3Make(-lightRange, 0.0f, 0.0f),
-            Vec3Make(0.0f,  lightRange, 0.0f),
-            Vec3Make(0.0f, -lightRange, 0.0f),
-            Vec3Make(0.0f, 0.0f,  lightRange),
-            Vec3Make(0.0f, 0.0f, -lightRange),
-            Vec3Make( lightRange,  lightRange,  lightRange),
-            Vec3Make( lightRange,  lightRange, -lightRange),
-            Vec3Make( lightRange, -lightRange,  lightRange),
-            Vec3Make( lightRange, -lightRange, -lightRange),
-            Vec3Make(-lightRange,  lightRange,  lightRange),
-            Vec3Make(-lightRange,  lightRange, -lightRange),
-            Vec3Make(-lightRange, -lightRange,  lightRange),
-            Vec3Make(-lightRange, -lightRange, -lightRange),
-        };
-
-        float minScreenX = static_cast<float>(m_swapchainExtent.width);
-        float minScreenY = static_cast<float>(m_swapchainExtent.height);
+        float screenCenterX = 0.0f;
+        float screenCenterY = 0.0f;
+        float radiusPixels = 0.0f;
+        float minScreenX = 0.0f;
+        float minScreenY = 0.0f;
         float maxScreenX = 0.0f;
         float maxScreenY = 0.0f;
-        float radiusPixels = 0.0f;
-        bool anyProjected = false;
-        for (const Vec3& offset : sampleOffsets)
+        int minTileX = 0;
+        int maxTileX = static_cast<int>(tileCountX) - 1;
+        int minTileY = 0;
+        int maxTileY = static_cast<int>(tileCountY) - 1;
+        if (!frustumMode)
         {
-            Vec4 sampleView = Vec4Make(
-                view.x + offset.x,
-                view.y + offset.y,
-                view.z + offset.z,
-                1.0f);
-            if (-sampleView.z < kNearPlaneDepth)
+            if (depth <= lightRange + 0.1f)
             {
-                sampleView.z = -kNearPlaneDepth;
+                screenCenterX = 0.5f * static_cast<float>(m_swapchainExtent.width);
+                screenCenterY = 0.5f * static_cast<float>(m_swapchainExtent.height);
+                minScreenX = 0.0f;
+                minScreenY = 0.0f;
+                maxScreenX = static_cast<float>(m_swapchainExtent.width);
+                maxScreenY = static_cast<float>(m_swapchainExtent.height);
+                radiusPixels = 0.5f * std::sqrt(
+                    static_cast<float>(m_swapchainExtent.width) * static_cast<float>(m_swapchainExtent.width) +
+                    static_cast<float>(m_swapchainExtent.height) * static_cast<float>(m_swapchainExtent.height));
             }
-
-            Vec4 sampleClip = Mat4MulVec4(uniforms.proj, sampleView);
-            if (std::fabs(sampleClip.w) <= 1e-6f)
+            else if (!ProjectSphereBoundsToScreen(
+                         uniforms.proj,
+                         view,
+                         lightRange,
+                         m_swapchainExtent.width,
+                         m_swapchainExtent.height,
+                         screenCenterX,
+                         screenCenterY,
+                         radiusPixels,
+                         minScreenX,
+                         minScreenY,
+                         maxScreenX,
+                         maxScreenY))
             {
                 continue;
             }
+            constexpr float kScreenPadPixels = 2.0f;
+            minScreenX = std::max(0.0f, minScreenX - kScreenPadPixels);
+            minScreenY = std::max(0.0f, minScreenY - kScreenPadPixels);
+            maxScreenX = std::min(static_cast<float>(m_swapchainExtent.width), maxScreenX + kScreenPadPixels);
+            maxScreenY = std::min(static_cast<float>(m_swapchainExtent.height), maxScreenY + kScreenPadPixels);
 
-            float sampleInvW = 1.0f / sampleClip.w;
-            float ndcX = sampleClip.x * sampleInvW;
-            float ndcY = sampleClip.y * sampleInvW;
-            float screenX = (ndcX * 0.5f + 0.5f) * static_cast<float>(m_swapchainExtent.width);
-            float screenY = (ndcY * 0.5f + 0.5f) * static_cast<float>(m_swapchainExtent.height);
-            float dx = screenX - screenCenterX;
-            float dy = screenY - screenCenterY;
-            minScreenX = std::min(minScreenX, screenX);
-            minScreenY = std::min(minScreenY, screenY);
-            maxScreenX = std::max(maxScreenX, screenX);
-            maxScreenY = std::max(maxScreenY, screenY);
-            radiusPixels = std::max(radiusPixels, std::sqrt(dx * dx + dy * dy));
-            anyProjected = true;
+            minTileX = std::max(0, static_cast<int>(std::floor(minScreenX / static_cast<float>(kTileSize))));
+            maxTileX = std::min(static_cast<int>(tileCountX) - 1, static_cast<int>(std::floor(maxScreenX / static_cast<float>(kTileSize))));
+            minTileY = std::max(0, static_cast<int>(std::floor(minScreenY / static_cast<float>(kTileSize))));
+            maxTileY = std::min(static_cast<int>(tileCountY) - 1, static_cast<int>(std::floor(maxScreenY / static_cast<float>(kTileSize))));
         }
-        if (!anyProjected)
-        {
-            continue;
-        }
-
-        minScreenX = std::max(0.0f, minScreenX - kScreenPadPixels);
-        minScreenY = std::max(0.0f, minScreenY - kScreenPadPixels);
-        maxScreenX = std::min(static_cast<float>(m_swapchainExtent.width), maxScreenX + kScreenPadPixels);
-        maxScreenY = std::min(static_cast<float>(m_swapchainExtent.height), maxScreenY + kScreenPadPixels);
-
-        int minTileX = std::max(0, static_cast<int>(std::floor(minScreenX / static_cast<float>(kTileSize))));
-        int maxTileX = std::min(static_cast<int>(tileCountX) - 1, static_cast<int>(std::floor(maxScreenX / static_cast<float>(kTileSize))));
-        int minTileY = std::max(0, static_cast<int>(std::floor(minScreenY / static_cast<float>(kTileSize))));
-        int maxTileY = std::min(static_cast<int>(tileCountY) - 1, static_cast<int>(std::floor(maxScreenY / static_cast<float>(kTileSize))));
         if (minTileX > maxTileX || minTileY > maxTileY)
         {
             continue;
@@ -323,17 +421,35 @@ void VulkanRenderer::BuildProcCityTiledLightLists(const SceneUniforms& uniforms)
         {
             for (int tx = minTileX; tx <= maxTileX; ++tx)
             {
-                float tileMinX = static_cast<float>(tx) * static_cast<float>(kTileSize);
-                float tileMinY = static_cast<float>(ty) * static_cast<float>(kTileSize);
-                float tileMaxX = tileMinX + static_cast<float>(kTileSize);
-                float tileMaxY = tileMinY + static_cast<float>(kTileSize);
-                float nearestX = std::clamp(screenCenterX, tileMinX, tileMaxX);
-                float nearestY = std::clamp(screenCenterY, tileMinY, tileMaxY);
-                float dx = nearestX - screenCenterX;
-                float dy = nearestY - screenCenterY;
-                if (dx * dx + dy * dy > radiusPixels * radiusPixels)
+                if (frustumMode)
                 {
-                    continue;
+                    if (!SphereIntersectsTileFrustum(
+                            uniforms.proj,
+                            view,
+                            lightRange,
+                            tx,
+                            ty,
+                            kTileSize,
+                            m_swapchainExtent.width,
+                            m_swapchainExtent.height))
+                    {
+                        continue;
+                    }
+                }
+                else
+                {
+                    float tileMinX = static_cast<float>(tx) * static_cast<float>(kTileSize);
+                    float tileMinY = static_cast<float>(ty) * static_cast<float>(kTileSize);
+                    float tileMaxX = tileMinX + static_cast<float>(kTileSize);
+                    float tileMaxY = tileMinY + static_cast<float>(kTileSize);
+                    float nearestX = std::clamp(screenCenterX, tileMinX, tileMaxX);
+                    float nearestY = std::clamp(screenCenterY, tileMinY, tileMaxY);
+                    float dx = nearestX - screenCenterX;
+                    float dy = nearestY - screenCenterY;
+                    if (dx * dx + dy * dy > radiusPixels * radiusPixels)
+                    {
+                        continue;
+                    }
                 }
                 std::uint32_t tileIndex = static_cast<std::uint32_t>(ty) * tileCountX + static_cast<std::uint32_t>(tx);
                 if (tileIndex >= m_procCityLightTiles.size())

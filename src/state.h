@@ -68,6 +68,12 @@ struct RuntimeState
 
 struct LightingState
 {
+    enum class ProcCityTiledOccupancyMode : std::uint32_t
+    {
+        Circle = 0,
+        Frustum = 1,
+    };
+
     bool cycleDayNight = true;
     bool animateSunAzimuth = true;
     bool debugVisualizeUv = false;
@@ -121,7 +127,11 @@ struct LightingState
     float procCityDynamicLightHeight = 2.4f;
     float procCityDynamicLightDepth = 9.25f;
     float procCityDynamicLightMotionRadius = 2.8f;
+    Vec3 procCityDynamicLightGridCenterOffset = {};
+    Vec3 procCityDynamicLightGridExtents = {8.0f, 8.0f, 8.0f};
+    ManyLightsHeroModel manyLightsHeroModel = ManyLightsHeroModel::Character;
     std::uint32_t procCityLightTileSize = 32;
+    ProcCityTiledOccupancyMode procCityTiledOccupancyMode = ProcCityTiledOccupancyMode::Circle;
     Vec3 sunWorldPosition = {};
     Vec3 moonWorldPosition = {};
     Vec3 spotLightSourceOffset = {};

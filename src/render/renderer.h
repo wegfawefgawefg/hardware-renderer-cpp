@@ -27,10 +27,10 @@ constexpr std::uint32_t kPaintTextureSize = 64;
 constexpr std::uint32_t kSunShadowCascadeCount = 2;
 constexpr std::uint32_t kTotalShadowMaps = kSunShadowCascadeCount + kMaxShadowedSpotLights;
 constexpr std::uint32_t kGpuTimestampCount = 6;
-constexpr std::uint32_t kMaxProcCityDynamicLights = 1024;
+constexpr std::uint32_t kMaxProcCityDynamicLights = 32768;
 constexpr std::uint32_t kMaxProcCityLightRefsPerInstance = 32;
 constexpr std::uint32_t kMaxProcCityLightTiles = 16384;
-constexpr std::uint32_t kMaxProcCityTileLightRefs = 4 * 1024 * 1024;
+constexpr std::uint32_t kMaxProcCityTileLightRefs = 64 * 1024 * 1024;
 
 struct alignas(16) SceneUniforms
 {
@@ -260,6 +260,7 @@ struct VulkanRenderer
     void BuildProcCityTiledLightLists(const SceneUniforms& uniforms);
     void SetProcCityDynamicLights(std::span<const DynamicPointLightGpu> lights);
     void SetProcCityTileContributionCutoff(float cutoff) { m_debugTileContributionCutoff = cutoff; }
+    void SetProcCityTiledOccupancyMode(std::uint32_t mode) { m_procCityTiledOccupancyMode = mode; }
     void AppendPersistentPaint(const PaintSplatSpawn& splat);
     void ResetAccumulatedPaint();
     std::uint32_t GetAccumulatedPaintHitCount() const;
@@ -507,6 +508,7 @@ struct VulkanRenderer
     bool m_useProcCityPipeline = false;
     bool m_useProcCityTiledLighting = false;
     float m_debugTileContributionCutoff = 0.06f;
+    std::uint32_t m_procCityTiledOccupancyMode = 0;
     bool m_imguiInitialized = false;
     bool m_initialized = false;
 };

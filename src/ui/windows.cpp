@@ -34,8 +34,8 @@ void App::BuildLightingWindow(bool& debugSettingsChanged)
     if (ImGui::Begin("Lighting"))
     {
         int sceneKind = static_cast<int>(lighting.sceneKind);
-        const char* sceneNames[] = {"Player Mask Test", "City", "Proc City", "Light Tile Test", "Shadow Test", "Spot Shadow Test", "Vehicle Light Test", "Fracture Test"};
-        if (ImGui::Combo("Scene", &sceneKind, sceneNames, 8))
+        const char* sceneNames[] = {"Player Mask Test", "City", "Proc City", "Light Tile Test", "Many Lights", "Shadow Test", "Spot Shadow Test", "Vehicle Light Test", "Fracture Test"};
+        if (ImGui::Combo("Scene", &sceneKind, sceneNames, 9))
         {
             lighting.sceneKind = static_cast<SceneKind>(sceneKind);
             runtime.reloadSceneRequested = true;
@@ -397,7 +397,9 @@ void App::BuildCityWindow(bool& debugSettingsChanged)
     auto& lighting = m_state.lighting;
     auto& city = m_state.city;
     auto& runtime = m_state.runtime;
-    if (lighting.sceneKind != SceneKind::ProcCity && lighting.sceneKind != SceneKind::LightTileTest)
+    if (lighting.sceneKind != SceneKind::ProcCity &&
+        lighting.sceneKind != SceneKind::LightTileTest &&
+        lighting.sceneKind != SceneKind::ManyLights)
     {
         return;
     }
@@ -409,7 +411,10 @@ void App::BuildCityWindow(bool& debugSettingsChanged)
     );
     ImGui::SetNextWindowPos(pos, ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(300.0f, 246.0f), ImGuiCond_FirstUseEver);
-    if (ImGui::Begin(lighting.sceneKind == SceneKind::ProcCity ? "Proc City" : "Light Tile Test"))
+    const char* windowTitle = lighting.sceneKind == SceneKind::ProcCity
+        ? "Proc City"
+        : (lighting.sceneKind == SceneKind::ManyLights ? "Many Lights" : "Light Tile Test");
+    if (ImGui::Begin(windowTitle))
     {
         if (lighting.sceneKind == SceneKind::ProcCity)
         {
@@ -418,17 +423,33 @@ void App::BuildCityWindow(bool& debugSettingsChanged)
         }
         debugSettingsChanged |= ImGui::Checkbox("Dynamic proc lights", &lighting.enableProcCityDynamicLights);
         debugSettingsChanged |= ImGui::Checkbox("Tiled proc lights", &lighting.useProcCityTiledLighting);
+        int occupancyMode = static_cast<int>(lighting.procCityTiledOccupancyMode);
+        static const char* occupancyModeNames[] = {"Circle", "Frustum"};
+        debugSettingsChanged |= ImGui::Combo("Tile occupancy", &occupancyMode, occupancyModeNames, IM_ARRAYSIZE(occupancyModeNames));
+        lighting.procCityTiledOccupancyMode = static_cast<LightingState::ProcCityTiledOccupancyMode>(occupancyMode);
         int dynamicLightCount = static_cast<int>(lighting.procCityDynamicLightCount);
         int maxLightCount = lighting.sceneKind == SceneKind::LightTileTest ? 8 : static_cast<int>(kMaxProcCityDynamicLights);
         debugSettingsChanged |= ImGui::SliderInt("Light count", &dynamicLightCount, 0, maxLightCount);
         lighting.procCityDynamicLightCount = static_cast<std::uint32_t>(dynamicLightCount);
-        debugSettingsChanged |= ImGui::SliderFloat("Light range", &lighting.procCityDynamicLightRange, 1.0f, 20.0f, "%.1f");
+        debugSettingsChanged |= ImGui::SliderFloat("Light range", &lighting.procCityDynamicLightRange, 0.05f, 20.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
         debugSettingsChanged |= ImGui::SliderFloat("Light intensity", &lighting.procCityDynamicLightIntensity, 0.0f, 4.0f, "%.2f");
-        debugSettingsChanged |= ImGui::SliderFloat("Tile cutoff", &lighting.procCityTileContributionCutoff, 0.001f, 4.00f, "%.3f", ImGuiSliderFlags_Logarithmic);
         debugSettingsChanged |= ImGui::SliderFloat("Light height", &lighting.procCityDynamicLightHeight, 0.5f, 8.0f, "%.1f");
         if (lighting.sceneKind == SceneKind::LightTileTest)
         {
             debugSettingsChanged |= ImGui::SliderFloat("Light depth", &lighting.procCityDynamicLightDepth, 8.0f, 10.0f, "%.3f");
+        }
+        if (lighting.sceneKind == SceneKind::ManyLights)
+        {
+            int heroModel = static_cast<int>(lighting.manyLightsHeroModel);
+            static const char* heroModelNames[] = {"Character", "Sponza"};
+            if (ImGui::Combo("Hero model", &heroModel, heroModelNames, IM_ARRAYSIZE(heroModelNames)))
+            {
+                lighting.manyLightsHeroModel = static_cast<ManyLightsHeroModel>(heroModel);
+                runtime.reloadSceneRequested = true;
+                debugSettingsChanged = true;
+            }
+            debugSettingsChanged |= ImGui::DragFloat3("Grid center", &lighting.procCityDynamicLightGridCenterOffset.x, 0.05f, -200.0f, 200.0f, "%.2f");
+            debugSettingsChanged |= ImGui::DragFloat3("Grid extents", &lighting.procCityDynamicLightGridExtents.x, 0.05f, 0.0f, 200.0f, "%.2f");
         }
         debugSettingsChanged |= ImGui::SliderFloat("Motion radius", &lighting.procCityDynamicLightMotionRadius, 0.0f, 8.0f, "%.1f");
         ImGui::Text("Active proc lights: %zu", lighting.procCityDynamicLights.size());
@@ -442,13 +463,22 @@ void App::BuildCityWindow(bool& debugSettingsChanged)
                 runtime.reloadSceneRequested = true;
             }
         }
-        else
+        else if (lighting.sceneKind == SceneKind::LightTileTest)
         {
             ImGui::TextUnformatted("Light Tile Test is a minimal proc-light debug scene.");
             ImGui::TextUnformatted("It uses one camera-facing quad and fly camera controls.");
             debugSettingsChanged |= ImGui::Checkbox("Show light volumes", &lighting.debugDrawLightVolumes);
             debugSettingsChanged |= ImGui::Checkbox("Show labels", &lighting.debugDrawLightLabels);
             ImGui::TextUnformatted("Show light volumes draws projected screen-space circles and 3D bounds.");
+        }
+        else
+        {
+            ImGui::TextUnformatted("Many Lights anchors a 3D light grid around the hero mesh.");
+            ImGui::TextUnformatted("Light count controls density; extents define the box the lattice fills.");
+            ImGui::TextUnformatted("Grid center and extents position the lattice around the hero or Sponza.");
+            ImGui::TextUnformatted("Sponza uses the imported glTF scene as the hero environment.");
+            debugSettingsChanged |= ImGui::Checkbox("Show light volumes", &lighting.debugDrawLightVolumes);
+            debugSettingsChanged |= ImGui::Checkbox("Show labels", &lighting.debugDrawLightLabels);
         }
     }
     ImGui::End();

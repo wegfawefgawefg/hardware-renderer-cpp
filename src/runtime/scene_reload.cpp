@@ -148,7 +148,7 @@ void App::ReloadScene()
     }
     else
     {
-        core.scene = LoadSampleScene(core.assetRegistry, lighting.sceneKind);
+        core.scene = LoadSampleScene(core.assetRegistry, lighting.sceneKind, lighting.manyLightsHeroModel);
     }
     if (lighting.sceneKind == SceneKind::PlayerMaskTest && runtime.hasCharacter && core.scene.models.size() >= 2 && core.scene.entities.size() >= 2)
     {
@@ -284,6 +284,34 @@ void App::ReloadScene()
         core.camera.position = Vec3Make(0.0f, 4.0f, -2.5f);
         core.camera.yawRadians = DegreesToRadians(0.0f);
         core.camera.pitchRadians = DegreesToRadians(0.0f);
+    }
+    else if (lighting.sceneKind == SceneKind::ManyLights)
+    {
+        lighting.shadowTestSpotTargetValid = false;
+        lighting.cycleDayNight = false;
+        lighting.sunAzimuthDegrees = -35.0f;
+        lighting.pointLightIntensity = 0.0f;
+        if (lighting.manyLightsHeroModel == ManyLightsHeroModel::Sponza)
+        {
+            lighting.sunIntensity = 1.15f;
+            lighting.moonIntensity = 0.0f;
+            lighting.ambientIntensity = 0.05f;
+            lighting.shadowCascadeSplit = 42.0f;
+            core.camera.position = Vec3Make(0.0f, 6.0f, -18.0f);
+            core.camera.yawRadians = DegreesToRadians(0.0f);
+            core.camera.pitchRadians = DegreesToRadians(-8.0f);
+        }
+        else
+        {
+            lighting.sunIntensity = 0.35f;
+            lighting.moonIntensity = 0.0f;
+            lighting.ambientIntensity = 0.08f;
+            lighting.shadowCascadeSplit = 16.0f;
+            core.camera.position = Vec3Make(0.0f, 3.0f, -7.0f);
+            core.camera.yawRadians = DegreesToRadians(0.0f);
+            core.camera.pitchRadians = DegreesToRadians(-6.0f);
+        }
+        lighting.procCityDynamicLightMotionRadius = 0.0f;
     }
     else
     {

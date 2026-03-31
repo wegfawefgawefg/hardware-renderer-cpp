@@ -5,6 +5,7 @@
 #include <filesystem>
 
 #include "assets/fbx_loader.h"
+#include "assets/gltf_loader.h"
 #include "assets/texture_loader.h"
 #include "scene_city.h"
 
@@ -12,6 +13,7 @@ namespace
 {
 constexpr std::string_view kCharacterModelAsset = "kenney/animated-characters-1/Model/characterMedium.fbx";
 constexpr std::string_view kCharacterTextureAsset = "kenney/animated-characters-1/Skins/survivorMaleB.png";
+constexpr std::string_view kSponzaGltfAsset = "sponza_optimized/Sponza.gltf";
 
 Vec3 TransformPoint(Mat4 m, Vec3 p)
 {
@@ -147,11 +149,105 @@ ModelData MakeVerticalQuadModel(float halfWidth, float halfHeight, std::uint8_t 
 SceneData BuildLightTileTestScene(const AssetRegistry&)
 {
     SceneData scene{};
-    scene.models.push_back(MakeVerticalQuadModel(7.0f, 5.0f, 220, 220, 220));
+    scene.models.push_back(MakeVerticalQuadModel(16.0f, 12.0f, 220, 220, 220));
     scene.entities.push_back(EntityData{
         .modelIndex = 0,
         .transform = Mat4Translate(Vec3Make(0.0f, 4.0f, 10.0f)),
         .assetPath = "generated/light_tile_test_quad",
+        .collidable = false,
+    });
+    return scene;
+}
+
+float ComputeModelFootprint(const ModelData& model);
+Vec3 ComputeModelMin(const ModelData& model);
+
+SceneData BuildManyLightsScene(const AssetRegistry& assetRegistry, ManyLightsHeroModel heroModel)
+{
+    if (heroModel == ManyLightsHeroModel::Sponza)
+    {
+        const std::filesystem::path* sponzaPath = assetRegistry.FindByRelativePath(kSponzaGltfAsset);
+        if (sponzaPath != nullptr)
+        {
+            SceneData scene = LoadGltfScene(sponzaPath->string());
+            for (EntityData& entity : scene.entities)
+            {
+                entity.collidable = false;
+                if (entity.assetPath.empty())
+                {
+                    entity.assetPath = std::string(kSponzaGltfAsset);
+                }
+            }
+            return scene;
+        }
+    }
+
+    SceneData scene{};
+    scene.models.push_back(MakePlaneModel(32.0f, 48, 48, 48));
+    scene.entities.push_back(EntityData{
+        .modelIndex = 0,
+        .transform = Mat4Identity(),
+        .assetPath = "generated/many_lights_floor",
+        .collidable = false,
+    });
+
+    const std::filesystem::path* characterPath = assetRegistry.FindByRelativePath(kCharacterModelAsset);
+    if (characterPath != nullptr)
+    {
+        ModelData characterModel = LoadFbxModel(characterPath->string());
+        if (!characterModel.mesh.vertices.empty() && !characterModel.mesh.indices.empty())
+        {
+            const std::filesystem::path* texturePath = assetRegistry.FindByRelativePath(kCharacterTextureAsset);
+            if (texturePath != nullptr)
+            {
+                TextureData skinTexture = LoadTexture(texturePath->string());
+                if (characterModel.textures.empty())
+                {
+                    characterModel.textures.push_back(skinTexture);
+                    if (characterModel.materials.empty())
+                    {
+                        characterModel.materials.push_back(MaterialData{.name = "skin", .textureIndex = 0});
+                    }
+                    else
+                    {
+                        for (MaterialData& material : characterModel.materials)
+                        {
+                            material.textureIndex = 0;
+                        }
+                    }
+                }
+                else
+                {
+                    for (TextureData& texture : characterModel.textures)
+                    {
+                        texture = skinTexture;
+                    }
+                }
+            }
+
+            Vec3 modelMin = ComputeModelMin(characterModel);
+            float footprint = ComputeModelFootprint(characterModel);
+            float scale = 8.0f / std::max(footprint, 0.001f);
+            std::uint32_t modelIndex = static_cast<std::uint32_t>(scene.models.size());
+            scene.models.push_back(std::move(characterModel));
+            scene.entities.push_back(EntityData{
+                .modelIndex = modelIndex,
+                .transform = Mat4Mul(
+                    Mat4Translate(Vec3Make(0.0f, -modelMin.y * scale, 10.0f)),
+                    Mat4Scale(scale)
+                ),
+                .assetPath = std::string(kCharacterModelAsset),
+                .collidable = false,
+            });
+            return scene;
+        }
+    }
+
+    scene.models.push_back(MakeBoxModel(Vec3Make(2.0f, 4.0f, 2.0f), 220, 220, 220));
+    scene.entities.push_back(EntityData{
+        .modelIndex = 1,
+        .transform = Mat4Translate(Vec3Make(0.0f, 4.0f, 10.0f)),
+        .assetPath = "generated/many_lights_hero_box",
         .collidable = false,
     });
     return scene;
@@ -449,7 +545,7 @@ std::uint32_t CountSceneTriangles(const SceneData& scene)
     return triangleCount;
 }
 
-SceneData LoadSampleScene(const AssetRegistry& assetRegistry, SceneKind kind)
+SceneData LoadSampleScene(const AssetRegistry& assetRegistry, SceneKind kind, ManyLightsHeroModel manyLightsHeroModel)
 {
     if (kind == SceneKind::PlayerMaskTest)
     {
@@ -469,6 +565,10 @@ SceneData LoadSampleScene(const AssetRegistry& assetRegistry, SceneKind kind)
     if (kind == SceneKind::LightTileTest)
     {
         return BuildLightTileTestScene(assetRegistry);
+    }
+    if (kind == SceneKind::ManyLights)
+    {
+        return BuildManyLightsScene(assetRegistry, manyLightsHeroModel);
     }
     if (kind == SceneKind::ShadowTest)
     {

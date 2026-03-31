@@ -10,6 +10,17 @@
 
 namespace
 {
+Vec3 TransformPointLocal(Mat4 m, Vec3 p)
+{
+    Vec4 out = Mat4MulVec4(m, Vec4Make(p.x, p.y, p.z, 1.0f));
+    if (std::fabs(out.w) > 1e-6f && out.w != 1.0f)
+    {
+        float invW = 1.0f / out.w;
+        return Vec3Make(out.x * invW, out.y * invW, out.z * invW);
+    }
+    return Vec3Make(out.x, out.y, out.z);
+}
+
 float Fract(float v)
 {
     return v - std::floor(v);
@@ -25,6 +36,78 @@ Vec3 ProcCityPalette(std::uint32_t index)
         0.45f + 0.55f * (0.5f + 0.5f * std::sin(a + 4.1887902f))
     );
 }
+
+Vec3 ComputeManyLightsAnchor(const State& state)
+{
+    const LightingState& lighting = state.lighting;
+    const CoreState& core = state.core;
+    Vec3 center = core.sceneBounds.valid ? core.sceneBounds.center : Vec3Make(0.0f, 0.0f, 0.0f);
+    Vec3 anchor = lighting.manyLightsHeroModel == ManyLightsHeroModel::Sponza
+        ? center
+        : (core.scene.entities.size() > 1
+            ? TransformPointLocal(core.scene.entities[1].transform, Vec3Make(0.0f, 0.0f, 0.0f))
+            : center);
+    anchor = Vec3Add(anchor, lighting.procCityDynamicLightGridCenterOffset);
+    anchor.y += lighting.procCityDynamicLightHeight;
+    return anchor;
+}
+}
+
+ManyLightsGridLayout ComputeManyLightsGridLayout(const State& state, std::uint32_t lightCount)
+{
+    const LightingState& lighting = state.lighting;
+    ManyLightsGridLayout layout{};
+    layout.center = ComputeManyLightsAnchor(state);
+    layout.extents = Vec3Make(
+        std::max(lighting.procCityDynamicLightGridExtents.x, 0.0f),
+        std::max(lighting.procCityDynamicLightGridExtents.y, 0.0f),
+        std::max(lighting.procCityDynamicLightGridExtents.z, 0.0f));
+
+    lightCount = std::max<std::uint32_t>(lightCount, 1u);
+    const float wx = layout.extents.x > 0.001f ? layout.extents.x : 0.0f;
+    const float wy = layout.extents.y > 0.001f ? layout.extents.y : 0.0f;
+    const float wz = layout.extents.z > 0.001f ? layout.extents.z : 0.0f;
+    const float nx = std::max(wx, 0.001f);
+    const float ny = std::max(wy, 0.001f);
+    const float nz = std::max(wz, 0.001f);
+    const float volume = nx * ny * nz;
+    const float density = std::cbrt(static_cast<float>(lightCount) / volume);
+
+    layout.countX = wx > 0.0f ? std::max<std::uint32_t>(1u, static_cast<std::uint32_t>(std::round(nx * density))) : 1u;
+    layout.countY = wy > 0.0f ? std::max<std::uint32_t>(1u, static_cast<std::uint32_t>(std::round(ny * density))) : 1u;
+    layout.countZ = wz > 0.0f ? std::max<std::uint32_t>(1u, static_cast<std::uint32_t>(std::round(nz * density))) : 1u;
+
+    auto capacity = [&]() -> std::uint64_t {
+        return static_cast<std::uint64_t>(layout.countX) *
+               static_cast<std::uint64_t>(layout.countY) *
+               static_cast<std::uint64_t>(layout.countZ);
+    };
+    auto axisSpacingScore = [&](std::uint32_t count, float extent) -> float {
+        return count > 0 ? (extent * 2.0f) / static_cast<float>(count) : 0.0f;
+    };
+    while (capacity() < lightCount)
+    {
+        const float sx = axisSpacingScore(layout.countX, layout.extents.x);
+        const float sy = axisSpacingScore(layout.countY, layout.extents.y);
+        const float sz = axisSpacingScore(layout.countZ, layout.extents.z);
+        if (sx >= sy && sx >= sz)
+        {
+            ++layout.countX;
+        }
+        else if (sy >= sz)
+        {
+            ++layout.countY;
+        }
+        else
+        {
+            ++layout.countZ;
+        }
+    }
+
+    layout.stepX = layout.countX > 1u ? (layout.extents.x * 2.0f) / static_cast<float>(layout.countX - 1u) : 0.0f;
+    layout.stepY = layout.countY > 1u ? (layout.extents.y * 2.0f) / static_cast<float>(layout.countY - 1u) : 0.0f;
+    layout.stepZ = layout.countZ > 1u ? (layout.extents.z * 2.0f) / static_cast<float>(layout.countZ - 1u) : 0.0f;
+    return layout;
 }
 
 void ApplyRuntimeLighting(State& state, SceneUniforms& uniforms, float dtSeconds)
@@ -352,7 +435,7 @@ void ApplyRuntimeLighting(State& state, SceneUniforms& uniforms, float dtSeconds
         cascadeBlendWidth,
         static_cast<float>(shaderFeatureMask));
 
-    if ((lighting.sceneKind == SceneKind::ProcCity || lighting.sceneKind == SceneKind::LightTileTest) &&
+    if ((lighting.sceneKind == SceneKind::ProcCity || lighting.sceneKind == SceneKind::LightTileTest || lighting.sceneKind == SceneKind::ManyLights) &&
         lighting.enableProcCityDynamicLights)
     {
         std::uint32_t lightCount = std::min(lighting.procCityDynamicLightCount, kMaxProcCityDynamicLights);
@@ -367,7 +450,7 @@ void ApplyRuntimeLighting(State& state, SceneUniforms& uniforms, float dtSeconds
                 float baseX = (u * 2.0f - 1.0f) * 5.0f;
                 float seed = static_cast<float>(i);
                 float t = runtime.elapsedSeconds;
-                float phase = t * (0.6f + 0.07f * seed) + seed * 0.9f;
+                float phase = t * 0.6f + seed * 0.9f;
                 Vec3 color = ProcCityPalette(i);
                 state.lighting.procCityDynamicLights.push_back(DynamicPointLightGpu{
                     .positionRange = Vec4Make(
@@ -381,6 +464,49 @@ void ApplyRuntimeLighting(State& state, SceneUniforms& uniforms, float dtSeconds
                         color.z,
                         lighting.procCityDynamicLightIntensity),
                 });
+            }
+        }
+        else if (lighting.sceneKind == SceneKind::ManyLights)
+        {
+            const ManyLightsGridLayout layout = ComputeManyLightsGridLayout(state, lightCount);
+            float verticalMotion = lighting.procCityDynamicLightMotionRadius * 0.25f;
+            std::uint32_t emitted = 0;
+            for (std::uint32_t gy = 0; gy < layout.countY && emitted < lightCount; ++gy)
+            {
+                for (std::uint32_t gz = 0; gz < layout.countZ && emitted < lightCount; ++gz)
+                {
+                    for (std::uint32_t gx = 0; gx < layout.countX && emitted < lightCount; ++gx)
+                    {
+                        float ox = layout.countX > 1u
+                            ? -layout.extents.x + static_cast<float>(gx) * layout.stepX
+                            : 0.0f;
+                        float oy = layout.countY > 1u
+                            ? -layout.extents.y + static_cast<float>(gy) * layout.stepY
+                            : 0.0f;
+                        float oz = layout.countZ > 1u
+                            ? -layout.extents.z + static_cast<float>(gz) * layout.stepZ
+                            : 0.0f;
+                        float seed = static_cast<float>(emitted);
+                        float t = runtime.elapsedSeconds;
+                        float phaseX = t * 0.45f + seed * 0.73f;
+                        float phaseY = t * 0.36f + seed * 1.17f;
+                        float phaseZ = t * 0.28f + seed * 0.41f;
+                        Vec3 color = ProcCityPalette(emitted);
+                        state.lighting.procCityDynamicLights.push_back(DynamicPointLightGpu{
+                            .positionRange = Vec4Make(
+                                layout.center.x + ox + std::cos(phaseX) * lighting.procCityDynamicLightMotionRadius * 0.12f,
+                                layout.center.y + oy + std::sin(phaseY) * verticalMotion,
+                                layout.center.z + oz + std::sin(phaseZ) * lighting.procCityDynamicLightMotionRadius * 0.12f,
+                                lighting.procCityDynamicLightRange),
+                            .colorIntensity = Vec4Make(
+                                color.x,
+                                color.y,
+                                color.z,
+                                lighting.procCityDynamicLightIntensity),
+                        });
+                        ++emitted;
+                    }
+                }
             }
         }
         else
@@ -423,7 +549,10 @@ void ApplyRuntimeLighting(State& state, SceneUniforms& uniforms, float dtSeconds
         return;
     }
 
-    if (lighting.sceneKind != SceneKind::City && lighting.sceneKind != SceneKind::ProcCity)
+    if (lighting.sceneKind != SceneKind::City &&
+        lighting.sceneKind != SceneKind::ProcCity &&
+        lighting.sceneKind != SceneKind::LightTileTest &&
+        lighting.sceneKind != SceneKind::ManyLights)
     {
         PopulateFallbackOrbitPointLights(state, uniforms, center);
     }

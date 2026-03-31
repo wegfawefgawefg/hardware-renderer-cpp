@@ -131,6 +131,13 @@ void App::LoadDebugSettings()
     if (ExtractFloat(text, "\"enable_local_light_shadows\"", boolValue)) lighting.enableLocalLightShadows = boolValue != 0.0f;
     if (ExtractFloat(text, "\"enable_proc_city_dynamic_lights\"", boolValue)) lighting.enableProcCityDynamicLights = boolValue != 0.0f;
     if (ExtractFloat(text, "\"use_proc_city_tiled_lighting\"", boolValue)) lighting.useProcCityTiledLighting = boolValue != 0.0f;
+    {
+        std::uint32_t occupancyMode = static_cast<std::uint32_t>(lighting.procCityTiledOccupancyMode);
+        if (ExtractUInt(text, "\"proc_city_tiled_occupancy_mode\"", occupancyMode) && occupancyMode <= 1u)
+        {
+            lighting.procCityTiledOccupancyMode = static_cast<LightingState::ProcCityTiledOccupancyMode>(occupancyMode);
+        }
+    }
     ExtractUInt(text, "\"proc_city_dynamic_light_count\"", lighting.procCityDynamicLightCount);
     ExtractFloat(text, "\"proc_city_dynamic_light_range\"", lighting.procCityDynamicLightRange);
     ExtractFloat(text, "\"proc_city_dynamic_light_intensity\"", lighting.procCityDynamicLightIntensity);
@@ -138,6 +145,19 @@ void App::LoadDebugSettings()
     ExtractFloat(text, "\"proc_city_dynamic_light_height\"", lighting.procCityDynamicLightHeight);
     ExtractFloat(text, "\"proc_city_dynamic_light_depth\"", lighting.procCityDynamicLightDepth);
     ExtractFloat(text, "\"proc_city_dynamic_light_motion_radius\"", lighting.procCityDynamicLightMotionRadius);
+    ExtractFloat(text, "\"proc_city_dynamic_light_grid_center_x\"", lighting.procCityDynamicLightGridCenterOffset.x);
+    ExtractFloat(text, "\"proc_city_dynamic_light_grid_center_y\"", lighting.procCityDynamicLightGridCenterOffset.y);
+    ExtractFloat(text, "\"proc_city_dynamic_light_grid_center_z\"", lighting.procCityDynamicLightGridCenterOffset.z);
+    ExtractFloat(text, "\"proc_city_dynamic_light_grid_extent_x\"", lighting.procCityDynamicLightGridExtents.x);
+    ExtractFloat(text, "\"proc_city_dynamic_light_grid_extent_y\"", lighting.procCityDynamicLightGridExtents.y);
+    ExtractFloat(text, "\"proc_city_dynamic_light_grid_extent_z\"", lighting.procCityDynamicLightGridExtents.z);
+    {
+        std::uint32_t heroModel = static_cast<std::uint32_t>(lighting.manyLightsHeroModel);
+        if (ExtractUInt(text, "\"many_lights_hero_model\"", heroModel) && heroModel <= 1u)
+        {
+            lighting.manyLightsHeroModel = static_cast<ManyLightsHeroModel>(heroModel);
+        }
+    }
     if (ExtractFloat(text, "\"debug_draw_vehicle_volumes\"", boolValue)) vehicle.debugDrawVehicleVolumes = boolValue != 0.0f;
     if (ExtractFloat(text, "\"debug_draw_vehicle_light_ranges\"", boolValue)) vehicle.debugDrawVehicleLightRanges = boolValue != 0.0f;
     ExtractUInt(text, "\"paint_ball_bounce_limit\"", paint.ballSettings.bounceLimit);
@@ -244,6 +264,7 @@ void App::SaveDebugSettings() const
         "  \"enable_local_light_shadows\": %d,\n"
         "  \"enable_proc_city_dynamic_lights\": %d,\n"
         "  \"use_proc_city_tiled_lighting\": %d,\n"
+        "  \"proc_city_tiled_occupancy_mode\": %u,\n"
         "  \"proc_city_dynamic_light_count\": %u,\n"
         "  \"proc_city_dynamic_light_range\": %.6f,\n"
         "  \"proc_city_dynamic_light_intensity\": %.6f,\n"
@@ -251,6 +272,13 @@ void App::SaveDebugSettings() const
         "  \"proc_city_dynamic_light_height\": %.6f,\n"
         "  \"proc_city_dynamic_light_depth\": %.6f,\n"
         "  \"proc_city_dynamic_light_motion_radius\": %.6f,\n"
+        "  \"proc_city_dynamic_light_grid_center_x\": %.6f,\n"
+        "  \"proc_city_dynamic_light_grid_center_y\": %.6f,\n"
+        "  \"proc_city_dynamic_light_grid_center_z\": %.6f,\n"
+        "  \"proc_city_dynamic_light_grid_extent_x\": %.6f,\n"
+        "  \"proc_city_dynamic_light_grid_extent_y\": %.6f,\n"
+        "  \"proc_city_dynamic_light_grid_extent_z\": %.6f,\n"
+        "  \"many_lights_hero_model\": %u,\n"
         "  \"debug_draw_vehicle_volumes\": %d,\n"
         "  \"debug_draw_vehicle_light_ranges\": %d,\n"
         "  \"paint_ball_bounce_limit\": %u,\n"
@@ -331,6 +359,7 @@ void App::SaveDebugSettings() const
         lighting.enableLocalLightShadows ? 1 : 0,
         lighting.enableProcCityDynamicLights ? 1 : 0,
         lighting.useProcCityTiledLighting ? 1 : 0,
+        static_cast<std::uint32_t>(lighting.procCityTiledOccupancyMode),
         lighting.procCityDynamicLightCount,
         lighting.procCityDynamicLightRange,
         lighting.procCityDynamicLightIntensity,
@@ -338,6 +367,13 @@ void App::SaveDebugSettings() const
         lighting.procCityDynamicLightHeight,
         lighting.procCityDynamicLightDepth,
         lighting.procCityDynamicLightMotionRadius,
+        lighting.procCityDynamicLightGridCenterOffset.x,
+        lighting.procCityDynamicLightGridCenterOffset.y,
+        lighting.procCityDynamicLightGridCenterOffset.z,
+        lighting.procCityDynamicLightGridExtents.x,
+        lighting.procCityDynamicLightGridExtents.y,
+        lighting.procCityDynamicLightGridExtents.z,
+        static_cast<std::uint32_t>(lighting.manyLightsHeroModel),
         vehicle.debugDrawVehicleVolumes ? 1 : 0,
         vehicle.debugDrawVehicleLightRanges ? 1 : 0,
         paint.ballSettings.bounceLimit,

@@ -7,6 +7,7 @@
 #include <string_view>
 
 #include "imgui.h"
+#include "lighting/runtime.h"
 
 namespace
 {
@@ -155,7 +156,8 @@ void App::Update(float dtSeconds)
     {
         if (lighting.sceneKind == SceneKind::PlayerMaskTest ||
             lighting.sceneKind == SceneKind::FractureTest ||
-            lighting.sceneKind == SceneKind::LightTileTest)
+            lighting.sceneKind == SceneKind::LightTileTest ||
+            lighting.sceneKind == SceneKind::ManyLights)
         {
             PlayerFlyUpdate(core.camera, kGameplayFixedStepSeconds, runtime.mouseCaptured && !imguiCapturingKeyboard);
         }
@@ -241,7 +243,7 @@ void App::Update(float dtSeconds)
         static_cast<float>(m_state.lighting.uvDebugMode)
     );
     uniforms.surfaceMaskParamsA = Vec4Make(
-        (lighting.sceneKind == SceneKind::ProcCity || lighting.sceneKind == SceneKind::LightTileTest)
+        (lighting.sceneKind == SceneKind::ProcCity || lighting.sceneKind == SceneKind::LightTileTest || lighting.sceneKind == SceneKind::ManyLights)
             ? static_cast<float>(std::max(core.renderer.GetProcCityMaxTileLightCount(), 1u))
             : paint.vanishSplitStrength,
         paint.vanishJitterStrength,
@@ -253,10 +255,10 @@ void App::Update(float dtSeconds)
         (lighting.sceneKind == SceneKind::City || lighting.sceneKind == SceneKind::ProcCity)
             ? m_state.city.buildingQuadSize
             : fracture.prism.quadSize,
-        (lighting.sceneKind == SceneKind::ProcCity || lighting.sceneKind == SceneKind::LightTileTest) && lighting.useProcCityTiledLighting
+        (lighting.sceneKind == SceneKind::ProcCity || lighting.sceneKind == SceneKind::LightTileTest || lighting.sceneKind == SceneKind::ManyLights) && lighting.useProcCityTiledLighting
             ? static_cast<float>((runtime.windowWidth + 31u) / 32u)
             : 0.0f,
-        (lighting.sceneKind == SceneKind::ProcCity || lighting.sceneKind == SceneKind::LightTileTest) && lighting.useProcCityTiledLighting
+        (lighting.sceneKind == SceneKind::ProcCity || lighting.sceneKind == SceneKind::LightTileTest || lighting.sceneKind == SceneKind::ManyLights) && lighting.useProcCityTiledLighting
             ? static_cast<float>((runtime.windowHeight + 31u) / 32u)
             : 0.0f
     );
@@ -335,7 +337,7 @@ void App::Update(float dtSeconds)
     debugOptions.drawLightVolumes = lighting.debugDrawLightVolumes;
     debugOptions.drawActivationVolumes = lighting.debugDrawActivationVolumes;
     debugOptions.useProcCityPipeline =
-        lighting.sceneKind == SceneKind::ProcCity || lighting.sceneKind == SceneKind::LightTileTest;
+        lighting.sceneKind == SceneKind::ProcCity || lighting.sceneKind == SceneKind::LightTileTest || lighting.sceneKind == SceneKind::ManyLights;
     debugOptions.useProcCityTiledLighting = debugOptions.useProcCityPipeline && lighting.useProcCityTiledLighting;
     debugOptions.mainDrawDistance = lighting.mainDrawDistance;
     debugOptions.shadowDrawDistance = lighting.shadowDrawDistance;
@@ -408,10 +410,52 @@ void App::Update(float dtSeconds)
         }
     }
     debugOptions.customCubeCount = cubeIndex;
-    if ((lighting.sceneKind == SceneKind::ProcCity || lighting.sceneKind == SceneKind::LightTileTest) &&
+    if ((lighting.sceneKind == SceneKind::ProcCity || lighting.sceneKind == SceneKind::LightTileTest || lighting.sceneKind == SceneKind::ManyLights) &&
         lighting.enableProcCityDynamicLights &&
         lighting.debugDrawLightVolumes)
     {
+        if (lighting.sceneKind == SceneKind::ManyLights)
+        {
+            const ManyLightsGridLayout layout = ComputeManyLightsGridLayout(m_state, lighting.procCityDynamicLightCount);
+            const Vec3 c = layout.center;
+            const Vec3 e = layout.extents;
+            const Vec3 p000 = Vec3Add(c, Vec3Make(-e.x, -e.y, -e.z));
+            const Vec3 p001 = Vec3Add(c, Vec3Make(-e.x, -e.y, e.z));
+            const Vec3 p010 = Vec3Add(c, Vec3Make(-e.x, e.y, -e.z));
+            const Vec3 p011 = Vec3Add(c, Vec3Make(-e.x, e.y, e.z));
+            const Vec3 p100 = Vec3Add(c, Vec3Make(e.x, -e.y, -e.z));
+            const Vec3 p101 = Vec3Add(c, Vec3Make(e.x, -e.y, e.z));
+            const Vec3 p110 = Vec3Add(c, Vec3Make(e.x, e.y, -e.z));
+            const Vec3 p111 = Vec3Add(c, Vec3Make(e.x, e.y, e.z));
+            const Vec3 boxColor = Vec3Make(0.95f, 0.92f, 0.55f);
+            if (debugOptions.customLineCount + 12u <= DebugRenderOptions::kMaxCustomLines)
+            {
+                const std::array<std::pair<Vec3, Vec3>, 12> edges = {{
+                    {p000, p001}, {p001, p011}, {p011, p010}, {p010, p000},
+                    {p100, p101}, {p101, p111}, {p111, p110}, {p110, p100},
+                    {p000, p100}, {p001, p101}, {p010, p110}, {p011, p111},
+                }};
+                for (const auto& edge : edges)
+                {
+                    std::uint32_t lineIndex = debugOptions.customLineCount++;
+                    debugOptions.customLineStarts[lineIndex] = Vec4Make(edge.first.x, edge.first.y, edge.first.z, 1.0f);
+                    debugOptions.customLineEnds[lineIndex] = Vec4Make(edge.second.x, edge.second.y, edge.second.z, 1.0f);
+                    debugOptions.customLineColors[lineIndex] = Vec4Make(boxColor.x, boxColor.y, boxColor.z, 1.0f);
+                }
+            }
+            if (debugOptions.customCubeCount < DebugRenderOptions::kMaxCustomCubes)
+            {
+                std::uint32_t centerCubeIndex = debugOptions.customCubeCount++;
+                float minStep = std::numeric_limits<float>::max();
+                if (layout.stepX > 0.0f) minStep = std::min(minStep, layout.stepX);
+                if (layout.stepY > 0.0f) minStep = std::min(minStep, layout.stepY);
+                if (layout.stepZ > 0.0f) minStep = std::min(minStep, layout.stepZ);
+                float markerSize = std::max((minStep < std::numeric_limits<float>::max() ? minStep : 1.0f) * 0.08f, 0.08f);
+                debugOptions.customCubes[centerCubeIndex] = Vec4Make(c.x, c.y, c.z, markerSize);
+                debugOptions.customCubeColors[centerCubeIndex] = Vec4Make(1.0f, 0.35f, 0.15f, 1.0f);
+            }
+        }
+
         struct ProcLightCandidate
         {
             float dist2 = std::numeric_limits<float>::max();
@@ -590,6 +634,7 @@ void App::Update(float dtSeconds)
     auto renderStart = Clock::now();
     core.renderer.SetProcCityDynamicLights(m_state.lighting.procCityDynamicLights);
     core.renderer.SetProcCityTileContributionCutoff(m_state.lighting.procCityTileContributionCutoff);
+    core.renderer.SetProcCityTiledOccupancyMode(static_cast<std::uint32_t>(m_state.lighting.procCityTiledOccupancyMode));
     core.renderer.Render(
         uniforms,
         text,

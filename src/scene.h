@@ -116,14 +116,21 @@ enum class SceneKind
     City,
     ProcCity,
     LightTileTest,
+    ManyLights,
     ShadowTest,
     SpotShadowTest,
     VehicleLightTest,
     FractureTest,
 };
 
+enum class ManyLightsHeroModel : std::uint32_t
+{
+    Character = 0,
+    Sponza = 1,
+};
+
 SceneBounds ComputeSceneBounds(const SceneData& scene);
 std::uint32_t CountSceneTriangles(const SceneData& scene);
 SceneData BuildFractureTestScene(const AssetRegistry& assetRegistry, const FractureSceneConfig& config);
 SceneData BuildVehicleLightTestScene(const AssetRegistry& assetRegistry);
-SceneData LoadSampleScene(const AssetRegistry& assetRegistry, SceneKind kind);
+SceneData LoadSampleScene(const AssetRegistry& assetRegistry, SceneKind kind, ManyLightsHeroModel manyLightsHeroModel);

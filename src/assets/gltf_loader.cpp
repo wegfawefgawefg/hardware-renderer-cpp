@@ -52,15 +52,14 @@ Vec2 ReadVec2(const cgltf_accessor* accessor, cgltf_size index, Vec2 fallback)
     return Vec2Make(values[0], 1.0f - values[1]);
 }
 
-TextureData LoadGltfMaterialTexture(
+TextureData LoadGltfTexture(
     const std::filesystem::path& sceneDirectory,
-    const cgltf_material* material
+    const cgltf_texture_view* textureView
 )
 {
-    if (material != nullptr && material->has_pbr_metallic_roughness)
+    if (textureView != nullptr)
     {
-        const cgltf_texture* texture =
-            material->pbr_metallic_roughness.base_color_texture.texture;
+        const cgltf_texture* texture = textureView->texture;
         if (texture != nullptr && texture->image != nullptr && texture->image->uri != nullptr)
         {
             std::filesystem::path imagePath = sceneDirectory / texture->image->uri;
@@ -69,6 +68,21 @@ TextureData LoadGltfMaterialTexture(
                 return LoadTexture(imagePath.string());
             }
         }
+    }
+
+    return MakeSolidTexture(255, 255, 255, 255);
+}
+
+TextureData LoadGltfMaterialTexture(
+    const std::filesystem::path& sceneDirectory,
+    const cgltf_material* material
+)
+{
+    if (material != nullptr && material->has_pbr_metallic_roughness)
+    {
+        return LoadGltfTexture(
+            sceneDirectory,
+            &material->pbr_metallic_roughness.base_color_texture);
     }
 
     auto clampColor = [](float v) -> std::uint8_t {
@@ -90,6 +104,19 @@ TextureData LoadGltfMaterialTexture(
     return MakeSolidTexture(255, 255, 255, 255);
 }
 
+TextureData LoadGltfMaterialNormalTexture(
+    const std::filesystem::path& sceneDirectory,
+    const cgltf_material* material
+)
+{
+    if (material != nullptr)
+    {
+        return LoadGltfTexture(sceneDirectory, &material->normal_texture);
+    }
+
+    return MakeSolidTexture(128, 128, 255, 255);
+}
+
 std::uint32_t EnsureMaterial(
     ModelData& model,
     const std::filesystem::path& sceneDirectory,
@@ -107,6 +134,12 @@ std::uint32_t EnsureMaterial(
     outMaterial.name = material != nullptr && material->name != nullptr ? material->name : "default";
     outMaterial.textureIndex = static_cast<std::int32_t>(model.textures.size());
     model.textures.push_back(LoadGltfMaterialTexture(sceneDirectory, material));
+    if (material != nullptr && material->normal_texture.texture != nullptr)
+    {
+        outMaterial.normalTextureIndex = static_cast<std::int32_t>(model.textures.size());
+        model.textures.push_back(LoadGltfMaterialNormalTexture(sceneDirectory, material));
+        outMaterial.flipNormalY = false;
+    }
 
     std::uint32_t materialIndex = static_cast<std::uint32_t>(model.materials.size());
     model.materials.push_back(outMaterial);

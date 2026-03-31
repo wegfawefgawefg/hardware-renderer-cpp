@@ -4,5 +4,6 @@ build/
 .vscode/.browse.VC.db*
 .vscode/ipch/
 assets/kenney/
+assets/sponza_optimized/
 imgui.ini
 artifacts/text_atlas_cache/
